@@ -36,7 +36,7 @@
       notes: [
         {
           id: welcomeId,
-          title: 'Willkommen bei Notizen',
+          title: 'Willkommen bei KrisNote',
           content:
             'Willkommen bei deiner neuen Notizen-App!\n\n' +
             '- Tippe links unten auf das Stift-Symbol, um eine neue Notiz zu erstellen.\n' +

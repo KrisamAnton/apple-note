@@ -1,4 +1,4 @@
-# Notizen (Apple Notes PWA)
+# KrisNote (Apple Notes PWA)
 
 Eine Notizen-App als Progressive Web App (PWA), die sich optisch und
 strukturell an Apple Notes (iPad) anlehnt: linke Spalte mit Ordnern,
@@ -25,6 +25,13 @@ Anpassungen und Features folgen in späteren Schritten.
 Alle Notizen und Ordner werden aktuell ausschließlich lokal im Browser
 gespeichert (`localStorage`). Es findet keine Synchronisierung zwischen
 Geräten statt – das ist für einen späteren Schritt vorgesehen.
+
+Es gibt noch **kein Login/Benutzerkonto**. Jedes Gerät bzw. jeder
+Browser hat automatisch seinen eigenen, getrennten lokalen Speicher –
+nutzen also z. B. zwei Personen jeweils ihr eigenes Gerät, sehen sie
+nur ihre eigenen Notizen. Teilen sie sich dasselbe Gerät/denselben
+Browser, sehen sie hingegen dieselben Notizen, da es (noch) keine
+Trennung nach Benutzer auf einem gemeinsamen Gerät gibt.
 
 ## Technik
 

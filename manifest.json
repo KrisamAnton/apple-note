@@ -1,7 +1,7 @@
 {
-  "name": "Notizen",
-  "short_name": "Notizen",
-  "description": "Eine Notizen-App als Progressive Web App, angelehnt an Apple Notes.",
+  "name": "KrisNote",
+  "short_name": "KrisNote",
+  "description": "KrisNote – eine Notizen-App als Progressive Web App, angelehnt an Apple Notes.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
