@@ -41,9 +41,11 @@
             'Willkommen bei deiner neuen Notizen-App!\n\n' +
             '- Tippe links unten auf das Stift-Symbol, um eine neue Notiz zu erstellen.\n' +
             '- Lege über "Neuer Ordner" eigene Kategorien an.\n' +
-            '- Nutze die Suche, um alle Notizen zu durchsuchen.\n\n' +
+            '- Nutze die Suche, um alle Notizen zu durchsuchen.\n' +
+            '- Über das Skizzen-Symbol oben kannst du mit dem Finger oder dem Stift zeichnen.\n\n' +
             'Alle Notizen werden aktuell nur lokal auf diesem Gerät gespeichert.',
           folderId: null,
+          sketch: null,
           createdAt: now,
           updatedAt: now,
         },
@@ -89,6 +91,14 @@
     popoverBackdrop: document.getElementById('popoverBackdrop'),
     movePopover: document.getElementById('movePopover'),
     movePopoverList: document.getElementById('movePopoverList'),
+    sketchToggleBtn: document.getElementById('sketchToggleBtn'),
+    sketchPanel: document.getElementById('sketchPanel'),
+    sketchCanvas: document.getElementById('sketchCanvas'),
+    sketchColors: document.getElementById('sketchColors'),
+    sketchEraserBtn: document.getElementById('sketchEraserBtn'),
+    sketchUndoBtn: document.getElementById('sketchUndoBtn'),
+    sketchClearBtn: document.getElementById('sketchClearBtn'),
+    sketchDoneBtn: document.getElementById('sketchDoneBtn'),
   };
 
   // ---------- Helpers ----------
@@ -290,6 +300,7 @@
   // ---------- Rendering: Editor ----------
 
   function selectNote(id) {
+    commitSketchToNote();
     selectedNoteId = id;
     goToView('editor');
     renderNoteList();
@@ -309,6 +320,7 @@
     el.contentInput.value = note.content;
     el.editorDate.textContent = formatDate(note.updatedAt);
     autoGrow(el.titleInput);
+    resetSketchForNote(note);
   }
 
   function autoGrow(textarea) {
@@ -317,12 +329,14 @@
   }
 
   function createNote() {
+    commitSketchToNote();
     const now = Date.now();
     const note = {
       id: uid(),
       title: '',
       content: '',
       folderId: selectedFolderId,
+      sketch: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -363,6 +377,228 @@
     renderNoteList();
     renderEditor();
     goToView('notes');
+  }
+
+  // ---------- Skizze ----------
+
+  const sketchCtx = el.sketchCanvas.getContext('2d');
+  let sketchStrokes = [];
+  let sketchBackgroundImg = null; // gespeichertes Bild der Notiz (falls vorhanden)
+  let sketchCurrentStroke = null;
+  let sketchColor = '#1c1c1e';
+  let sketchIsEraser = false;
+  let sketchHasContent = false;
+  let sketchSaveTimer = null;
+  let sketchSized = false;
+
+  function widthForPoint(pointerType, pressure) {
+    if (sketchIsEraser) return 20;
+    if (pointerType === 'pen') {
+      const p = pressure > 0 ? pressure : 0.5;
+      return 1.5 + p * 3.5;
+    }
+    if (pointerType === 'touch') return 5;
+    return 2.5;
+  }
+
+  function sizeSketchCanvas() {
+    const width = Math.max(1, Math.round(el.sketchPanel.clientWidth));
+    const height = 320;
+    const dpr = window.devicePixelRatio || 1;
+    el.sketchCanvas.width = width * dpr;
+    el.sketchCanvas.height = height * dpr;
+    el.sketchCanvas.style.width = `${width}px`;
+    el.sketchCanvas.style.height = `${height}px`;
+    sketchCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    sketchSized = true;
+    redrawSketch();
+  }
+
+  function redrawSketch() {
+    const width = el.sketchCanvas.clientWidth;
+    const height = el.sketchCanvas.clientHeight;
+    sketchCtx.save();
+    sketchCtx.globalCompositeOperation = 'source-over';
+    sketchCtx.clearRect(0, 0, width, height);
+    sketchCtx.fillStyle = '#ffffff';
+    sketchCtx.fillRect(0, 0, width, height);
+    if (sketchBackgroundImg) {
+      sketchCtx.drawImage(sketchBackgroundImg, 0, 0, width, height);
+    }
+    for (const stroke of sketchStrokes) {
+      drawStroke(stroke);
+    }
+    sketchCtx.restore();
+  }
+
+  function drawStroke(stroke) {
+    if (stroke.points.length === 0) return;
+    sketchCtx.globalCompositeOperation = stroke.eraser ? 'destination-out' : 'source-over';
+    sketchCtx.strokeStyle = stroke.color;
+    sketchCtx.lineCap = 'round';
+    sketchCtx.lineJoin = 'round';
+    sketchCtx.beginPath();
+    const pts = stroke.points;
+    sketchCtx.moveTo(pts[0].x, pts[0].y);
+    if (pts.length === 1) {
+      sketchCtx.lineWidth = pts[0].width;
+      sketchCtx.lineTo(pts[0].x + 0.1, pts[0].y + 0.1);
+      sketchCtx.stroke();
+      return;
+    }
+    for (let i = 1; i < pts.length; i++) {
+      sketchCtx.lineWidth = pts[i].width;
+      sketchCtx.lineTo(pts[i].x, pts[i].y);
+    }
+    sketchCtx.stroke();
+  }
+
+  function pointerPos(e) {
+    const rect = el.sketchCanvas.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
+
+  function onSketchPointerDown(e) {
+    if (!sketchSized) sizeSketchCanvas();
+    try {
+      el.sketchCanvas.setPointerCapture(e.pointerId);
+    } catch (err) {
+      // Pointer-Capture kann in seltenen Fällen fehlschlagen; Zeichnen funktioniert trotzdem weiter.
+    }
+    const pos = pointerPos(e);
+    const width = widthForPoint(e.pointerType, e.pressure);
+    sketchCurrentStroke = {
+      color: sketchColor,
+      eraser: sketchIsEraser,
+      points: [{ x: pos.x, y: pos.y, width }],
+    };
+    sketchStrokes.push(sketchCurrentStroke);
+    sketchHasContent = true;
+    drawStroke(sketchCurrentStroke);
+    e.preventDefault();
+  }
+
+  function onSketchPointerMove(e) {
+    if (!sketchCurrentStroke) return;
+    const pos = pointerPos(e);
+    const width = widthForPoint(e.pointerType, e.pressure);
+    sketchCurrentStroke.points.push({ x: pos.x, y: pos.y, width });
+    redrawSketch();
+    e.preventDefault();
+  }
+
+  function endSketchStroke() {
+    if (!sketchCurrentStroke) return;
+    sketchCurrentStroke = null;
+    scheduleSketchSave();
+  }
+
+  function scheduleSketchSave() {
+    clearTimeout(sketchSaveTimer);
+    sketchSaveTimer = setTimeout(commitSketchToNote, 250);
+  }
+
+  function commitSketchToNote() {
+    const note = findNote(selectedNoteId);
+    if (!note || el.sketchPanel.hidden) return;
+    if (!sketchHasContent) {
+      note.sketch = null;
+    } else {
+      note.sketch = el.sketchCanvas.toDataURL('image/png');
+    }
+    note.updatedAt = Date.now();
+    schedulePersist();
+  }
+
+  function openSketchPanel() {
+    el.sketchPanel.hidden = false;
+    sketchSized = false;
+    requestAnimationFrame(sizeSketchCanvas);
+  }
+
+  function closeSketchPanel() {
+    commitSketchToNote();
+    el.sketchPanel.hidden = true;
+  }
+
+  function resetSketchForNote(note) {
+    clearTimeout(sketchSaveTimer);
+    sketchStrokes = [];
+    sketchCurrentStroke = null;
+    sketchSized = false;
+    if (note && note.sketch) {
+      sketchHasContent = true;
+      sketchBackgroundImg = new Image();
+      sketchBackgroundImg.onload = () => {
+        if (findNote(selectedNoteId) === note) {
+          el.sketchPanel.hidden = false;
+          requestAnimationFrame(sizeSketchCanvas);
+        }
+      };
+      sketchBackgroundImg.src = note.sketch;
+      el.sketchPanel.hidden = false;
+    } else {
+      sketchHasContent = false;
+      sketchBackgroundImg = null;
+      el.sketchPanel.hidden = true;
+    }
+  }
+
+  function setSketchColor(color) {
+    sketchColor = color;
+    sketchIsEraser = false;
+    el.sketchEraserBtn.classList.remove('active');
+    for (const btn of el.sketchColors.querySelectorAll('.sketch-color')) {
+      btn.classList.toggle('active', btn.dataset.color === color);
+    }
+  }
+
+  function toggleEraser() {
+    sketchIsEraser = !sketchIsEraser;
+    el.sketchEraserBtn.classList.toggle('active', sketchIsEraser);
+  }
+
+  function undoSketch() {
+    sketchStrokes.pop();
+    sketchHasContent = sketchStrokes.length > 0 || !!sketchBackgroundImg;
+    redrawSketch();
+    scheduleSketchSave();
+  }
+
+  function clearSketch() {
+    sketchStrokes = [];
+    sketchBackgroundImg = null;
+    sketchHasContent = false;
+    redrawSketch();
+    scheduleSketchSave();
+  }
+
+  function setupSketchEvents() {
+    el.sketchToggleBtn.addEventListener('click', () => {
+      if (el.sketchPanel.hidden) {
+        openSketchPanel();
+      } else {
+        closeSketchPanel();
+      }
+    });
+    el.sketchDoneBtn.addEventListener('click', closeSketchPanel);
+    el.sketchClearBtn.addEventListener('click', clearSketch);
+    el.sketchUndoBtn.addEventListener('click', undoSketch);
+    el.sketchEraserBtn.addEventListener('click', toggleEraser);
+    el.sketchColors.addEventListener('click', (e) => {
+      const btn = e.target.closest('.sketch-color');
+      if (btn) setSketchColor(btn.dataset.color);
+    });
+
+    el.sketchCanvas.addEventListener('pointerdown', onSketchPointerDown);
+    el.sketchCanvas.addEventListener('pointermove', onSketchPointerMove);
+    el.sketchCanvas.addEventListener('pointerup', endSketchStroke);
+    el.sketchCanvas.addEventListener('pointercancel', endSketchStroke);
+    el.sketchCanvas.addEventListener('pointerleave', endSketchStroke);
+
+    window.addEventListener('resize', () => {
+      if (!el.sketchPanel.hidden) sizeSketchCanvas();
+    });
   }
 
   // ---------- Move popover ----------
@@ -441,6 +677,7 @@
     el.popoverBackdrop.addEventListener('click', (e) => {
       if (e.target === el.popoverBackdrop) closeMovePopover();
     });
+    setupSketchEvents();
 
     el.titleInput.addEventListener('input', () => {
       autoGrow(el.titleInput);
@@ -464,9 +701,15 @@
       }, 120);
     });
 
-    window.addEventListener('beforeunload', persist);
+    window.addEventListener('beforeunload', () => {
+      commitSketchToNote();
+      persist();
+    });
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') persist();
+      if (document.visibilityState === 'hidden') {
+        commitSketchToNote();
+        persist();
+      }
     });
   }
 

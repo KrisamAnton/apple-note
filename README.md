@@ -14,6 +14,9 @@ Anpassungen und Features folgen in späteren Schritten.
 - Ordner anlegen, umbenennen (Doppelklick) und löschen
 - Notizen zwischen Ordnern verschieben
 - Volltextsuche über alle Notizen
+- Skizzieren in der Notiz – mit Finger (Touch) oder Stift (z. B. Apple
+  Pencil, inkl. Druckstärke), mit Farbwahl, Radiergummi, Rückgängig
+  und Löschen
 - Helles und dunkles Erscheinungsbild (folgt den Systemeinstellungen)
 - Responsive: Split-View auf iPad/Desktop, Einzelspalten-Navigation auf
   kleinen Bildschirmen
