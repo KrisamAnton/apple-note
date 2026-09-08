@@ -1,0 +1,658 @@
+:root {
+  color-scheme: light dark;
+
+  --bg-sidebar: #f2f1ec;
+  --bg-list: #fafaf8;
+  --bg-editor: #fbfaf5;
+  --bg-elevated: #ffffff;
+  --border: rgba(0, 0, 0, 0.09);
+  --border-strong: rgba(0, 0, 0, 0.14);
+  --text-primary: #1c1c1e;
+  --text-secondary: rgba(60, 60, 67, 0.6);
+  --text-tertiary: rgba(60, 60, 67, 0.4);
+  --accent: #f5a623;
+  --accent-strong: #d98c00;
+  --yellow-icon: #f7b500;
+  --selection-bg: rgba(245, 166, 35, 0.16);
+  --selection-bg-strong: #f5a623;
+  --hover-bg: rgba(0, 0, 0, 0.045);
+  --danger: #ff3b30;
+  --shadow-popover: 0 12px 32px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.08);
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-sidebar: #1c1c1e;
+    --bg-list: #202022;
+    --bg-editor: #242426;
+    --bg-elevated: #2c2c2e;
+    --border: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.14);
+    --text-primary: #f2f2f7;
+    --text-secondary: rgba(235, 235, 245, 0.6);
+    --text-tertiary: rgba(235, 235, 245, 0.4);
+    --accent: #ffb340;
+    --accent-strong: #ffc25c;
+    --yellow-icon: #ffc42e;
+    --selection-bg: rgba(255, 179, 64, 0.18);
+    --selection-bg-strong: #ffb340;
+    --hover-bg: rgba(255, 255, 255, 0.06);
+    --shadow-popover: 0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
+  overscroll-behavior: none;
+}
+
+body {
+  font-family: var(--font);
+  color: var(--text-primary);
+  background: var(--bg-list);
+  font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+textarea {
+  font-family: inherit;
+}
+
+.icon {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+/* ---------- App Layout ---------- */
+
+.app {
+  display: grid;
+  grid-template-columns: 240px 1px minmax(260px, 320px) 1fr;
+  grid-template-areas: "sidebar resizer list editor";
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.sidebar-resizer {
+  grid-area: resizer;
+  background: var(--border);
+  cursor: col-resize;
+}
+
+/* ---------- Sidebar (Spalte 1) ---------- */
+
+.sidebar {
+  grid-area: sidebar;
+  background: var(--bg-sidebar);
+  display: flex;
+  flex-direction: column;
+  padding: env(safe-area-inset-top, 0) 0 env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0);
+  min-width: 0;
+}
+
+.sidebar-header {
+  padding: 20px 20px 8px;
+}
+
+.sidebar-title {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.folder-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 10px;
+}
+
+.folder-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 15px;
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+}
+
+.folder-item:hover {
+  background: var(--hover-bg);
+}
+
+.folder-item.active {
+  background: var(--selection-bg-strong);
+  color: #1c1c1e;
+}
+
+.folder-item.active .folder-icon {
+  color: #1c1c1e;
+}
+
+.folder-item.active .folder-count {
+  color: rgba(28, 28, 30, 0.65);
+}
+
+.folder-icon {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.folder-icon svg {
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+}
+
+.folder-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: inherit;
+  font-size: inherit;
+  font-family: inherit;
+  padding: 0;
+}
+
+.folder-count {
+  font-size: 15px;
+  color: var(--text-tertiary);
+  flex: none;
+}
+
+.folder-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 8px 10px;
+}
+
+.folder-delete {
+  display: none;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.folder-item:hover .folder-delete {
+  display: flex;
+}
+
+.folder-delete:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--danger);
+}
+
+.sidebar-footer {
+  padding: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.sidebar-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.sidebar-btn:hover {
+  background: var(--hover-bg);
+}
+
+/* ---------- Notizliste (Spalte 2) ---------- */
+
+.note-list-pane {
+  grid-area: list;
+  background: var(--bg-list);
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  min-width: 0;
+}
+
+.note-list-header {
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid transparent;
+}
+
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(118, 118, 128, 0.12);
+  border-radius: 10px;
+  padding: 7px 10px;
+}
+
+.icon-search {
+  width: 15px;
+  height: 15px;
+  color: var(--text-tertiary);
+  flex: none;
+}
+
+.search-field input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 15px;
+  color: var(--text-primary);
+  width: 100%;
+}
+
+.search-field input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.note-count {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  margin: 10px 0 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.note-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 8px;
+}
+
+.note-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+
+.note-item:last-child {
+  border-bottom: none;
+}
+
+.note-item:hover {
+  background: var(--hover-bg);
+}
+
+.note-item.active {
+  background: var(--selection-bg-strong);
+}
+
+.note-item.active .note-title,
+.note-item.active .note-preview,
+.note-item.active .note-meta {
+  color: #1c1c1e;
+}
+
+.note-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.note-title:empty::before {
+  content: "Neue Notiz";
+  color: var(--text-tertiary);
+}
+
+.note-meta {
+  font-size: 13px;
+  color: var(--text-secondary);
+  display: flex;
+  gap: 6px;
+  margin: 0;
+}
+
+.note-preview {
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.note-list-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 14px;
+}
+
+.note-list-footer {
+  padding: 10px 16px;
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid var(--border);
+}
+
+.new-note-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+.new-note-btn:hover {
+  background: var(--accent-strong);
+}
+
+.new-note-btn .icon {
+  width: 15px;
+  height: 15px;
+}
+
+/* ---------- Editor (Spalte 3) ---------- */
+
+.editor-pane {
+  grid-area: editor;
+  background: var(--bg-editor);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.editor-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  gap: 12px;
+}
+
+.empty-icon {
+  width: 56px;
+  height: 56px;
+  opacity: 0.5;
+}
+
+.editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+
+.editor-date {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+
+.toolbar-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toolbar-btn:hover {
+  background: var(--hover-bg);
+}
+
+#deleteNoteBtn {
+  color: var(--danger);
+}
+
+.editor-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 32px 40px;
+  display: flex;
+  flex-direction: column;
+  max-width: 760px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.title-input,
+.content-input {
+  border: none;
+  outline: none;
+  background: transparent;
+  resize: none;
+  color: var(--text-primary);
+  width: 100%;
+  line-height: 1.45;
+}
+
+.title-input {
+  font-size: 24px;
+  font-weight: 700;
+  padding: 10px 0 2px;
+  overflow: hidden;
+}
+
+.content-input {
+  font-size: 16px;
+  flex: 1;
+  min-height: 300px;
+  padding: 4px 0 0;
+}
+
+.title-input::placeholder,
+.content-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+/* ---------- Popover (Ordner verschieben) ---------- */
+
+.popover-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.001);
+}
+
+.popover {
+  position: absolute;
+  min-width: 220px;
+  max-width: 280px;
+  background: var(--bg-elevated);
+  border-radius: 12px;
+  box-shadow: var(--shadow-popover);
+  padding: 6px;
+  border: 1px solid var(--border);
+}
+
+.popover-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  padding: 8px 10px 6px;
+  margin: 0;
+}
+
+.popover-list {
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.popover-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.popover-item:hover {
+  background: var(--hover-bg);
+}
+
+.popover-item .folder-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.popover-item.current {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ---------- Responsive: iPad Portrait / kleinere Screens ---------- */
+
+@media (max-width: 1000px) {
+  .app {
+    grid-template-columns: 210px 1px minmax(220px, 280px) 1fr;
+  }
+}
+
+/* Handy-Breite: nur eine Spalte gleichzeitig, Navigation per Zustand */
+@media (max-width: 780px) {
+  .app {
+    grid-template-columns: 1fr;
+    grid-template-areas: "single";
+    position: relative;
+  }
+
+  .sidebar-resizer {
+    display: none;
+  }
+
+  .sidebar,
+  .note-list-pane,
+  .editor-pane {
+    grid-area: single;
+    width: 100%;
+    height: 100%;
+    border-right: none;
+  }
+
+  .sidebar,
+  .note-list-pane {
+    display: none;
+  }
+
+  .app.view-folders .sidebar {
+    display: flex;
+  }
+
+  .app.view-notes .note-list-pane {
+    display: flex;
+  }
+
+  .app.view-notes .sidebar,
+  .app.view-editor .sidebar,
+  .app.view-editor .note-list-pane {
+    display: none;
+  }
+
+  .app.view-editor .editor-pane {
+    display: flex;
+  }
+
+  .app:not(.view-editor) .editor-pane {
+    display: none;
+  }
+
+  .back-btn {
+    display: flex !important;
+  }
+}
+
+.back-btn {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: 15px;
+  padding: 6px 4px 6px 0;
+}
+
+.back-btn .icon {
+  width: 20px;
+  height: 20px;
+}
+
+/* Scrollbars dezent halten */
+.note-list::-webkit-scrollbar,
+.folder-list::-webkit-scrollbar,
+.editor-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.note-list::-webkit-scrollbar-thumb,
+.folder-list::-webkit-scrollbar-thumb,
+.editor-body::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+}
