@@ -22,16 +22,20 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
     Pencil, inkl. Druckstärke), Farbwahl, Radiergummi, Rückgängig –
     bleibt als Vektor-Strichdaten nachträglich korrigierbar
   - **Bild**: aus der Fotomediathek/Dateien einfügen
-  - Text lässt sich auf eine Skizze oder ein Bild ziehen, um ihn dort
-    als Beschriftung anzuheften – er bewegt und skaliert sich dann mit
-    dem Objekt mit, bleibt aber jederzeit per Doppelklick editierbar
+  - **PDF**: einfügen als Vorschaubild der ersten Seite (mit Datei-
+    /Seitenzahl-Badge); wird wie ein Bild-Objekt behandelt
+  - Text lässt sich auf eine Skizze, ein Bild oder ein PDF ziehen, um
+    ihn dort als Beschriftung anzuheften – er bewegt und skaliert sich
+    dann mit dem Objekt mit, bleibt aber jederzeit per Doppelklick
+    editierbar
 - Helles und dunkles Erscheinungsbild (folgt den Systemeinstellungen)
 - Responsive: Split-View auf iPad/Desktop, Einzelspalten-Navigation auf
   kleinen Bildschirmen
 - Als PWA installierbar ("Zum Home-Bildschirm hinzufügen" in Safari)
 - Funktioniert offline (App-Shell wird per Service Worker gecacht)
 
-PDF-Anhänge sind als nächster Ausbauschritt geplant.
+**Bekannte Einschränkung:** Von einem PDF wird aktuell nur die erste
+Seite als Bild dargestellt (kein Blättern durch mehrseitige PDFs).
 
 ## Daten
 
@@ -52,13 +56,19 @@ Bewusst ohne Build-Prozess und ohne Frameworks umgesetzt – reines
 HTML/CSS/JavaScript:
 
 ```
-index.html      Grundgerüst (3-Spalten-Layout)
-css/styles.css   Styling im Apple-Notes-Look (hell/dunkel)
-js/app.js        App-Logik (State, Rendering, localStorage)
-manifest.json    PWA-Manifest
-sw.js            Service Worker (Offline-Cache der App-Shell)
-icons/           App-Icons für Home-Bildschirm / Manifest
+index.html       Grundgerüst (3-Spalten-Layout)
+css/styles.css    Styling im Apple-Notes-Look (hell/dunkel)
+js/app.js         App-Logik (State, Rendering, freie Zeichenfläche, localStorage)
+js/vendor/        Lokal eingebundene pdf.js-Bibliothek (Apache-2.0, für PDF-Vorschau)
+manifest.json     PWA-Manifest
+sw.js             Service Worker (Offline-Cache der App-Shell)
+icons/            App-Icons für Home-Bildschirm / Manifest
 ```
+
+Die einzige externe Abhängigkeit ist [pdf.js](https://mozilla.github.io/pdf.js/)
+(Mozilla, Apache-2.0-Lizenz) zum Rendern von PDF-Seiten – lokal im
+Repository mitgeliefert (kein CDN, funktioniert auch offline) und wird
+nur bei Bedarf nachgeladen, wenn tatsächlich eine PDF eingefügt wird.
 
 ## Lokal ausführen
 

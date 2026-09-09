@@ -708,6 +708,30 @@ textarea {
   -webkit-user-drag: none;
 }
 
+/* PDF-Objekt */
+
+.canvas-object[data-type="pdf"] {
+  border-color: var(--border);
+  background: var(--bg-elevated);
+}
+
+.pdf-badge {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  background: rgba(28, 28, 30, 0.72);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 7px;
+  border-radius: 6px;
+  pointer-events: none;
+  white-space: nowrap;
+  max-width: calc(100% - 12px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ---------- Popover (Ordner verschieben) ---------- */
 
 .popover-backdrop {

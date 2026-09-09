@@ -4,7 +4,7 @@
   const STORAGE_KEY = 'appleNotesPwa.v1';
   const SURFACE_W = 1600;
   const SURFACE_H = 2200;
-  const MIN_SIZES = { text: [140, 60], drawing: [140, 120], image: [60, 60] };
+  const MIN_SIZES = { text: [140, 60], drawing: [140, 120], image: [60, 60], pdf: [60, 60] };
 
   const ICONS = {
     allNotes: '<svg viewBox="0 0 20 20"><path d="M4 3a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6.41a1 1 0 0 0-.29-.71l-2.41-2.41A1 1 0 0 0 13.59 3H4zm2 4h8v1.5H6V7zm0 3h8v1.5H6V10zm0 3h5v1.5H6V13z"/></svg>',
@@ -136,6 +136,8 @@
     addSketchBtn: document.getElementById('addSketchBtn'),
     addImageBtn: document.getElementById('addImageBtn'),
     imageFileInput: document.getElementById('imageFileInput'),
+    addPdfBtn: document.getElementById('addPdfBtn'),
+    pdfFileInput: document.getElementById('pdfFileInput'),
     canvasWorkspace: document.getElementById('canvasWorkspace'),
     canvasSurface: document.getElementById('canvasSurface'),
   };
@@ -158,6 +160,7 @@
     if (firstText) return firstText.text.trim().replace(/\s+/g, ' ').slice(0, 80);
     if (note.objects.some((o) => o.type === 'drawing')) return 'Skizze';
     if (note.objects.some((o) => o.type === 'image')) return 'Bild';
+    if (note.objects.some((o) => o.type === 'pdf')) return 'PDF';
     return '';
   }
 
@@ -501,6 +504,7 @@
     if (obj.type === 'text') buildTextContent(note, obj, objEl);
     else if (obj.type === 'drawing') buildDrawingContent(note, obj, objEl);
     else if (obj.type === 'image') buildImageContent(note, obj, objEl);
+    else if (obj.type === 'pdf') buildPdfContent(note, obj, objEl);
 
     const handle = document.createElement('div');
     handle.className = 'resize-handle';
@@ -959,6 +963,83 @@
     objEl.addEventListener('pointerdown', (e) => startObjectDrag(e, note, obj, objEl));
   }
 
+  // ----- PDF-Objekt -----
+
+  let pdfJsLoadPromise = null;
+
+  function loadPdfJs() {
+    if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+    if (pdfJsLoadPromise) return pdfJsLoadPromise;
+    pdfJsLoadPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'js/vendor/pdf.js';
+      script.onload = () => {
+        if (!window.pdfjsLib) {
+          reject(new Error('pdf.js wurde geladen, aber pdfjsLib ist nicht verfügbar.'));
+          return;
+        }
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'js/vendor/pdf.worker.js';
+        resolve(window.pdfjsLib);
+      };
+      script.onerror = () => reject(new Error('pdf.js konnte nicht geladen werden.'));
+      document.head.appendChild(script);
+    });
+    return pdfJsLoadPromise;
+  }
+
+  function buildPdfContent(note, obj, objEl) {
+    const img = document.createElement('img');
+    img.className = 'canvas-image-el';
+    img.src = obj.src;
+    img.draggable = false;
+    objEl.appendChild(img);
+
+    const badge = document.createElement('div');
+    badge.className = 'pdf-badge';
+    const pages = obj.pageCount > 1 ? `PDF · ${obj.pageCount} Seiten` : 'PDF';
+    badge.textContent = obj.fileName ? `${pages} · ${obj.fileName}` : pages;
+    objEl.appendChild(badge);
+
+    objEl.addEventListener('pointerdown', (e) => startObjectDrag(e, note, obj, objEl));
+  }
+
+  async function addPdfObjectFromFile(file) {
+    const note = currentNote();
+    if (!note || !file) return;
+    try {
+      const pdfjsLib = await loadPdfJs();
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const page = await pdf.getPage(1);
+      const viewport = page.getViewport({ scale: 2 });
+      const renderCanvas = document.createElement('canvas');
+      renderCanvas.width = viewport.width;
+      renderCanvas.height = viewport.height;
+      await page.render({ canvasContext: renderCanvas.getContext('2d'), viewport }).promise;
+      const src = renderCanvas.toDataURL('image/png');
+
+      const maxW = 360;
+      const scale = Math.min(1, maxW / viewport.width);
+      const w = Math.round(viewport.width * scale) || 200;
+      const h = Math.round(viewport.height * scale) || 260;
+      const { x, y } = nextPlacement(note, w, h);
+      const objData = {
+        id: uid(), type: 'pdf', x, y, w, h, z: 0,
+        src, pageCount: pdf.numPages, fileName: file.name,
+      };
+      bringToFront(note, objData);
+      note.objects.push(objData);
+      const objEl = buildObjectEl(note, objData);
+      el.canvasSurface.appendChild(objEl);
+      selectObject(note, objData, objEl);
+      schedulePersist();
+      renderNoteList();
+    } catch (err) {
+      console.error('PDF konnte nicht eingefügt werden:', err);
+      alert('Diese PDF-Datei konnte nicht eingefügt werden.');
+    }
+  }
+
   // ----- Objekte hinzufügen / löschen -----
 
   function addTextObject() {
@@ -1118,6 +1199,12 @@
       const file = el.imageFileInput.files[0];
       if (file) addImageObjectFromFile(file);
       el.imageFileInput.value = '';
+    });
+    el.addPdfBtn.addEventListener('click', () => el.pdfFileInput.click());
+    el.pdfFileInput.addEventListener('change', () => {
+      const file = el.pdfFileInput.files[0];
+      if (file) addPdfObjectFromFile(file);
+      el.pdfFileInput.value = '';
     });
     el.canvasSurface.addEventListener('pointerdown', (e) => {
       if (e.target === el.canvasSurface) deselectAll();
