@@ -83,7 +83,7 @@
           <button class="toolbar-btn" id="addTextBtn" type="button" aria-label="Text hinzufügen" title="Text hinzufügen">
             <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M3 3h14v2.2h-6v11.8H9V5.2H3V3z"/></svg>
           </button>
-          <button class="toolbar-btn" id="addSketchBtn" type="button" aria-label="Skizze hinzufügen" title="Skizze hinzufügen">
+          <button class="toolbar-btn" id="drawModeBtn" type="button" aria-label="Zeichnen" title="Zeichnen (Stift-Modus)">
             <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M13.6 2.4a1.9 1.9 0 0 1 2.7 2.7L7.4 14 4 15l1-3.4 8.6-9.2zM3 17.5h14V19H3v-1.5z"/></svg>
           </button>
           <button class="toolbar-btn" id="addImageBtn" type="button" aria-label="Bild hinzufügen" title="Bild hinzufügen">
@@ -94,15 +94,43 @@
             <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M5 2h7l3 3v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zm6.5.6V6H15L11.5 2.6zM6.2 9.5h1.6c.9 0 1.5.5 1.5 1.4 0 .9-.6 1.4-1.5 1.4h-.7v1.6H6.2V9.5zm1 .9v1h.5c.3 0 .5-.2.5-.5s-.2-.5-.5-.5h-.5zm2.7-.9h1.4c1.2 0 1.9.7 1.9 2.2 0 1.5-.7 2.2-1.9 2.2H9.9V9.5zm1 .9v2.6h.3c.6 0 1-.4 1-1.3s-.4-1.3-1-1.3h-.3zm3-.9h2.3v.9h-1.3v.7h1.2v.9h-1.2v1.6h-1V9.5z"/></svg>
           </button>
           <input type="file" id="pdfFileInput" accept="application/pdf" hidden />
+          <button class="toolbar-btn" id="backgroundBtn" type="button" aria-label="Hintergrund" title="Hintergrund der Fläche">
+            <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M4 3h12a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm1.2 3.2h.1m3.5 0h.1m3.5 0h.1M5.2 9.7h.1m3.5 0h.1m3.5 0h.1M5.2 13.2h.1m3.5 0h.1m3.5 0h.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg>
+          </button>
           <button class="toolbar-btn" id="moveNoteBtn" type="button" aria-label="Notiz verschieben">
             <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M2 5.5C2 4.67 2.67 4 3.5 4h4.13c.36 0 .7.14.96.4l1.2 1.2c.26.26.6.4.96.4H16.5c.83 0 1.5.67 1.5 1.5v7.6c0 .83-.67 1.5-1.5 1.5h-13C2.67 16.6 2 15.93 2 15.1V5.5z"/></svg>
           </button>
         </div>
+
         <div class="editor-body">
           <textarea id="titleInput" class="title-input" placeholder="Titel" rows="1"></textarea>
 
           <div class="canvas-workspace" id="canvasWorkspace">
-            <div class="canvas-surface" id="canvasSurface"></div>
+            <div class="draw-toolbar" id="drawToolbar" hidden>
+              <div class="draw-colors" id="drawColors">
+                <button type="button" class="draw-color active" data-color="#1c1c1e" style="--swatch:#1c1c1e" aria-label="Schwarz"></button>
+                <button type="button" class="draw-color" data-color="#ff3b30" style="--swatch:#ff3b30" aria-label="Rot"></button>
+                <button type="button" class="draw-color" data-color="#007aff" style="--swatch:#007aff" aria-label="Blau"></button>
+                <button type="button" class="draw-color" data-color="#34c759" style="--swatch:#34c759" aria-label="Grün"></button>
+                <button type="button" class="draw-color" data-color="#ff9500" style="--swatch:#ff9500" aria-label="Orange"></button>
+              </div>
+              <div class="draw-actions">
+                <button type="button" class="draw-tool-btn" id="drawEraserBtn" aria-label="Radiergummi" title="Radiergummi">
+                  <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M13.5 2.6a2 2 0 0 1 2.9 0l1 1a2 2 0 0 1 0 2.9L9.8 14H5.4L3 11.6l8.6-8.6c.6-.6 1.3-.9 1.9-.4zM4.6 12.6 7.4 15.4H3.5A1.5 1.5 0 0 1 2 13.9v-.3l2.6-1z"/></svg>
+                </button>
+                <button type="button" class="draw-tool-btn" id="drawUndoBtn" aria-label="Rückgängig" title="Rückgängig">
+                  <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M7 4 3 8l4 4V9c3.9 0 6.5 1.3 8 4-0.3-4.7-3-8-8-8V4z"/></svg>
+                </button>
+                <button type="button" class="draw-tool-btn" id="drawClearBtn" aria-label="Alles löschen" title="Alles löschen">
+                  <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M6 2.5h8l.5 1.5H16v1.5H4V4h1.5L6 2.5zM5 7h10l-.7 10.1c-.05.7-.63 1.4-1.5 1.4H7.2c-.87 0-1.45-.7-1.5-1.4L5 7z"/></svg>
+                </button>
+                <button type="button" class="sketch-done-btn" id="drawDoneBtn">Fertig</button>
+              </div>
+            </div>
+
+            <div class="canvas-surface" id="canvasSurface">
+              <canvas id="inkLayer" class="ink-layer"></canvas>
+            </div>
           </div>
         </div>
       </article>
@@ -114,6 +142,18 @@
     <div class="popover" id="movePopover">
       <p class="popover-title">In Ordner verschieben</p>
       <div class="popover-list" id="movePopoverList"></div>
+    </div>
+  </div>
+
+  <!-- Hintergrund-Auswahl -->
+  <div class="popover-backdrop" id="backgroundPopoverBackdrop" hidden>
+    <div class="popover" id="backgroundPopover">
+      <p class="popover-title">Hintergrund</p>
+      <div class="popover-list">
+        <div class="popover-item" data-bg="dots">Punkte</div>
+        <div class="popover-item" data-bg="lines">Linien</div>
+        <div class="popover-item" data-bg="blank">Leer (Whiteboard)</div>
+      </div>
     </div>
   </div>
 

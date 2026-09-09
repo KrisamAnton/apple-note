@@ -504,19 +504,122 @@ textarea {
 /* ---------- Freie Zeichenfläche ---------- */
 
 .canvas-workspace {
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow: auto;
   margin: 10px -32px 0;
   padding: 0 32px 32px;
-  background-image: radial-gradient(var(--border-strong) 1px, transparent 1px);
-  background-size: 22px 22px;
 }
 
 .canvas-surface {
   position: relative;
   width: 1600px;
   height: 2200px;
+  background-color: var(--bg-editor);
+}
+
+.canvas-surface[data-bg="dots"] {
+  background-image: radial-gradient(var(--border-strong) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+.canvas-surface[data-bg="lines"] {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 27px,
+    var(--border-strong) 27px,
+    var(--border-strong) 28px
+  );
+  background-size: 100% 28px;
+}
+
+.canvas-surface[data-bg="blank"] {
+  background-image: none;
+}
+
+.ink-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 5000;
+  pointer-events: none;
+}
+
+.canvas-surface.draw-mode .ink-layer {
+  pointer-events: auto;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+/* Zeichen-Werkzeugleiste (Stift-Modus, schwebt über der Fläche) */
+
+.draw-toolbar {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: fit-content;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-popover);
+  flex-wrap: wrap;
+}
+
+.draw-colors {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.draw-color {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  background: var(--swatch);
+  padding: 0;
+}
+
+.draw-color.active {
+  border-color: var(--text-secondary);
+  box-shadow: 0 0 0 2px var(--bg-elevated);
+}
+
+.draw-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.draw-tool-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.draw-tool-btn:hover {
+  background: var(--hover-bg);
+}
+
+.draw-tool-btn.active {
+  background: var(--selection-bg);
+  color: var(--accent);
 }
 
 .canvas-object {
@@ -552,18 +655,6 @@ textarea {
 }
 
 .canvas-object.selected .object-toolbar-main {
-  display: flex;
-}
-
-.canvas-object.selected.drawing-mode .object-toolbar-main {
-  display: none;
-}
-
-.drawing-tools-toolbar {
-  display: none;
-}
-
-.canvas-object.drawing-mode .drawing-tools-toolbar {
   display: flex;
 }
 
@@ -650,45 +741,6 @@ textarea {
 
 .canvas-object[data-type="text"].selected {
   border-color: var(--accent);
-}
-
-/* Zeichnungs-Objekt */
-
-.canvas-object[data-type="drawing"] {
-  background: #fff;
-  border-color: var(--border);
-}
-
-.canvas-drawing-canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
-  touch-action: none;
-  cursor: grab;
-}
-
-.canvas-object[data-type="drawing"].drawing-mode .canvas-drawing-canvas {
-  cursor: crosshair;
-}
-
-.drawing-colors {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  padding: 0 2px;
-}
-
-.drawing-color {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 2px solid var(--border-strong);
-  background: var(--swatch);
-  padding: 0;
-}
-
-.drawing-color.active {
-  border-color: var(--text-primary);
 }
 
 /* Bild-Objekt */

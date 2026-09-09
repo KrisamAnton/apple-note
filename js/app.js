@@ -4,22 +4,19 @@
   const STORAGE_KEY = 'appleNotesPwa.v1';
   const SURFACE_W = 1600;
   const SURFACE_H = 2200;
-  const MIN_SIZES = { text: [140, 60], drawing: [140, 120], image: [60, 60], pdf: [60, 60] };
+  const MIN_SIZES = { text: [140, 60], image: [60, 60], pdf: [60, 60] };
 
   const ICONS = {
     allNotes: '<svg viewBox="0 0 20 20"><path d="M4 3a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6.41a1 1 0 0 0-.29-.71l-2.41-2.41A1 1 0 0 0 13.59 3H4zm2 4h8v1.5H6V7zm0 3h8v1.5H6V10zm0 3h5v1.5H6V13z"/></svg>',
     folder: '<svg viewBox="0 0 20 20"><path d="M2 5.5C2 4.67 2.67 4 3.5 4h4.13c.36 0 .7.14.96.4l1.2 1.2c.26.26.6.4.96.4H16.5c.83 0 1.5.67 1.5 1.5v7.6c0 .83-.67 1.5-1.5 1.5h-13C2.67 16.6 2 15.93 2 15.1V5.5z"/></svg>',
     trash: '<svg viewBox="0 0 20 20"><path d="M6 2.5h8l.5 1.5H16v1.5H4V4h1.5L6 2.5zM5 7h10l-.7 10.1c-.05.7-.63 1.4-1.5 1.4H7.2c-.87 0-1.45-.7-1.5-1.4L5 7z"/></svg>',
-    pencil: '<svg viewBox="0 0 20 20"><path d="M13.6 2.4a1.9 1.9 0 0 1 2.7 2.7L7.4 14 4 15l1-3.4 8.6-9.2zM3 17.5h14V19H3v-1.5z"/></svg>',
-    eraser: '<svg viewBox="0 0 20 20"><path d="M13.5 2.6a2 2 0 0 1 2.9 0l1 1a2 2 0 0 1 0 2.9L9.8 14H5.4L3 11.6l8.6-8.6c.6-.6 1.3-.9 1.9-.4zM4.6 12.6 7.4 15.4H3.5A1.5 1.5 0 0 1 2 13.9v-.3l2.6-1z"/></svg>',
-    undo: '<svg viewBox="0 0 20 20"><path d="M7 4 3 8l4 4V9c3.9 0 6.5 1.3 8 4-0.3-4.7-3-8-8-8V4z"/></svg>',
   };
 
   /**
    * @typedef {{id:string, type:'text', x:number, y:number, w:number, h:number, z:number, text:string, parentId:?string, relX?:number, relY?:number, relW?:number, relH?:number}} TextObject
-   * @typedef {{id:string, type:'drawing', x:number, y:number, w:number, h:number, z:number, strokes:Array}} DrawingObject
    * @typedef {{id:string, type:'image', x:number, y:number, w:number, h:number, z:number, src:string}} ImageObject
-   * @typedef {{id:string, title:string, objects:Array, folderId:?string, createdAt:number, updatedAt:number}} Note
+   * @typedef {{color:string, eraser:boolean, points:Array<{x:number,y:number,width:number}>}} Stroke
+   * @typedef {{id:string, title:string, objects:Array, ink:{strokes:Stroke[]}, background:'dots'|'lines'|'blank', folderId:?string, createdAt:number, updatedAt:number}} Note
    * @typedef {{id:string, name:string}} Folder
    */
 
@@ -44,6 +41,27 @@
       note.objects = objects;
       delete note.content;
       delete note.sketch;
+    }
+    if (!note.ink) note.ink = { strokes: [] };
+    if (!note.background) note.background = 'dots';
+
+    // Alte, auf ein Objekt begrenzte Zeichnungen (Vorversion) in die globale Tinten-Ebene übernehmen
+    const oldDrawings = note.objects.filter((o) => o.type === 'drawing');
+    for (const d of oldDrawings) {
+      for (const stroke of d.strokes || []) {
+        note.ink.strokes.push({
+          color: stroke.color,
+          eraser: stroke.eraser,
+          points: (stroke.points || []).map((p) => ({
+            x: d.x + p.x * d.w,
+            y: d.y + p.y * d.h,
+            width: p.width * d.w,
+          })),
+        });
+      }
+    }
+    if (oldDrawings.length > 0) {
+      note.objects = note.objects.filter((o) => o.type !== 'drawing');
     }
     return note;
   }
@@ -75,18 +93,22 @@
           title: 'Willkommen bei KrisNote',
           objects: [
             {
-              id: uid(), type: 'text', x: 24, y: 24, w: 560, h: 340, z: 1, parentId: null,
+              id: uid(), type: 'text', x: 24, y: 24, w: 560, h: 360, z: 1, parentId: null,
               text:
                 'Willkommen bei deiner neuen Notizen-App!\n\n' +
-                '- Oben in der Werkzeugleiste: Text, Skizze oder Bild hinzufügen.\n' +
-                '- Objekte per Ziehen verschieben, an der Ecke unten rechts in der Größe ändern.\n' +
+                '- Oben: Text, Bild oder PDF hinzufügen. Objekte per Ziehen verschieben, ' +
+                'an der Ecke unten rechts in der Größe ändern.\n' +
                 '- Text per Doppelklick bearbeiten.\n' +
-                '- Ziehe einen Text auf ein Bild oder eine Skizze, um ihn dort als Beschriftung anzuheften ' +
+                '- Stift-Symbol = Zeichnen-Modus: dann kannst du überall auf der Fläche zeichnen, ' +
+                'auch direkt auf einem Bild.\n' +
+                '- Ziehe einen Text auf ein Bild oder PDF, um ihn dort als Beschriftung anzuheften ' +
                 '– er bewegt und skaliert sich dann mit.\n' +
-                '- Beliebig viele Text-, Skizzen- und Bild-Objekte pro Notiz.\n\n' +
+                '- Über das Raster-Symbol kannst du den Hintergrund umstellen: Punkte, Linien oder leer.\n\n' +
                 'Alle Notizen werden aktuell nur lokal auf diesem Gerät gespeichert.',
             },
           ],
+          ink: { strokes: [] },
+          background: 'dots',
           folderId: null,
           createdAt: now,
           updatedAt: now,
@@ -133,13 +155,23 @@
     movePopover: document.getElementById('movePopover'),
     movePopoverList: document.getElementById('movePopoverList'),
     addTextBtn: document.getElementById('addTextBtn'),
-    addSketchBtn: document.getElementById('addSketchBtn'),
+    drawModeBtn: document.getElementById('drawModeBtn'),
     addImageBtn: document.getElementById('addImageBtn'),
     imageFileInput: document.getElementById('imageFileInput'),
     addPdfBtn: document.getElementById('addPdfBtn'),
     pdfFileInput: document.getElementById('pdfFileInput'),
+    backgroundBtn: document.getElementById('backgroundBtn'),
+    backgroundPopoverBackdrop: document.getElementById('backgroundPopoverBackdrop'),
+    backgroundPopover: document.getElementById('backgroundPopover'),
     canvasWorkspace: document.getElementById('canvasWorkspace'),
     canvasSurface: document.getElementById('canvasSurface'),
+    inkLayer: document.getElementById('inkLayer'),
+    drawToolbar: document.getElementById('drawToolbar'),
+    drawColors: document.getElementById('drawColors'),
+    drawEraserBtn: document.getElementById('drawEraserBtn'),
+    drawUndoBtn: document.getElementById('drawUndoBtn'),
+    drawClearBtn: document.getElementById('drawClearBtn'),
+    drawDoneBtn: document.getElementById('drawDoneBtn'),
   };
 
   // ---------- Helpers ----------
@@ -158,7 +190,7 @@
   function notePreviewText(note) {
     const firstText = note.objects.find((o) => o.type === 'text' && o.text && o.text.trim());
     if (firstText) return firstText.text.trim().replace(/\s+/g, ' ').slice(0, 80);
-    if (note.objects.some((o) => o.type === 'drawing')) return 'Skizze';
+    if (note.ink && note.ink.strokes && note.ink.strokes.length > 0) return 'Skizze';
     if (note.objects.some((o) => o.type === 'image')) return 'Bild';
     if (note.objects.some((o) => o.type === 'pdf')) return 'PDF';
     return '';
@@ -387,6 +419,8 @@
       id: uid(),
       title: '',
       objects: [],
+      ink: { strokes: [] },
+      background: 'dots',
       folderId: selectedFolderId,
       createdAt: now,
       updatedAt: now,
@@ -429,11 +463,11 @@
   // ---------- Freie Zeichenfläche: Objekte ----------
 
   let selectedObjectId = null;
-  let activeDrawingObjId = null;
   let dragState = null;
-  let strokeState = null;
-  let drawingColor = '#1c1c1e';
-  let drawingIsEraser = false;
+  let inkStrokeState = null;
+  let drawColor = '#1c1c1e';
+  let drawIsEraser = false;
+  let drawModeActive = false;
 
   function bringToFront(note, obj) {
     const maxZ = note.objects.reduce((m, o) => Math.max(m, o.z || 0), 0);
@@ -451,14 +485,19 @@
   }
 
   function renderCanvas(note) {
-    closeActiveDrawing();
+    deactivateDrawMode();
     selectedObjectId = null;
-    el.canvasSurface.innerHTML = '';
+    for (const child of [...el.canvasSurface.children]) {
+      if (child !== el.inkLayer) child.remove();
+    }
     if (!note) return;
+    el.canvasSurface.dataset.bg = note.background || 'dots';
     const sorted = [...note.objects].sort((a, b) => (a.z || 0) - (b.z || 0));
     for (const obj of sorted) {
-      el.canvasSurface.appendChild(buildObjectEl(note, obj));
+      el.canvasSurface.insertBefore(buildObjectEl(note, obj), el.inkLayer);
     }
+    sizeInkLayer();
+    redrawInk(note);
   }
 
   function findObjEl(id) {
@@ -496,13 +535,9 @@
     const mainToolbar = document.createElement('div');
     mainToolbar.className = 'object-toolbar object-toolbar-main';
     mainToolbar.appendChild(makeToolbarBtn(ICONS.trash, true, () => deleteObject(note, obj.id)));
-    if (obj.type === 'drawing') {
-      mainToolbar.appendChild(makeToolbarBtn(ICONS.pencil, false, () => toggleDrawingMode(note, obj, objEl)));
-    }
     objEl.appendChild(mainToolbar);
 
     if (obj.type === 'text') buildTextContent(note, obj, objEl);
-    else if (obj.type === 'drawing') buildDrawingContent(note, obj, objEl);
     else if (obj.type === 'image') buildImageContent(note, obj, objEl);
     else if (obj.type === 'pdf') buildPdfContent(note, obj, objEl);
 
@@ -522,10 +557,7 @@
   function selectObject(note, obj, objEl) {
     if (selectedObjectId !== obj.id) {
       const prev = el.canvasSurface.querySelector('.canvas-object.selected');
-      if (prev && prev !== objEl) {
-        prev.classList.remove('selected');
-        if (activeDrawingObjId && prev.dataset.id === activeDrawingObjId) closeActiveDrawing();
-      }
+      if (prev && prev !== objEl) prev.classList.remove('selected');
       selectedObjectId = obj.id;
       objEl.classList.add('selected');
     }
@@ -535,7 +567,6 @@
   }
 
   function deselectAll() {
-    closeActiveDrawing();
     const prev = el.canvasSurface.querySelector('.canvas-object.selected');
     if (prev) prev.classList.remove('selected');
     selectedObjectId = null;
@@ -623,7 +654,7 @@
     let target = null;
     for (const o of note.objects) {
       if (o.id === textObj.id) continue;
-      if (o.type !== 'image' && o.type !== 'drawing') continue;
+      if (o.type !== 'image' && o.type !== 'pdf') continue;
       if (centerX >= o.x && centerX <= o.x + o.w && centerY >= o.y && centerY <= o.y + o.h) {
         if (!target || (o.z || 0) > (target.z || 0)) target = o;
       }
@@ -677,7 +708,6 @@
     if (objEl) {
       objEl.style.width = `${obj.w}px`;
       objEl.style.height = `${obj.h}px`;
-      if (obj.type === 'drawing') resizeDrawingCanvas(objEl, obj);
     }
     for (const child of note.objects) {
       if (child.parentId !== obj.id) continue;
@@ -758,7 +788,7 @@
     renderNoteList();
   }
 
-  // ----- Zeichnungs-Objekt -----
+  // ----- Zeichnen (globale Tinten-Ebene über der ganzen Fläche) -----
 
   function widthForPointer(pointerType, pressure, eraser) {
     if (eraser) return 20;
@@ -770,14 +800,14 @@
     return 2.5;
   }
 
-  function sizeDrawingCanvas(canvas, obj) {
+  function sizeInkLayer() {
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.max(1, Math.round(obj.w * dpr));
-    canvas.height = Math.max(1, Math.round(obj.h * dpr));
-    canvas.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
+    el.inkLayer.width = Math.round(SURFACE_W * dpr);
+    el.inkLayer.height = Math.round(SURFACE_H * dpr);
+    el.inkLayer.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  function drawStrokeOnCtx(ctx, stroke, w, h) {
+  function drawStrokeAbs(ctx, stroke) {
     const pts = stroke.points;
     if (!pts || pts.length === 0) return;
     ctx.globalCompositeOperation = stroke.eraser ? 'destination-out' : 'source-over';
@@ -785,170 +815,125 @@
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.beginPath();
-    ctx.moveTo(pts[0].x * w, pts[0].y * h);
+    ctx.moveTo(pts[0].x, pts[0].y);
     if (pts.length === 1) {
-      ctx.lineWidth = pts[0].width * w;
-      ctx.lineTo(pts[0].x * w + 0.1, pts[0].y * h + 0.1);
+      ctx.lineWidth = pts[0].width;
+      ctx.lineTo(pts[0].x + 0.1, pts[0].y + 0.1);
       ctx.stroke();
       return;
     }
     for (let i = 1; i < pts.length; i++) {
-      ctx.lineWidth = pts[i].width * w;
-      ctx.lineTo(pts[i].x * w, pts[i].y * h);
+      ctx.lineWidth = pts[i].width;
+      ctx.lineTo(pts[i].x, pts[i].y);
     }
     ctx.stroke();
     ctx.globalCompositeOperation = 'source-over';
   }
 
-  function redrawDrawingCanvas(canvas, obj) {
-    const ctx = canvas.getContext('2d');
-    const w = obj.w;
-    const h = obj.h;
+  function redrawInk(note) {
+    const ctx = el.inkLayer.getContext('2d');
     ctx.save();
-    ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, w, h);
-    for (const stroke of obj.strokes || []) {
-      drawStrokeOnCtx(ctx, stroke, w, h);
+    ctx.clearRect(0, 0, SURFACE_W, SURFACE_H);
+    for (const stroke of (note.ink && note.ink.strokes) || []) {
+      drawStrokeAbs(ctx, stroke);
     }
     ctx.restore();
   }
 
-  function resizeDrawingCanvas(objEl, obj) {
-    const canvas = objEl.querySelector('.canvas-drawing-canvas');
-    if (!canvas) return;
-    sizeDrawingCanvas(canvas, obj);
-    redrawDrawingCanvas(canvas, obj);
-  }
-
-  function buildDrawingContent(note, obj, objEl) {
-    const canvas = document.createElement('canvas');
-    canvas.className = 'canvas-drawing-canvas';
-    objEl.appendChild(canvas);
-    sizeDrawingCanvas(canvas, obj);
-    redrawDrawingCanvas(canvas, obj);
-
-    canvas.addEventListener('pointerdown', (e) => {
-      if (objEl.classList.contains('drawing-mode')) {
-        startStroke(e, note, obj, canvas);
-      } else {
-        startObjectDrag(e, note, obj, objEl);
-      }
-    });
-
-    const toolsBar = document.createElement('div');
-    toolsBar.className = 'object-toolbar drawing-tools-toolbar';
-
-    const colors = document.createElement('div');
-    colors.className = 'drawing-colors';
-    const palette = ['#1c1c1e', '#ff3b30', '#007aff', '#34c759', '#ff9500'];
-    for (const color of palette) {
-      const swatch = document.createElement('button');
-      swatch.type = 'button';
-      swatch.className = 'drawing-color' + (color === drawingColor ? ' active' : '');
-      swatch.style.setProperty('--swatch', color);
-      swatch.dataset.color = color;
-      colors.appendChild(swatch);
-    }
-    colors.addEventListener('pointerdown', (e) => e.stopPropagation());
-    colors.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const btn = e.target.closest('.drawing-color');
-      if (!btn) return;
-      drawingColor = btn.dataset.color;
-      drawingIsEraser = false;
-      eraserBtn.classList.remove('active');
-      colors.querySelectorAll('.drawing-color').forEach((b) => b.classList.toggle('active', b === btn));
-    });
-    toolsBar.appendChild(colors);
-
-    const eraserBtn = makeToolbarBtn(ICONS.eraser, false, () => {
-      drawingIsEraser = !drawingIsEraser;
-      eraserBtn.classList.toggle('active', drawingIsEraser);
-    });
-    toolsBar.appendChild(eraserBtn);
-
-    toolsBar.appendChild(
-      makeToolbarBtn(ICONS.undo, false, () => {
-        (obj.strokes || []).pop();
-        redrawDrawingCanvas(canvas, obj);
-        schedulePersist();
-      })
-    );
-
-    const doneBtn = document.createElement('button');
-    doneBtn.type = 'button';
-    doneBtn.className = 'sketch-done-btn';
-    doneBtn.textContent = 'Fertig';
-    doneBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
-    doneBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      closeActiveDrawing();
-    });
-    toolsBar.appendChild(doneBtn);
-
-    objEl.appendChild(toolsBar);
-  }
-
-  function startStroke(e, note, obj, canvas) {
+  function startInkStroke(e) {
+    const note = currentNote();
+    if (!note || !drawModeActive) return;
     e.preventDefault();
-    const rect = canvas.getBoundingClientRect();
-    const w = obj.w;
-    const h = obj.h;
-    const widthPx = widthForPointer(e.pointerType, e.pressure, drawingIsEraser);
-    const point = { x: (e.clientX - rect.left) / w, y: (e.clientY - rect.top) / h, width: widthPx / w };
-    const stroke = { color: drawingColor, eraser: drawingIsEraser, points: [point] };
-    obj.strokes = obj.strokes || [];
-    obj.strokes.push(stroke);
-    strokeState = { note, obj, canvas };
+    const rect = el.canvasSurface.getBoundingClientRect();
+    const widthPx = widthForPointer(e.pointerType, e.pressure, drawIsEraser);
+    const point = { x: e.clientX - rect.left, y: e.clientY - rect.top, width: widthPx };
+    const stroke = { color: drawColor, eraser: drawIsEraser, points: [point] };
+    note.ink.strokes.push(stroke);
+    inkStrokeState = { note };
     try {
-      canvas.setPointerCapture(e.pointerId);
+      el.inkLayer.setPointerCapture(e.pointerId);
     } catch (err) {
       // ignorieren
     }
-    canvas.addEventListener('pointermove', onStrokeMove);
-    canvas.addEventListener('pointerup', onStrokeEnd);
-    canvas.addEventListener('pointercancel', onStrokeEnd);
-    redrawDrawingCanvas(canvas, obj);
+    el.inkLayer.addEventListener('pointermove', onInkMove);
+    el.inkLayer.addEventListener('pointerup', onInkEnd);
+    el.inkLayer.addEventListener('pointercancel', onInkEnd);
+    redrawInk(note);
   }
 
-  function onStrokeMove(e) {
-    if (!strokeState) return;
-    const { obj, canvas } = strokeState;
-    const rect = canvas.getBoundingClientRect();
-    const w = obj.w;
-    const h = obj.h;
-    const widthPx = widthForPointer(e.pointerType, e.pressure, drawingIsEraser);
-    const stroke = obj.strokes[obj.strokes.length - 1];
-    stroke.points.push({ x: (e.clientX - rect.left) / w, y: (e.clientY - rect.top) / h, width: widthPx / w });
-    redrawDrawingCanvas(canvas, obj);
+  function onInkMove(e) {
+    if (!inkStrokeState) return;
+    const { note } = inkStrokeState;
+    const rect = el.canvasSurface.getBoundingClientRect();
+    const widthPx = widthForPointer(e.pointerType, e.pressure, drawIsEraser);
+    const stroke = note.ink.strokes[note.ink.strokes.length - 1];
+    stroke.points.push({ x: e.clientX - rect.left, y: e.clientY - rect.top, width: widthPx });
+    redrawInk(note);
   }
 
-  function onStrokeEnd() {
-    if (!strokeState) return;
-    const { canvas } = strokeState;
-    canvas.removeEventListener('pointermove', onStrokeMove);
-    canvas.removeEventListener('pointerup', onStrokeEnd);
-    canvas.removeEventListener('pointercancel', onStrokeEnd);
-    strokeState = null;
+  function onInkEnd() {
+    if (!inkStrokeState) return;
+    el.inkLayer.removeEventListener('pointermove', onInkMove);
+    el.inkLayer.removeEventListener('pointerup', onInkEnd);
+    el.inkLayer.removeEventListener('pointercancel', onInkEnd);
+    inkStrokeState = null;
     schedulePersist();
   }
 
-  function toggleDrawingMode(note, obj, objEl) {
-    const isActive = objEl.classList.contains('drawing-mode');
-    closeActiveDrawing();
-    if (!isActive) {
-      objEl.classList.add('drawing-mode');
-      activeDrawingObjId = obj.id;
+  function activateDrawMode() {
+    const note = currentNote();
+    if (!note) return;
+    deselectAll();
+    drawModeActive = true;
+    el.canvasSurface.classList.add('draw-mode');
+    el.drawModeBtn.classList.add('active');
+    el.drawToolbar.hidden = false;
+  }
+
+  function deactivateDrawMode() {
+    if (!drawModeActive) return;
+    drawModeActive = false;
+    el.canvasSurface.classList.remove('draw-mode');
+    el.drawModeBtn.classList.remove('active');
+    el.drawToolbar.hidden = true;
+  }
+
+  function toggleDrawMode() {
+    if (drawModeActive) deactivateDrawMode();
+    else activateDrawMode();
+  }
+
+  function setDrawColor(color) {
+    drawColor = color;
+    drawIsEraser = false;
+    el.drawEraserBtn.classList.remove('active');
+    for (const btn of el.drawColors.querySelectorAll('.draw-color')) {
+      btn.classList.toggle('active', btn.dataset.color === color);
     }
   }
 
-  function closeActiveDrawing() {
-    if (!activeDrawingObjId) return;
-    const prevEl = findObjEl(activeDrawingObjId);
-    if (prevEl) prevEl.classList.remove('drawing-mode');
-    activeDrawingObjId = null;
+  function toggleDrawEraser() {
+    drawIsEraser = !drawIsEraser;
+    el.drawEraserBtn.classList.toggle('active', drawIsEraser);
+  }
+
+  function undoInk() {
+    const note = currentNote();
+    if (!note) return;
+    note.ink.strokes.pop();
+    redrawInk(note);
     schedulePersist();
+    renderNoteList();
+  }
+
+  function clearInk() {
+    const note = currentNote();
+    if (!note) return;
+    if (!confirm('Alle Zeichnungen auf dieser Fläche löschen?')) return;
+    note.ink.strokes = [];
+    redrawInk(note);
+    schedulePersist();
+    renderNoteList();
   }
 
   // ----- Bild-Objekt -----
@@ -1030,7 +1015,7 @@
       bringToFront(note, objData);
       note.objects.push(objData);
       const objEl = buildObjectEl(note, objData);
-      el.canvasSurface.appendChild(objEl);
+      el.canvasSurface.insertBefore(objEl, el.inkLayer);
       selectObject(note, objData, objEl);
       schedulePersist();
       renderNoteList();
@@ -1050,27 +1035,12 @@
     bringToFront(note, obj);
     note.objects.push(obj);
     const objEl = buildObjectEl(note, obj);
-    el.canvasSurface.appendChild(objEl);
+    el.canvasSurface.insertBefore(objEl, el.inkLayer);
     schedulePersist();
     renderNoteList();
     const textarea = objEl.querySelector('.canvas-text-body');
     const overlay = objEl.querySelector('.text-drag-overlay');
     enterTextEdit(note, obj, objEl, textarea, overlay);
-  }
-
-  function addDrawingObject() {
-    const note = currentNote();
-    if (!note) return;
-    const { x, y } = nextPlacement(note, 280, 220);
-    const obj = { id: uid(), type: 'drawing', x, y, w: 280, h: 220, z: 0, strokes: [] };
-    bringToFront(note, obj);
-    note.objects.push(obj);
-    const objEl = buildObjectEl(note, obj);
-    el.canvasSurface.appendChild(objEl);
-    selectObject(note, obj, objEl);
-    toggleDrawingMode(note, obj, objEl);
-    schedulePersist();
-    renderNoteList();
   }
 
   function addImageObjectFromFile(file) {
@@ -1090,7 +1060,7 @@
         bringToFront(note, obj);
         note.objects.push(obj);
         const objEl = buildObjectEl(note, obj);
-        el.canvasSurface.appendChild(objEl);
+        el.canvasSurface.insertBefore(objEl, el.inkLayer);
         selectObject(note, obj, objEl);
         schedulePersist();
         renderNoteList();
@@ -1107,7 +1077,6 @@
     }
     note.objects = note.objects.filter((o) => o.id !== id);
     if (selectedObjectId === id) selectedObjectId = null;
-    if (activeDrawingObjId === id) activeDrawingObjId = null;
     const objEl = findObjEl(id);
     if (objEl) objEl.remove();
     note.updatedAt = Date.now();
@@ -1147,6 +1116,29 @@
 
   function closeMovePopover() {
     el.popoverBackdrop.hidden = true;
+  }
+
+  // ---------- Hintergrund-Popover ----------
+
+  function openBackgroundPopover() {
+    const btnRect = el.backgroundBtn.getBoundingClientRect();
+    el.backgroundPopoverBackdrop.hidden = false;
+    el.backgroundPopover.style.top = `${btnRect.bottom + 6}px`;
+    el.backgroundPopover.style.left = `${Math.max(8, btnRect.right - 200)}px`;
+  }
+
+  function closeBackgroundPopover() {
+    el.backgroundPopoverBackdrop.hidden = true;
+  }
+
+  function setBackground(value) {
+    const note = currentNote();
+    if (!note) return;
+    note.background = value;
+    note.updatedAt = Date.now();
+    el.canvasSurface.dataset.bg = value;
+    schedulePersist();
+    closeBackgroundPopover();
   }
 
   // ---------- Responsive view state (mobile) ----------
@@ -1193,7 +1185,6 @@
     });
 
     el.addTextBtn.addEventListener('click', addTextObject);
-    el.addSketchBtn.addEventListener('click', addDrawingObject);
     el.addImageBtn.addEventListener('click', () => el.imageFileInput.click());
     el.imageFileInput.addEventListener('change', () => {
       const file = el.imageFileInput.files[0];
@@ -1208,6 +1199,26 @@
     });
     el.canvasSurface.addEventListener('pointerdown', (e) => {
       if (e.target === el.canvasSurface) deselectAll();
+    });
+
+    el.drawModeBtn.addEventListener('click', toggleDrawMode);
+    el.inkLayer.addEventListener('pointerdown', startInkStroke);
+    el.drawEraserBtn.addEventListener('click', toggleDrawEraser);
+    el.drawUndoBtn.addEventListener('click', undoInk);
+    el.drawClearBtn.addEventListener('click', clearInk);
+    el.drawDoneBtn.addEventListener('click', deactivateDrawMode);
+    el.drawColors.addEventListener('click', (e) => {
+      const btn = e.target.closest('.draw-color');
+      if (btn) setDrawColor(btn.dataset.color);
+    });
+
+    el.backgroundBtn.addEventListener('click', openBackgroundPopover);
+    el.backgroundPopoverBackdrop.addEventListener('click', (e) => {
+      if (e.target === el.backgroundPopoverBackdrop) closeBackgroundPopover();
+    });
+    el.backgroundPopover.addEventListener('click', (e) => {
+      const item = e.target.closest('.popover-item');
+      if (item) setBackground(item.dataset.bg);
     });
 
     el.titleInput.addEventListener('input', () => {

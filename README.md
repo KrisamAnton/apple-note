@@ -18,16 +18,19 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
 - Volltextsuche über alle Notizen
 - **Freie Zeichenfläche pro Notiz** mit beliebig vielen Objekten:
   - **Text**: per Doppelklick bearbeiten, frei positionieren und skalieren
-  - **Skizze**: Zeichnen mit Finger (Touch) oder Stift (z. B. Apple
-    Pencil, inkl. Druckstärke), Farbwahl, Radiergummi, Rückgängig –
-    bleibt als Vektor-Strichdaten nachträglich korrigierbar
   - **Bild**: aus der Fotomediathek/Dateien einfügen
   - **PDF**: einfügen als Vorschaubild der ersten Seite (mit Datei-
     /Seitenzahl-Badge); wird wie ein Bild-Objekt behandelt
-  - Text lässt sich auf eine Skizze, ein Bild oder ein PDF ziehen, um
-    ihn dort als Beschriftung anzuheften – er bewegt und skaliert sich
-    dann mit dem Objekt mit, bleibt aber jederzeit per Doppelklick
-    editierbar
+  - Text lässt sich auf ein Bild oder ein PDF ziehen, um ihn dort als
+    Beschriftung anzuheften – er bewegt und skaliert sich dann mit dem
+    Objekt mit, bleibt aber jederzeit per Doppelklick editierbar
+- **Zeichnen-Modus** (Stift-Symbol) für die ganze Fläche: mit Finger
+  (Touch) oder Stift (z. B. Apple Pencil, inkl. Druckstärke) direkt auf
+  der Fläche zeichnen – auch über Bildern/PDFs. Farbwahl, Radiergummi,
+  Rückgängig, Alles löschen. Bleibt als Vektor-Strichdaten nachträglich
+  korrigierbar, kein begrenztes Zeichenfeld
+- **Hintergrund umstellen** (Raster-Symbol): Punkte, Linien oder leer
+  (Whiteboard) – pro Notiz einstellbar
 - Helles und dunkles Erscheinungsbild (folgt den Systemeinstellungen)
 - Responsive: Split-View auf iPad/Desktop, Einzelspalten-Navigation auf
   kleinen Bildschirmen
