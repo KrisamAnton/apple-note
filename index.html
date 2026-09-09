@@ -80,9 +80,16 @@
             <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M6 2.5h8l.5 1.5H16v1.5H4V4h1.5L6 2.5zM5 7h10l-.7 10.1c-.05.7-.63 1.4-1.5 1.4H7.2c-.87 0-1.45-.7-1.5-1.4L5 7z"/></svg>
           </button>
           <span class="editor-date" id="editorDate"></span>
-          <button class="toolbar-btn" id="sketchToggleBtn" type="button" aria-label="Skizze hinzufügen">
+          <button class="toolbar-btn" id="addTextBtn" type="button" aria-label="Text hinzufügen" title="Text hinzufügen">
+            <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M3 3h14v2.2h-6v11.8H9V5.2H3V3z"/></svg>
+          </button>
+          <button class="toolbar-btn" id="addSketchBtn" type="button" aria-label="Skizze hinzufügen" title="Skizze hinzufügen">
             <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M13.6 2.4a1.9 1.9 0 0 1 2.7 2.7L7.4 14 4 15l1-3.4 8.6-9.2zM3 17.5h14V19H3v-1.5z"/></svg>
           </button>
+          <button class="toolbar-btn" id="addImageBtn" type="button" aria-label="Bild hinzufügen" title="Bild hinzufügen">
+            <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M3 4h14a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm1 10h12l-3.8-5-2.7 3.5L7.5 10 4 14zm2-6a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/></svg>
+          </button>
+          <input type="file" id="imageFileInput" accept="image/*" hidden />
           <button class="toolbar-btn" id="moveNoteBtn" type="button" aria-label="Notiz verschieben">
             <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M2 5.5C2 4.67 2.67 4 3.5 4h4.13c.36 0 .7.14.96.4l1.2 1.2c.26.26.6.4.96.4H16.5c.83 0 1.5.67 1.5 1.5v7.6c0 .83-.67 1.5-1.5 1.5h-13C2.67 16.6 2 15.93 2 15.1V5.5z"/></svg>
           </button>
@@ -90,32 +97,9 @@
         <div class="editor-body">
           <textarea id="titleInput" class="title-input" placeholder="Titel" rows="1"></textarea>
 
-          <div class="sketch-panel" id="sketchPanel" hidden>
-            <div class="sketch-toolbar">
-              <div class="sketch-colors" id="sketchColors">
-                <button type="button" class="sketch-color active" data-color="#1c1c1e" style="--swatch:#1c1c1e" aria-label="Schwarz"></button>
-                <button type="button" class="sketch-color" data-color="#ff3b30" style="--swatch:#ff3b30" aria-label="Rot"></button>
-                <button type="button" class="sketch-color" data-color="#007aff" style="--swatch:#007aff" aria-label="Blau"></button>
-                <button type="button" class="sketch-color" data-color="#34c759" style="--swatch:#34c759" aria-label="Grün"></button>
-                <button type="button" class="sketch-color" data-color="#ff9500" style="--swatch:#ff9500" aria-label="Orange"></button>
-              </div>
-              <div class="sketch-actions">
-                <button type="button" class="sketch-tool-btn" id="sketchEraserBtn" aria-label="Radiergummi" title="Radiergummi">
-                  <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M13.5 2.6a2 2 0 0 1 2.9 0l1 1a2 2 0 0 1 0 2.9L9.8 14H5.4L3 11.6l8.6-8.6c.6-.6 1.3-.9 1.9-.4zM4.6 12.6 7.4 15.4H3.5A1.5 1.5 0 0 1 2 13.9v-.3l2.6-1z"/></svg>
-                </button>
-                <button type="button" class="sketch-tool-btn" id="sketchUndoBtn" aria-label="Rückgängig" title="Rückgängig">
-                  <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M7 4 3 8l4 4V9c3.9 0 6.5 1.3 8 4-0.3-4.7-3-8-8-8V4z"/></svg>
-                </button>
-                <button type="button" class="sketch-tool-btn" id="sketchClearBtn" aria-label="Skizze löschen" title="Skizze löschen">
-                  <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M6 2.5h8l.5 1.5H16v1.5H4V4h1.5L6 2.5zM5 7h10l-.7 10.1c-.05.7-.63 1.4-1.5 1.4H7.2c-.87 0-1.45-.7-1.5-1.4L5 7z"/></svg>
-                </button>
-                <button type="button" class="sketch-done-btn" id="sketchDoneBtn">Fertig</button>
-              </div>
-            </div>
-            <canvas id="sketchCanvas" class="sketch-canvas"></canvas>
+          <div class="canvas-workspace" id="canvasWorkspace">
+            <div class="canvas-surface" id="canvasSurface"></div>
           </div>
-
-          <textarea id="contentInput" class="content-input" placeholder="Notiz eingeben..."></textarea>
         </div>
       </article>
     </main>

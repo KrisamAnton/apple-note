@@ -1,12 +1,14 @@
-# KrisNote (Apple Notes PWA)
+# KrisNote
 
-Eine Notizen-App als Progressive Web App (PWA), die sich optisch und
-strukturell an Apple Notes (iPad) anlehnt: linke Spalte mit Ordnern,
-mittlere Spalte mit der Notizliste, rechte Spalte mit dem Editor
-(Split-View).
+Eine Notizen-App als Progressive Web App (PWA). Die drei Spalten
+(Ordner / Notizliste / Editor) sind an Apple Notes angelehnt, der
+Editor selbst ist bewusst eine **freie Zeichenfläche** (ähnlich Apples
+"Freeform"-App statt des linearen Notes-Textflusses): Text-, Skizzen-
+und Bild-Objekte lassen sich frei auf der Fläche platzieren, verschieben,
+in der Größe ändern und aneinander anheften.
 
-**Status:** Schritt 1 – Grundgerüst mit den Kernfunktionen. Weitere
-Anpassungen und Features folgen in späteren Schritten.
+**Status:** Laufende Weiterentwicklung. Weitere Anpassungen und
+Features werden Schritt für Schritt besprochen und umgesetzt.
 
 ## Funktionen
 
@@ -14,14 +16,22 @@ Anpassungen und Features folgen in späteren Schritten.
 - Ordner anlegen, umbenennen (Doppelklick) und löschen
 - Notizen zwischen Ordnern verschieben
 - Volltextsuche über alle Notizen
-- Skizzieren in der Notiz – mit Finger (Touch) oder Stift (z. B. Apple
-  Pencil, inkl. Druckstärke), mit Farbwahl, Radiergummi, Rückgängig
-  und Löschen
+- **Freie Zeichenfläche pro Notiz** mit beliebig vielen Objekten:
+  - **Text**: per Doppelklick bearbeiten, frei positionieren und skalieren
+  - **Skizze**: Zeichnen mit Finger (Touch) oder Stift (z. B. Apple
+    Pencil, inkl. Druckstärke), Farbwahl, Radiergummi, Rückgängig –
+    bleibt als Vektor-Strichdaten nachträglich korrigierbar
+  - **Bild**: aus der Fotomediathek/Dateien einfügen
+  - Text lässt sich auf eine Skizze oder ein Bild ziehen, um ihn dort
+    als Beschriftung anzuheften – er bewegt und skaliert sich dann mit
+    dem Objekt mit, bleibt aber jederzeit per Doppelklick editierbar
 - Helles und dunkles Erscheinungsbild (folgt den Systemeinstellungen)
 - Responsive: Split-View auf iPad/Desktop, Einzelspalten-Navigation auf
   kleinen Bildschirmen
 - Als PWA installierbar ("Zum Home-Bildschirm hinzufügen" in Safari)
 - Funktioniert offline (App-Shell wird per Service Worker gecacht)
+
+PDF-Anhänge sind als nächster Ausbauschritt geplant.
 
 ## Daten
 

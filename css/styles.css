@@ -470,17 +470,14 @@ textarea {
 
 .editor-body {
   flex: 1;
-  overflow-y: auto;
-  padding: 8px 32px 40px;
+  overflow: hidden;
+  padding: 8px 32px 0;
   display: flex;
   flex-direction: column;
-  max-width: 760px;
-  width: 100%;
-  margin: 0 auto;
+  min-height: 0;
 }
 
-.title-input,
-.content-input {
+.title-input {
   border: none;
   outline: none;
   background: transparent;
@@ -488,6 +485,9 @@ textarea {
   color: var(--text-primary);
   width: 100%;
   line-height: 1.45;
+  flex: none;
+  max-width: 760px;
+  margin: 0 auto;
 }
 
 .title-input {
@@ -497,68 +497,80 @@ textarea {
   overflow: hidden;
 }
 
-.content-input {
-  font-size: 16px;
-  flex: 1;
-  min-height: 300px;
-  padding: 4px 0 0;
-}
-
-.title-input::placeholder,
-.content-input::placeholder {
+.title-input::placeholder {
   color: var(--text-tertiary);
 }
 
-/* ---------- Skizze ---------- */
+/* ---------- Freie Zeichenfläche ---------- */
 
-.sketch-panel {
-  margin: 6px 0 14px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  overflow: hidden;
+.canvas-workspace {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  margin: 10px -32px 0;
+  padding: 0 32px 32px;
+  background-image: radial-gradient(var(--border-strong) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+.canvas-surface {
+  position: relative;
+  width: 1600px;
+  height: 2200px;
+}
+
+.canvas-object {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid transparent;
+  border-radius: 6px;
+}
+
+.canvas-object.selected {
+  border-color: var(--accent);
+  z-index: 1000 !important;
+}
+
+.canvas-object.dragging,
+.canvas-object.resizing {
+  opacity: 0.92;
+}
+
+.object-toolbar {
+  position: absolute;
+  top: -38px;
+  left: 0;
+  display: none;
+  align-items: center;
+  gap: 2px;
   background: var(--bg-elevated);
-}
-
-.sketch-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--border);
-  flex-wrap: wrap;
-}
-
-.sketch-colors {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.sketch-color {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: 2px solid var(--border-strong);
-  background: var(--swatch);
-  padding: 0;
-}
-
-.sketch-color.active {
-  border-color: var(--text-secondary);
-  box-shadow: 0 0 0 2px var(--bg-elevated);
-}
-
-.sketch-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.sketch-tool-btn {
-  width: 32px;
-  height: 32px;
+  border: 1px solid var(--border);
   border-radius: 8px;
+  padding: 3px;
+  box-shadow: var(--shadow-popover);
+  white-space: nowrap;
+}
+
+.canvas-object.selected .object-toolbar-main {
+  display: flex;
+}
+
+.canvas-object.selected.drawing-mode .object-toolbar-main {
+  display: none;
+}
+
+.drawing-tools-toolbar {
+  display: none;
+}
+
+.canvas-object.drawing-mode .drawing-tools-toolbar {
+  display: flex;
+}
+
+.object-toolbar-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
   border: none;
   background: transparent;
   color: var(--text-primary);
@@ -567,37 +579,133 @@ textarea {
   justify-content: center;
 }
 
-.sketch-tool-btn:hover {
+.object-toolbar-btn:hover {
   background: var(--hover-bg);
 }
 
-.sketch-tool-btn.active {
-  background: var(--selection-bg);
-  color: var(--accent);
+.object-toolbar-btn.danger {
+  color: var(--danger);
 }
 
-.sketch-done-btn {
-  border: none;
+.object-toolbar-btn .icon {
+  width: 15px;
+  height: 15px;
+}
+
+.resize-handle {
+  position: absolute;
+  right: -8px;
+  bottom: -8px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
   background: var(--accent);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  padding: 7px 14px;
-  border-radius: 8px;
-  margin-left: 4px;
+  border: 2px solid var(--bg-elevated);
+  display: none;
+  cursor: nwse-resize;
+  touch-action: none;
 }
 
-.sketch-done-btn:hover {
-  background: var(--accent-strong);
+.canvas-object.selected .resize-handle {
+  display: block;
 }
 
-.sketch-canvas {
+/* Text-Objekt */
+
+.canvas-text-body {
+  width: 100%;
+  height: 100%;
+  padding: 8px 10px;
+  overflow: auto;
+  outline: none;
+  border: none;
+  resize: none;
+  background: transparent;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.4;
+  font-family: var(--font);
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  pointer-events: none;
+}
+
+.canvas-text-body.editing {
+  pointer-events: auto;
+  cursor: text;
+  background: var(--selection-bg);
+}
+
+.text-drag-overlay {
+  position: absolute;
+  inset: 0;
+  cursor: grab;
+}
+
+.canvas-object[data-type="text"] {
+  background: var(--bg-elevated);
+  border-color: var(--border);
+}
+
+.canvas-object[data-type="text"].selected {
+  border-color: var(--accent);
+}
+
+/* Zeichnungs-Objekt */
+
+.canvas-object[data-type="drawing"] {
+  background: #fff;
+  border-color: var(--border);
+}
+
+.canvas-drawing-canvas {
   display: block;
   width: 100%;
-  height: 320px;
+  height: 100%;
   touch-action: none;
-  background: #fff;
+  cursor: grab;
+}
+
+.canvas-object[data-type="drawing"].drawing-mode .canvas-drawing-canvas {
   cursor: crosshair;
+}
+
+.drawing-colors {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 2px;
+}
+
+.drawing-color {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  background: var(--swatch);
+  padding: 0;
+}
+
+.drawing-color.active {
+  border-color: var(--text-primary);
+}
+
+/* Bild-Objekt */
+
+.canvas-object[data-type="image"] {
+  border-color: var(--border);
+  background: var(--bg-elevated);
+}
+
+.canvas-image-el {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 /* ---------- Popover (Ordner verschieben) ---------- */

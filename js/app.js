@@ -2,16 +2,51 @@
   'use strict';
 
   const STORAGE_KEY = 'appleNotesPwa.v1';
+  const SURFACE_W = 1600;
+  const SURFACE_H = 2200;
+  const MIN_SIZES = { text: [140, 60], drawing: [140, 120], image: [60, 60] };
 
   const ICONS = {
     allNotes: '<svg viewBox="0 0 20 20"><path d="M4 3a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6.41a1 1 0 0 0-.29-.71l-2.41-2.41A1 1 0 0 0 13.59 3H4zm2 4h8v1.5H6V7zm0 3h8v1.5H6V10zm0 3h5v1.5H6V13z"/></svg>',
-      folder: '<svg viewBox="0 0 20 20"><path d="M2 5.5C2 4.67 2.67 4 3.5 4h4.13c.36 0 .7.14.96.4l1.2 1.2c.26.26.6.4.96.4H16.5c.83 0 1.5.67 1.5 1.5v7.6c0 .83-.67 1.5-1.5 1.5h-13C2.67 16.6 2 15.93 2 15.1V5.5z"/></svg>',
+    folder: '<svg viewBox="0 0 20 20"><path d="M2 5.5C2 4.67 2.67 4 3.5 4h4.13c.36 0 .7.14.96.4l1.2 1.2c.26.26.6.4.96.4H16.5c.83 0 1.5.67 1.5 1.5v7.6c0 .83-.67 1.5-1.5 1.5h-13C2.67 16.6 2 15.93 2 15.1V5.5z"/></svg>',
+    trash: '<svg viewBox="0 0 20 20"><path d="M6 2.5h8l.5 1.5H16v1.5H4V4h1.5L6 2.5zM5 7h10l-.7 10.1c-.05.7-.63 1.4-1.5 1.4H7.2c-.87 0-1.45-.7-1.5-1.4L5 7z"/></svg>',
+    pencil: '<svg viewBox="0 0 20 20"><path d="M13.6 2.4a1.9 1.9 0 0 1 2.7 2.7L7.4 14 4 15l1-3.4 8.6-9.2zM3 17.5h14V19H3v-1.5z"/></svg>',
+    eraser: '<svg viewBox="0 0 20 20"><path d="M13.5 2.6a2 2 0 0 1 2.9 0l1 1a2 2 0 0 1 0 2.9L9.8 14H5.4L3 11.6l8.6-8.6c.6-.6 1.3-.9 1.9-.4zM4.6 12.6 7.4 15.4H3.5A1.5 1.5 0 0 1 2 13.9v-.3l2.6-1z"/></svg>',
+    undo: '<svg viewBox="0 0 20 20"><path d="M7 4 3 8l4 4V9c3.9 0 6.5 1.3 8 4-0.3-4.7-3-8-8-8V4z"/></svg>',
   };
 
-  /** @typedef {{id:string, title:string, content:string, folderId:string, createdAt:number, updatedAt:number}} Note */
-  /** @typedef {{id:string, name:string}} Folder */
+  /**
+   * @typedef {{id:string, type:'text', x:number, y:number, w:number, h:number, z:number, text:string, parentId:?string, relX?:number, relY?:number, relW?:number, relH?:number}} TextObject
+   * @typedef {{id:string, type:'drawing', x:number, y:number, w:number, h:number, z:number, strokes:Array}} DrawingObject
+   * @typedef {{id:string, type:'image', x:number, y:number, w:number, h:number, z:number, src:string}} ImageObject
+   * @typedef {{id:string, title:string, objects:Array, folderId:?string, createdAt:number, updatedAt:number}} Note
+   * @typedef {{id:string, name:string}} Folder
+   */
 
   const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
+  const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
+
+  function migrateNote(note) {
+    if (!Array.isArray(note.objects)) {
+      const objects = [];
+      if (note.content) {
+        objects.push({
+          id: uid(), type: 'text', x: 24, y: 24, w: 480, h: 260, z: 1,
+          text: note.content, parentId: null,
+        });
+      }
+      if (note.sketch) {
+        objects.push({
+          id: uid(), type: 'image', x: 24, y: note.content ? 300 : 24, w: 360, h: 260, z: 2,
+          src: note.sketch,
+        });
+      }
+      note.objects = objects;
+      delete note.content;
+      delete note.sketch;
+    }
+    return note;
+  }
 
   function loadState() {
     try {
@@ -19,6 +54,7 @@
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed && Array.isArray(parsed.notes) && Array.isArray(parsed.folders)) {
+          parsed.notes.forEach(migrateNote);
           return parsed;
         }
       }
@@ -37,15 +73,21 @@
         {
           id: welcomeId,
           title: 'Willkommen bei KrisNote',
-          content:
-            'Willkommen bei deiner neuen Notizen-App!\n\n' +
-            '- Tippe links unten auf das Stift-Symbol, um eine neue Notiz zu erstellen.\n' +
-            '- Lege über "Neuer Ordner" eigene Kategorien an.\n' +
-            '- Nutze die Suche, um alle Notizen zu durchsuchen.\n' +
-            '- Über das Skizzen-Symbol oben kannst du mit dem Finger oder dem Stift zeichnen.\n\n' +
-            'Alle Notizen werden aktuell nur lokal auf diesem Gerät gespeichert.',
+          objects: [
+            {
+              id: uid(), type: 'text', x: 24, y: 24, w: 560, h: 340, z: 1, parentId: null,
+              text:
+                'Willkommen bei deiner neuen Notizen-App!\n\n' +
+                '- Oben in der Werkzeugleiste: Text, Skizze oder Bild hinzufügen.\n' +
+                '- Objekte per Ziehen verschieben, an der Ecke unten rechts in der Größe ändern.\n' +
+                '- Text per Doppelklick bearbeiten.\n' +
+                '- Ziehe einen Text auf ein Bild oder eine Skizze, um ihn dort als Beschriftung anzuheften ' +
+                '– er bewegt und skaliert sich dann mit.\n' +
+                '- Beliebig viele Text-, Skizzen- und Bild-Objekte pro Notiz.\n\n' +
+                'Alle Notizen werden aktuell nur lokal auf diesem Gerät gespeichert.',
+            },
+          ],
           folderId: null,
-          sketch: null,
           createdAt: now,
           updatedAt: now,
         },
@@ -84,21 +126,18 @@
     editorEmpty: document.getElementById('editorEmpty'),
     editor: document.getElementById('editor'),
     titleInput: document.getElementById('titleInput'),
-    contentInput: document.getElementById('contentInput'),
     editorDate: document.getElementById('editorDate'),
     deleteNoteBtn: document.getElementById('deleteNoteBtn'),
     moveNoteBtn: document.getElementById('moveNoteBtn'),
     popoverBackdrop: document.getElementById('popoverBackdrop'),
     movePopover: document.getElementById('movePopover'),
     movePopoverList: document.getElementById('movePopoverList'),
-    sketchToggleBtn: document.getElementById('sketchToggleBtn'),
-    sketchPanel: document.getElementById('sketchPanel'),
-    sketchCanvas: document.getElementById('sketchCanvas'),
-    sketchColors: document.getElementById('sketchColors'),
-    sketchEraserBtn: document.getElementById('sketchEraserBtn'),
-    sketchUndoBtn: document.getElementById('sketchUndoBtn'),
-    sketchClearBtn: document.getElementById('sketchClearBtn'),
-    sketchDoneBtn: document.getElementById('sketchDoneBtn'),
+    addTextBtn: document.getElementById('addTextBtn'),
+    addSketchBtn: document.getElementById('addSketchBtn'),
+    addImageBtn: document.getElementById('addImageBtn'),
+    imageFileInput: document.getElementById('imageFileInput'),
+    canvasWorkspace: document.getElementById('canvasWorkspace'),
+    canvasSurface: document.getElementById('canvasSurface'),
   };
 
   // ---------- Helpers ----------
@@ -107,12 +146,27 @@
     return state.notes.filter((n) => (folderId === null ? true : n.folderId === folderId));
   }
 
+  function noteSearchableText(note) {
+    return note.objects
+      .filter((o) => o.type === 'text')
+      .map((o) => o.text || '')
+      .join(' ');
+  }
+
+  function notePreviewText(note) {
+    const firstText = note.objects.find((o) => o.type === 'text' && o.text && o.text.trim());
+    if (firstText) return firstText.text.trim().replace(/\s+/g, ' ').slice(0, 80);
+    if (note.objects.some((o) => o.type === 'drawing')) return 'Skizze';
+    if (note.objects.some((o) => o.type === 'image')) return 'Bild';
+    return '';
+  }
+
   function getVisibleNotes() {
     let list = notesInFolder(selectedFolderId);
     const q = searchQuery.trim().toLowerCase();
     if (q) {
       list = list.filter(
-        (n) => n.title.toLowerCase().includes(q) || n.content.toLowerCase().includes(q)
+        (n) => n.title.toLowerCase().includes(q) || noteSearchableText(n).toLowerCase().includes(q)
       );
     }
     return list.slice().sort((a, b) => b.updatedAt - a.updatedAt);
@@ -120,6 +174,14 @@
 
   function findNote(id) {
     return state.notes.find((n) => n.id === id) || null;
+  }
+
+  function currentNote() {
+    return findNote(selectedNoteId);
+  }
+
+  function getObj(note, id) {
+    return note.objects.find((o) => o.id === id);
   }
 
   function formatDate(ts) {
@@ -137,14 +199,10 @@
     });
   }
 
-  function firstLine(text) {
-    const idx = text.indexOf('\n');
-    return idx === -1 ? text : text.slice(0, idx);
-  }
-
-  function restLines(text) {
-    const idx = text.indexOf('\n');
-    return idx === -1 ? '' : text.slice(idx + 1).trim();
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
   }
 
   // ---------- Rendering: Sidebar ----------
@@ -177,7 +235,7 @@
         <input class="folder-name" value="${escapeHtml(folder.name)}" readonly />
         <span class="folder-count">${count}</span>
         <button class="folder-delete" type="button" aria-label="Ordner löschen" title="Ordner löschen">
-          <svg viewBox="0 0 20 20" class="icon" style="width:14px;height:14px"><path d="M6 2.5h8l.5 1.5H16v1.5H4V4h1.5L6 2.5zM5 7h10l-.7 10.1c-.05.7-.63 1.4-1.5 1.4H7.2c-.87 0-1.45-.7-1.5-1.4L5 7z"/></svg>
+          <svg viewBox="0 0 20 20" class="icon" style="width:14px;height:14px">${ICONS.trash}</svg>
         </button>
       `;
       const nameInput = item.querySelector('.folder-name');
@@ -216,12 +274,6 @@
       });
       el.folderList.appendChild(item);
     }
-  }
-
-  function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
   }
 
   function selectFolder(folderId) {
@@ -284,12 +336,12 @@
     for (const note of notes) {
       const item = document.createElement('div');
       item.className = 'note-item' + (note.id === selectedNoteId ? ' active' : '');
-      const preview = restLines(note.content) || note.content;
+      const preview = notePreviewText(note);
       item.innerHTML = `
         <div class="note-title">${escapeHtml(note.title)}</div>
         <div class="note-meta">
           <span>${formatDate(note.updatedAt)}</span>
-          <span class="note-preview">${escapeHtml(preview.slice(0, 80))}</span>
+          <span class="note-preview">${escapeHtml(preview)}</span>
         </div>
       `;
       item.addEventListener('click', () => selectNote(note.id));
@@ -300,7 +352,6 @@
   // ---------- Rendering: Editor ----------
 
   function selectNote(id) {
-    commitSketchToNote();
     selectedNoteId = id;
     goToView('editor');
     renderNoteList();
@@ -317,10 +368,9 @@
     el.editorEmpty.hidden = true;
     el.editor.hidden = false;
     el.titleInput.value = note.title;
-    el.contentInput.value = note.content;
     el.editorDate.textContent = formatDate(note.updatedAt);
     autoGrow(el.titleInput);
-    resetSketchForNote(note);
+    renderCanvas(note);
   }
 
   function autoGrow(textarea) {
@@ -329,14 +379,12 @@
   }
 
   function createNote() {
-    commitSketchToNote();
     const now = Date.now();
     const note = {
       id: uid(),
       title: '',
-      content: '',
+      objects: [],
       folderId: selectedFolderId,
-      sketch: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -350,14 +398,10 @@
     el.titleInput.focus();
   }
 
-  function updateSelectedNote() {
+  function updateTitle() {
     const note = findNote(selectedNoteId);
     if (!note) return;
-    const titleRaw = el.titleInput.value;
-    const title = titleRaw.replace(/\n/g, ' ').trim();
-    const content = el.contentInput.value;
-    note.title = title;
-    note.content = content;
+    note.title = el.titleInput.value.replace(/\n/g, ' ').trim();
     note.updatedAt = Date.now();
     schedulePersist();
     renderNoteList();
@@ -379,20 +423,341 @@
     goToView('notes');
   }
 
-  // ---------- Skizze ----------
+  // ---------- Freie Zeichenfläche: Objekte ----------
 
-  const sketchCtx = el.sketchCanvas.getContext('2d');
-  let sketchStrokes = [];
-  let sketchBackgroundImg = null; // gespeichertes Bild der Notiz (falls vorhanden)
-  let sketchCurrentStroke = null;
-  let sketchColor = '#1c1c1e';
-  let sketchIsEraser = false;
-  let sketchHasContent = false;
-  let sketchSaveTimer = null;
-  let sketchSized = false;
+  let selectedObjectId = null;
+  let activeDrawingObjId = null;
+  let dragState = null;
+  let strokeState = null;
+  let drawingColor = '#1c1c1e';
+  let drawingIsEraser = false;
 
-  function widthForPoint(pointerType, pressure) {
-    if (sketchIsEraser) return 20;
+  function bringToFront(note, obj) {
+    const maxZ = note.objects.reduce((m, o) => Math.max(m, o.z || 0), 0);
+    obj.z = maxZ + 1;
+  }
+
+  function nextPlacement(note, w, h) {
+    const scrollLeft = el.canvasWorkspace.scrollLeft;
+    const scrollTop = el.canvasWorkspace.scrollTop;
+    const offset = (note.objects.length % 6) * 24;
+    return {
+      x: clamp(scrollLeft + 30 + offset, 0, Math.max(0, SURFACE_W - w)),
+      y: clamp(scrollTop + 30 + offset, 0, Math.max(0, SURFACE_H - h)),
+    };
+  }
+
+  function renderCanvas(note) {
+    closeActiveDrawing();
+    selectedObjectId = null;
+    el.canvasSurface.innerHTML = '';
+    if (!note) return;
+    const sorted = [...note.objects].sort((a, b) => (a.z || 0) - (b.z || 0));
+    for (const obj of sorted) {
+      el.canvasSurface.appendChild(buildObjectEl(note, obj));
+    }
+  }
+
+  function findObjEl(id) {
+    return el.canvasSurface.querySelector(`[data-id="${id}"]`);
+  }
+
+  function applyObjRect(objEl, obj) {
+    objEl.style.left = `${obj.x}px`;
+    objEl.style.top = `${obj.y}px`;
+    objEl.style.width = `${obj.w}px`;
+    objEl.style.height = `${obj.h}px`;
+    objEl.style.zIndex = obj.z || 1;
+  }
+
+  function makeToolbarBtn(icon, danger, onClick) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'object-toolbar-btn' + (danger ? ' danger' : '');
+    btn.innerHTML = `<svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${icon}</svg>`;
+    btn.addEventListener('pointerdown', (e) => e.stopPropagation());
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      onClick();
+    });
+    return btn;
+  }
+
+  function buildObjectEl(note, obj) {
+    const objEl = document.createElement('div');
+    objEl.className = 'canvas-object';
+    objEl.dataset.id = obj.id;
+    objEl.dataset.type = obj.type;
+    applyObjRect(objEl, obj);
+
+    const mainToolbar = document.createElement('div');
+    mainToolbar.className = 'object-toolbar object-toolbar-main';
+    mainToolbar.appendChild(makeToolbarBtn(ICONS.trash, true, () => deleteObject(note, obj.id)));
+    if (obj.type === 'drawing') {
+      mainToolbar.appendChild(makeToolbarBtn(ICONS.pencil, false, () => toggleDrawingMode(note, obj, objEl)));
+    }
+    objEl.appendChild(mainToolbar);
+
+    if (obj.type === 'text') buildTextContent(note, obj, objEl);
+    else if (obj.type === 'drawing') buildDrawingContent(note, obj, objEl);
+    else if (obj.type === 'image') buildImageContent(note, obj, objEl);
+
+    const handle = document.createElement('div');
+    handle.className = 'resize-handle';
+    handle.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      startObjectResize(e, note, obj, objEl, handle);
+    });
+    objEl.appendChild(handle);
+
+    return objEl;
+  }
+
+  // ----- Auswahl -----
+
+  function selectObject(note, obj, objEl) {
+    if (selectedObjectId !== obj.id) {
+      const prev = el.canvasSurface.querySelector('.canvas-object.selected');
+      if (prev && prev !== objEl) {
+        prev.classList.remove('selected');
+        if (activeDrawingObjId && prev.dataset.id === activeDrawingObjId) closeActiveDrawing();
+      }
+      selectedObjectId = obj.id;
+      objEl.classList.add('selected');
+    }
+    bringToFront(note, obj);
+    objEl.style.zIndex = obj.z;
+    schedulePersist();
+  }
+
+  function deselectAll() {
+    closeActiveDrawing();
+    const prev = el.canvasSurface.querySelector('.canvas-object.selected');
+    if (prev) prev.classList.remove('selected');
+    selectedObjectId = null;
+  }
+
+  // ----- Verschieben -----
+
+  function startObjectDrag(e, note, obj, objEl) {
+    if (e.button !== undefined && e.button !== 0 && e.pointerType === 'mouse') return;
+    e.preventDefault();
+    selectObject(note, obj, objEl);
+    const children = note.objects
+      .filter((o) => o.parentId === obj.id)
+      .map((o) => ({ id: o.id, x: o.x, y: o.y }));
+    dragState = {
+      type: 'move',
+      objId: obj.id,
+      startX: e.clientX,
+      startY: e.clientY,
+      startObjX: obj.x,
+      startObjY: obj.y,
+      children,
+      moved: false,
+    };
+    objEl.classList.add('dragging');
+    try {
+      objEl.setPointerCapture(e.pointerId);
+    } catch (err) {
+      // ignorieren
+    }
+    objEl.addEventListener('pointermove', onObjectDragMove);
+    objEl.addEventListener('pointerup', onObjectDragEnd);
+    objEl.addEventListener('pointercancel', onObjectDragEnd);
+  }
+
+  function onObjectDragMove(e) {
+    if (!dragState || dragState.type !== 'move') return;
+    const note = currentNote();
+    const obj = note && getObj(note, dragState.objId);
+    if (!note || !obj) return;
+    const dx = e.clientX - dragState.startX;
+    const dy = e.clientY - dragState.startY;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragState.moved = true;
+    obj.x = clamp(dragState.startObjX + dx, -obj.w + 40, SURFACE_W - 40);
+    obj.y = clamp(dragState.startObjY + dy, 0, SURFACE_H - 40);
+    const objEl = findObjEl(obj.id);
+    if (objEl) {
+      objEl.style.left = `${obj.x}px`;
+      objEl.style.top = `${obj.y}px`;
+    }
+    for (const child of dragState.children) {
+      const childObj = getObj(note, child.id);
+      if (!childObj) continue;
+      childObj.x = child.x + dx;
+      childObj.y = child.y + dy;
+      const childEl = findObjEl(childObj.id);
+      if (childEl) {
+        childEl.style.left = `${childObj.x}px`;
+        childEl.style.top = `${childObj.y}px`;
+      }
+    }
+  }
+
+  function onObjectDragEnd(e) {
+    if (!dragState) return;
+    const note = currentNote();
+    const obj = note && getObj(note, dragState.objId);
+    const objEl = obj && findObjEl(obj.id);
+    if (objEl) {
+      objEl.classList.remove('dragging');
+      objEl.removeEventListener('pointermove', onObjectDragMove);
+      objEl.removeEventListener('pointerup', onObjectDragEnd);
+      objEl.removeEventListener('pointercancel', onObjectDragEnd);
+    }
+    if (note && obj && obj.type === 'text' && dragState.moved) {
+      updateAttachment(note, obj);
+    }
+    dragState = null;
+    if (note) schedulePersist();
+  }
+
+  function updateAttachment(note, textObj) {
+    const centerX = textObj.x + textObj.w / 2;
+    const centerY = textObj.y + textObj.h / 2;
+    let target = null;
+    for (const o of note.objects) {
+      if (o.id === textObj.id) continue;
+      if (o.type !== 'image' && o.type !== 'drawing') continue;
+      if (centerX >= o.x && centerX <= o.x + o.w && centerY >= o.y && centerY <= o.y + o.h) {
+        if (!target || (o.z || 0) > (target.z || 0)) target = o;
+      }
+    }
+    if (target) {
+      textObj.parentId = target.id;
+      textObj.relX = (textObj.x - target.x) / target.w;
+      textObj.relY = (textObj.y - target.y) / target.h;
+      textObj.relW = textObj.w / target.w;
+      textObj.relH = textObj.h / target.h;
+    } else {
+      textObj.parentId = null;
+    }
+  }
+
+  // ----- Größe ändern -----
+
+  function startObjectResize(e, note, obj, objEl, handle) {
+    e.preventDefault();
+    selectObject(note, obj, objEl);
+    dragState = {
+      type: 'resize',
+      objId: obj.id,
+      startX: e.clientX,
+      startY: e.clientY,
+      startW: obj.w,
+      startH: obj.h,
+    };
+    objEl.classList.add('resizing');
+    try {
+      handle.setPointerCapture(e.pointerId);
+    } catch (err) {
+      // ignorieren
+    }
+    handle.addEventListener('pointermove', onObjectResizeMove);
+    handle.addEventListener('pointerup', onObjectResizeEnd);
+    handle.addEventListener('pointercancel', onObjectResizeEnd);
+  }
+
+  function onObjectResizeMove(e) {
+    if (!dragState || dragState.type !== 'resize') return;
+    const note = currentNote();
+    const obj = note && getObj(note, dragState.objId);
+    if (!note || !obj) return;
+    const [minW, minH] = MIN_SIZES[obj.type] || [60, 60];
+    const dx = e.clientX - dragState.startX;
+    const dy = e.clientY - dragState.startY;
+    obj.w = clamp(dragState.startW + dx, minW, SURFACE_W - obj.x);
+    obj.h = clamp(dragState.startH + dy, minH, SURFACE_H - obj.y);
+    const objEl = findObjEl(obj.id);
+    if (objEl) {
+      objEl.style.width = `${obj.w}px`;
+      objEl.style.height = `${obj.h}px`;
+      if (obj.type === 'drawing') resizeDrawingCanvas(objEl, obj);
+    }
+    for (const child of note.objects) {
+      if (child.parentId !== obj.id) continue;
+      child.x = obj.x + child.relX * obj.w;
+      child.y = obj.y + child.relY * obj.h;
+      child.w = child.relW * obj.w;
+      child.h = child.relH * obj.h;
+      const childEl = findObjEl(child.id);
+      if (childEl) {
+        childEl.style.left = `${child.x}px`;
+        childEl.style.top = `${child.y}px`;
+        childEl.style.width = `${child.w}px`;
+        childEl.style.height = `${child.h}px`;
+      }
+    }
+  }
+
+  function onObjectResizeEnd(e) {
+    if (!dragState) return;
+    const handle = e.currentTarget;
+    const note = currentNote();
+    const obj = note && getObj(note, dragState.objId);
+    const objEl = obj && findObjEl(obj.id);
+    if (objEl) objEl.classList.remove('resizing');
+    handle.removeEventListener('pointermove', onObjectResizeMove);
+    handle.removeEventListener('pointerup', onObjectResizeEnd);
+    handle.removeEventListener('pointercancel', onObjectResizeEnd);
+    dragState = null;
+    if (note) schedulePersist();
+  }
+
+  // ----- Text-Objekt -----
+
+  function buildTextContent(note, obj, objEl) {
+    const textarea = document.createElement('textarea');
+    textarea.className = 'canvas-text-body';
+    textarea.placeholder = 'Text …';
+    textarea.value = obj.text || '';
+    textarea.readOnly = true;
+    objEl.appendChild(textarea);
+
+    const overlay = document.createElement('div');
+    overlay.className = 'text-drag-overlay';
+    objEl.appendChild(overlay);
+
+    overlay.addEventListener('pointerdown', (e) => startObjectDrag(e, note, obj, objEl));
+    overlay.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      enterTextEdit(note, obj, objEl, textarea, overlay);
+    });
+
+    textarea.addEventListener('blur', () => exitTextEdit(obj, textarea, overlay));
+    textarea.addEventListener('input', () => {
+      obj.text = textarea.value;
+      note.updatedAt = Date.now();
+      schedulePersist();
+      renderNoteList();
+    });
+    textarea.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') textarea.blur();
+    });
+  }
+
+  function enterTextEdit(note, obj, objEl, textarea, overlay) {
+    selectObject(note, obj, objEl);
+    textarea.readOnly = false;
+    textarea.classList.add('editing');
+    overlay.style.display = 'none';
+    textarea.focus();
+  }
+
+  function exitTextEdit(obj, textarea, overlay) {
+    textarea.readOnly = true;
+    textarea.classList.remove('editing');
+    overlay.style.display = '';
+    obj.text = textarea.value;
+    schedulePersist();
+    renderNoteList();
+  }
+
+  // ----- Zeichnungs-Objekt -----
+
+  function widthForPointer(pointerType, pressure, eraser) {
+    if (eraser) return 20;
     if (pointerType === 'pen') {
       const p = pressure > 0 ? pressure : 0.5;
       return 1.5 + p * 3.5;
@@ -401,204 +766,272 @@
     return 2.5;
   }
 
-  function sizeSketchCanvas() {
-    const width = Math.max(1, Math.round(el.sketchPanel.clientWidth));
-    const height = 320;
+  function sizeDrawingCanvas(canvas, obj) {
     const dpr = window.devicePixelRatio || 1;
-    el.sketchCanvas.width = width * dpr;
-    el.sketchCanvas.height = height * dpr;
-    el.sketchCanvas.style.width = `${width}px`;
-    el.sketchCanvas.style.height = `${height}px`;
-    sketchCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    sketchSized = true;
-    redrawSketch();
+    canvas.width = Math.max(1, Math.round(obj.w * dpr));
+    canvas.height = Math.max(1, Math.round(obj.h * dpr));
+    canvas.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  function redrawSketch() {
-    const width = el.sketchCanvas.clientWidth;
-    const height = el.sketchCanvas.clientHeight;
-    sketchCtx.save();
-    sketchCtx.globalCompositeOperation = 'source-over';
-    sketchCtx.clearRect(0, 0, width, height);
-    sketchCtx.fillStyle = '#ffffff';
-    sketchCtx.fillRect(0, 0, width, height);
-    if (sketchBackgroundImg) {
-      sketchCtx.drawImage(sketchBackgroundImg, 0, 0, width, height);
-    }
-    for (const stroke of sketchStrokes) {
-      drawStroke(stroke);
-    }
-    sketchCtx.restore();
-  }
-
-  function drawStroke(stroke) {
-    if (stroke.points.length === 0) return;
-    sketchCtx.globalCompositeOperation = stroke.eraser ? 'destination-out' : 'source-over';
-    sketchCtx.strokeStyle = stroke.color;
-    sketchCtx.lineCap = 'round';
-    sketchCtx.lineJoin = 'round';
-    sketchCtx.beginPath();
+  function drawStrokeOnCtx(ctx, stroke, w, h) {
     const pts = stroke.points;
-    sketchCtx.moveTo(pts[0].x, pts[0].y);
+    if (!pts || pts.length === 0) return;
+    ctx.globalCompositeOperation = stroke.eraser ? 'destination-out' : 'source-over';
+    ctx.strokeStyle = stroke.color;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x * w, pts[0].y * h);
     if (pts.length === 1) {
-      sketchCtx.lineWidth = pts[0].width;
-      sketchCtx.lineTo(pts[0].x + 0.1, pts[0].y + 0.1);
-      sketchCtx.stroke();
+      ctx.lineWidth = pts[0].width * w;
+      ctx.lineTo(pts[0].x * w + 0.1, pts[0].y * h + 0.1);
+      ctx.stroke();
       return;
     }
     for (let i = 1; i < pts.length; i++) {
-      sketchCtx.lineWidth = pts[i].width;
-      sketchCtx.lineTo(pts[i].x, pts[i].y);
+      ctx.lineWidth = pts[i].width * w;
+      ctx.lineTo(pts[i].x * w, pts[i].y * h);
     }
-    sketchCtx.stroke();
+    ctx.stroke();
+    ctx.globalCompositeOperation = 'source-over';
   }
 
-  function pointerPos(e) {
-    const rect = el.sketchCanvas.getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  function redrawDrawingCanvas(canvas, obj) {
+    const ctx = canvas.getContext('2d');
+    const w = obj.w;
+    const h = obj.h;
+    ctx.save();
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, w, h);
+    for (const stroke of obj.strokes || []) {
+      drawStrokeOnCtx(ctx, stroke, w, h);
+    }
+    ctx.restore();
   }
 
-  function onSketchPointerDown(e) {
-    if (!sketchSized) sizeSketchCanvas();
+  function resizeDrawingCanvas(objEl, obj) {
+    const canvas = objEl.querySelector('.canvas-drawing-canvas');
+    if (!canvas) return;
+    sizeDrawingCanvas(canvas, obj);
+    redrawDrawingCanvas(canvas, obj);
+  }
+
+  function buildDrawingContent(note, obj, objEl) {
+    const canvas = document.createElement('canvas');
+    canvas.className = 'canvas-drawing-canvas';
+    objEl.appendChild(canvas);
+    sizeDrawingCanvas(canvas, obj);
+    redrawDrawingCanvas(canvas, obj);
+
+    canvas.addEventListener('pointerdown', (e) => {
+      if (objEl.classList.contains('drawing-mode')) {
+        startStroke(e, note, obj, canvas);
+      } else {
+        startObjectDrag(e, note, obj, objEl);
+      }
+    });
+
+    const toolsBar = document.createElement('div');
+    toolsBar.className = 'object-toolbar drawing-tools-toolbar';
+
+    const colors = document.createElement('div');
+    colors.className = 'drawing-colors';
+    const palette = ['#1c1c1e', '#ff3b30', '#007aff', '#34c759', '#ff9500'];
+    for (const color of palette) {
+      const swatch = document.createElement('button');
+      swatch.type = 'button';
+      swatch.className = 'drawing-color' + (color === drawingColor ? ' active' : '');
+      swatch.style.setProperty('--swatch', color);
+      swatch.dataset.color = color;
+      colors.appendChild(swatch);
+    }
+    colors.addEventListener('pointerdown', (e) => e.stopPropagation());
+    colors.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const btn = e.target.closest('.drawing-color');
+      if (!btn) return;
+      drawingColor = btn.dataset.color;
+      drawingIsEraser = false;
+      eraserBtn.classList.remove('active');
+      colors.querySelectorAll('.drawing-color').forEach((b) => b.classList.toggle('active', b === btn));
+    });
+    toolsBar.appendChild(colors);
+
+    const eraserBtn = makeToolbarBtn(ICONS.eraser, false, () => {
+      drawingIsEraser = !drawingIsEraser;
+      eraserBtn.classList.toggle('active', drawingIsEraser);
+    });
+    toolsBar.appendChild(eraserBtn);
+
+    toolsBar.appendChild(
+      makeToolbarBtn(ICONS.undo, false, () => {
+        (obj.strokes || []).pop();
+        redrawDrawingCanvas(canvas, obj);
+        schedulePersist();
+      })
+    );
+
+    const doneBtn = document.createElement('button');
+    doneBtn.type = 'button';
+    doneBtn.className = 'sketch-done-btn';
+    doneBtn.textContent = 'Fertig';
+    doneBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+    doneBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeActiveDrawing();
+    });
+    toolsBar.appendChild(doneBtn);
+
+    objEl.appendChild(toolsBar);
+  }
+
+  function startStroke(e, note, obj, canvas) {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const w = obj.w;
+    const h = obj.h;
+    const widthPx = widthForPointer(e.pointerType, e.pressure, drawingIsEraser);
+    const point = { x: (e.clientX - rect.left) / w, y: (e.clientY - rect.top) / h, width: widthPx / w };
+    const stroke = { color: drawingColor, eraser: drawingIsEraser, points: [point] };
+    obj.strokes = obj.strokes || [];
+    obj.strokes.push(stroke);
+    strokeState = { note, obj, canvas };
     try {
-      el.sketchCanvas.setPointerCapture(e.pointerId);
+      canvas.setPointerCapture(e.pointerId);
     } catch (err) {
-      // Pointer-Capture kann in seltenen Fällen fehlschlagen; Zeichnen funktioniert trotzdem weiter.
+      // ignorieren
     }
-    const pos = pointerPos(e);
-    const width = widthForPoint(e.pointerType, e.pressure);
-    sketchCurrentStroke = {
-      color: sketchColor,
-      eraser: sketchIsEraser,
-      points: [{ x: pos.x, y: pos.y, width }],
-    };
-    sketchStrokes.push(sketchCurrentStroke);
-    sketchHasContent = true;
-    drawStroke(sketchCurrentStroke);
-    e.preventDefault();
+    canvas.addEventListener('pointermove', onStrokeMove);
+    canvas.addEventListener('pointerup', onStrokeEnd);
+    canvas.addEventListener('pointercancel', onStrokeEnd);
+    redrawDrawingCanvas(canvas, obj);
   }
 
-  function onSketchPointerMove(e) {
-    if (!sketchCurrentStroke) return;
-    const pos = pointerPos(e);
-    const width = widthForPoint(e.pointerType, e.pressure);
-    sketchCurrentStroke.points.push({ x: pos.x, y: pos.y, width });
-    redrawSketch();
-    e.preventDefault();
+  function onStrokeMove(e) {
+    if (!strokeState) return;
+    const { obj, canvas } = strokeState;
+    const rect = canvas.getBoundingClientRect();
+    const w = obj.w;
+    const h = obj.h;
+    const widthPx = widthForPointer(e.pointerType, e.pressure, drawingIsEraser);
+    const stroke = obj.strokes[obj.strokes.length - 1];
+    stroke.points.push({ x: (e.clientX - rect.left) / w, y: (e.clientY - rect.top) / h, width: widthPx / w });
+    redrawDrawingCanvas(canvas, obj);
   }
 
-  function endSketchStroke() {
-    if (!sketchCurrentStroke) return;
-    sketchCurrentStroke = null;
-    scheduleSketchSave();
-  }
-
-  function scheduleSketchSave() {
-    clearTimeout(sketchSaveTimer);
-    sketchSaveTimer = setTimeout(commitSketchToNote, 250);
-  }
-
-  function commitSketchToNote() {
-    const note = findNote(selectedNoteId);
-    if (!note || el.sketchPanel.hidden) return;
-    if (!sketchHasContent) {
-      note.sketch = null;
-    } else {
-      note.sketch = el.sketchCanvas.toDataURL('image/png');
-    }
-    note.updatedAt = Date.now();
+  function onStrokeEnd() {
+    if (!strokeState) return;
+    const { canvas } = strokeState;
+    canvas.removeEventListener('pointermove', onStrokeMove);
+    canvas.removeEventListener('pointerup', onStrokeEnd);
+    canvas.removeEventListener('pointercancel', onStrokeEnd);
+    strokeState = null;
     schedulePersist();
   }
 
-  function openSketchPanel() {
-    el.sketchPanel.hidden = false;
-    sketchSized = false;
-    requestAnimationFrame(sizeSketchCanvas);
+  function toggleDrawingMode(note, obj, objEl) {
+    const isActive = objEl.classList.contains('drawing-mode');
+    closeActiveDrawing();
+    if (!isActive) {
+      objEl.classList.add('drawing-mode');
+      activeDrawingObjId = obj.id;
+    }
   }
 
-  function closeSketchPanel() {
-    commitSketchToNote();
-    el.sketchPanel.hidden = true;
+  function closeActiveDrawing() {
+    if (!activeDrawingObjId) return;
+    const prevEl = findObjEl(activeDrawingObjId);
+    if (prevEl) prevEl.classList.remove('drawing-mode');
+    activeDrawingObjId = null;
+    schedulePersist();
   }
 
-  function resetSketchForNote(note) {
-    clearTimeout(sketchSaveTimer);
-    sketchStrokes = [];
-    sketchCurrentStroke = null;
-    sketchSized = false;
-    if (note && note.sketch) {
-      sketchHasContent = true;
-      sketchBackgroundImg = new Image();
-      sketchBackgroundImg.onload = () => {
-        if (findNote(selectedNoteId) === note) {
-          el.sketchPanel.hidden = false;
-          requestAnimationFrame(sizeSketchCanvas);
-        }
+  // ----- Bild-Objekt -----
+
+  function buildImageContent(note, obj, objEl) {
+    const img = document.createElement('img');
+    img.className = 'canvas-image-el';
+    img.src = obj.src;
+    img.draggable = false;
+    objEl.appendChild(img);
+
+    objEl.addEventListener('pointerdown', (e) => startObjectDrag(e, note, obj, objEl));
+  }
+
+  // ----- Objekte hinzufügen / löschen -----
+
+  function addTextObject() {
+    const note = currentNote();
+    if (!note) return;
+    const { x, y } = nextPlacement(note, 220, 120);
+    const obj = { id: uid(), type: 'text', x, y, w: 220, h: 120, z: 0, text: '', parentId: null };
+    bringToFront(note, obj);
+    note.objects.push(obj);
+    const objEl = buildObjectEl(note, obj);
+    el.canvasSurface.appendChild(objEl);
+    schedulePersist();
+    renderNoteList();
+    const textarea = objEl.querySelector('.canvas-text-body');
+    const overlay = objEl.querySelector('.text-drag-overlay');
+    enterTextEdit(note, obj, objEl, textarea, overlay);
+  }
+
+  function addDrawingObject() {
+    const note = currentNote();
+    if (!note) return;
+    const { x, y } = nextPlacement(note, 280, 220);
+    const obj = { id: uid(), type: 'drawing', x, y, w: 280, h: 220, z: 0, strokes: [] };
+    bringToFront(note, obj);
+    note.objects.push(obj);
+    const objEl = buildObjectEl(note, obj);
+    el.canvasSurface.appendChild(objEl);
+    selectObject(note, obj, objEl);
+    toggleDrawingMode(note, obj, objEl);
+    schedulePersist();
+    renderNoteList();
+  }
+
+  function addImageObjectFromFile(file) {
+    const note = currentNote();
+    if (!note || !file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const src = reader.result;
+      const img = new Image();
+      img.onload = () => {
+        const maxW = 360;
+        const scale = Math.min(1, maxW / img.naturalWidth);
+        const w = Math.round(img.naturalWidth * scale) || 200;
+        const h = Math.round(img.naturalHeight * scale) || 150;
+        const { x, y } = nextPlacement(note, w, h);
+        const obj = { id: uid(), type: 'image', x, y, w, h, z: 0, src };
+        bringToFront(note, obj);
+        note.objects.push(obj);
+        const objEl = buildObjectEl(note, obj);
+        el.canvasSurface.appendChild(objEl);
+        selectObject(note, obj, objEl);
+        schedulePersist();
+        renderNoteList();
       };
-      sketchBackgroundImg.src = note.sketch;
-      el.sketchPanel.hidden = false;
-    } else {
-      sketchHasContent = false;
-      sketchBackgroundImg = null;
-      el.sketchPanel.hidden = true;
+      img.src = src;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function deleteObject(note, id) {
+    if (!confirm('Objekt löschen?')) return;
+    for (const o of note.objects) {
+      if (o.parentId === id) o.parentId = null;
     }
-  }
-
-  function setSketchColor(color) {
-    sketchColor = color;
-    sketchIsEraser = false;
-    el.sketchEraserBtn.classList.remove('active');
-    for (const btn of el.sketchColors.querySelectorAll('.sketch-color')) {
-      btn.classList.toggle('active', btn.dataset.color === color);
-    }
-  }
-
-  function toggleEraser() {
-    sketchIsEraser = !sketchIsEraser;
-    el.sketchEraserBtn.classList.toggle('active', sketchIsEraser);
-  }
-
-  function undoSketch() {
-    sketchStrokes.pop();
-    sketchHasContent = sketchStrokes.length > 0 || !!sketchBackgroundImg;
-    redrawSketch();
-    scheduleSketchSave();
-  }
-
-  function clearSketch() {
-    sketchStrokes = [];
-    sketchBackgroundImg = null;
-    sketchHasContent = false;
-    redrawSketch();
-    scheduleSketchSave();
-  }
-
-  function setupSketchEvents() {
-    el.sketchToggleBtn.addEventListener('click', () => {
-      if (el.sketchPanel.hidden) {
-        openSketchPanel();
-      } else {
-        closeSketchPanel();
-      }
-    });
-    el.sketchDoneBtn.addEventListener('click', closeSketchPanel);
-    el.sketchClearBtn.addEventListener('click', clearSketch);
-    el.sketchUndoBtn.addEventListener('click', undoSketch);
-    el.sketchEraserBtn.addEventListener('click', toggleEraser);
-    el.sketchColors.addEventListener('click', (e) => {
-      const btn = e.target.closest('.sketch-color');
-      if (btn) setSketchColor(btn.dataset.color);
-    });
-
-    el.sketchCanvas.addEventListener('pointerdown', onSketchPointerDown);
-    el.sketchCanvas.addEventListener('pointermove', onSketchPointerMove);
-    el.sketchCanvas.addEventListener('pointerup', endSketchStroke);
-    el.sketchCanvas.addEventListener('pointercancel', endSketchStroke);
-    el.sketchCanvas.addEventListener('pointerleave', endSketchStroke);
-
-    window.addEventListener('resize', () => {
-      if (!el.sketchPanel.hidden) sizeSketchCanvas();
-    });
+    note.objects = note.objects.filter((o) => o.id !== id);
+    if (selectedObjectId === id) selectedObjectId = null;
+    if (activeDrawingObjId === id) activeDrawingObjId = null;
+    const objEl = findObjEl(id);
+    if (objEl) objEl.remove();
+    note.updatedAt = Date.now();
+    schedulePersist();
+    renderNoteList();
   }
 
   // ---------- Move popover ----------
@@ -677,18 +1110,28 @@
     el.popoverBackdrop.addEventListener('click', (e) => {
       if (e.target === el.popoverBackdrop) closeMovePopover();
     });
-    setupSketchEvents();
+
+    el.addTextBtn.addEventListener('click', addTextObject);
+    el.addSketchBtn.addEventListener('click', addDrawingObject);
+    el.addImageBtn.addEventListener('click', () => el.imageFileInput.click());
+    el.imageFileInput.addEventListener('change', () => {
+      const file = el.imageFileInput.files[0];
+      if (file) addImageObjectFromFile(file);
+      el.imageFileInput.value = '';
+    });
+    el.canvasSurface.addEventListener('pointerdown', (e) => {
+      if (e.target === el.canvasSurface) deselectAll();
+    });
 
     el.titleInput.addEventListener('input', () => {
       autoGrow(el.titleInput);
-      updateSelectedNote();
+      updateTitle();
     });
-    el.contentInput.addEventListener('input', updateSelectedNote);
 
     el.titleInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        el.contentInput.focus();
+        el.titleInput.blur();
       }
     });
 
@@ -701,15 +1144,9 @@
       }, 120);
     });
 
-    window.addEventListener('beforeunload', () => {
-      commitSketchToNote();
-      persist();
-    });
+    window.addEventListener('beforeunload', persist);
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') {
-        commitSketchToNote();
-        persist();
-      }
+      if (document.visibilityState === 'hidden') persist();
     });
   }
 
