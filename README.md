@@ -29,6 +29,13 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
   der Fläche zeichnen – auch über Bildern/PDFs. Farbwahl, Radiergummi,
   Rückgängig, Alles löschen. Bleibt als Vektor-Strichdaten nachträglich
   korrigierbar, kein begrenztes Zeichenfeld
+  - **Lasso-Auswahl** (zweites Werkzeug im Zeichnen-Modus): einzelne
+    Striche umkreisen, um nur diese zu verschieben, in der Größe zu
+    ändern oder zu löschen – wie in einem Zeichenprogramm
+  - Eine Auswahl lässt sich an ein Bild/PDF **anheften**: bewegt und
+    skaliert sich danach mit dem Objekt mit (z. B. eine Markierung
+    direkt auf einem Foto), bleibt aber jederzeit über „Lösen" wieder
+    frei verschiebbar
 - **Hintergrund umstellen** (Raster-Symbol): Punkte, Linien oder leer
   (Whiteboard) – pro Notiz einstellbar
 - Helles und dunkles Erscheinungsbild (folgt den Systemeinstellungen)

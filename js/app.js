@@ -10,12 +10,14 @@
     allNotes: '<svg viewBox="0 0 20 20"><path d="M4 3a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6.41a1 1 0 0 0-.29-.71l-2.41-2.41A1 1 0 0 0 13.59 3H4zm2 4h8v1.5H6V7zm0 3h8v1.5H6V10zm0 3h5v1.5H6V13z"/></svg>',
     folder: '<svg viewBox="0 0 20 20"><path d="M2 5.5C2 4.67 2.67 4 3.5 4h4.13c.36 0 .7.14.96.4l1.2 1.2c.26.26.6.4.96.4H16.5c.83 0 1.5.67 1.5 1.5v7.6c0 .83-.67 1.5-1.5 1.5h-13C2.67 16.6 2 15.93 2 15.1V5.5z"/></svg>',
     trash: '<svg viewBox="0 0 20 20"><path d="M6 2.5h8l.5 1.5H16v1.5H4V4h1.5L6 2.5zM5 7h10l-.7 10.1c-.05.7-.63 1.4-1.5 1.4H7.2c-.87 0-1.45-.7-1.5-1.4L5 7z"/></svg>',
+    link: '<svg viewBox="0 0 20 20"><rect x="1" y="7" width="9" height="4.5" rx="2.25" transform="rotate(-45 5.5 9.25)" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="9.5" y="8.5" width="9" height="4.5" rx="2.25" transform="rotate(-45 14 10.75)" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
+    unlink: '<svg viewBox="0 0 20 20"><rect x="1" y="7" width="9" height="4.5" rx="2.25" transform="rotate(-45 5.5 9.25)" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="9.5" y="8.5" width="9" height="4.5" rx="2.25" transform="rotate(-45 14 10.75)" fill="none" stroke="currentColor" stroke-width="1.6"/><line x1="3" y1="17" x2="17" y2="3" stroke="currentColor" stroke-width="1.8"/></svg>',
   };
 
   /**
    * @typedef {{id:string, type:'text', x:number, y:number, w:number, h:number, z:number, text:string, parentId:?string, relX?:number, relY?:number, relW?:number, relH?:number}} TextObject
    * @typedef {{id:string, type:'image', x:number, y:number, w:number, h:number, z:number, src:string}} ImageObject
-   * @typedef {{color:string, eraser:boolean, points:Array<{x:number,y:number,width:number}>}} Stroke
+   * @typedef {{id:string, color:string, eraser:boolean, points:Array<{x:number,y:number,width:number}>, parentId:?string}} Stroke
    * @typedef {{id:string, title:string, objects:Array, ink:{strokes:Stroke[]}, background:'dots'|'lines'|'blank', folderId:?string, createdAt:number, updatedAt:number}} Note
    * @typedef {{id:string, name:string}} Folder
    */
@@ -50,8 +52,10 @@
     for (const d of oldDrawings) {
       for (const stroke of d.strokes || []) {
         note.ink.strokes.push({
+          id: uid(),
           color: stroke.color,
           eraser: stroke.eraser,
+          parentId: null,
           points: (stroke.points || []).map((p) => ({
             x: d.x + p.x * d.w,
             y: d.y + p.y * d.h,
@@ -62,6 +66,11 @@
     }
     if (oldDrawings.length > 0) {
       note.objects = note.objects.filter((o) => o.type !== 'drawing');
+    }
+    // Striche ohne id/parentId (ältere Zwischenversion) ergänzen
+    for (const stroke of note.ink.strokes) {
+      if (!stroke.id) stroke.id = uid();
+      if (stroke.parentId === undefined) stroke.parentId = null;
     }
     return note;
   }
@@ -167,6 +176,8 @@
     canvasSurface: document.getElementById('canvasSurface'),
     inkLayer: document.getElementById('inkLayer'),
     drawToolbar: document.getElementById('drawToolbar'),
+    drawPenToolBtn: document.getElementById('drawPenToolBtn'),
+    drawSelectToolBtn: document.getElementById('drawSelectToolBtn'),
     drawColors: document.getElementById('drawColors'),
     drawEraserBtn: document.getElementById('drawEraserBtn'),
     drawUndoBtn: document.getElementById('drawUndoBtn'),
@@ -468,6 +479,9 @@
   let drawColor = '#1c1c1e';
   let drawIsEraser = false;
   let drawModeActive = false;
+  let drawTool = 'pen'; // 'pen' | 'select'
+  let lassoPoints = null;
+  let strokeSelection = null; // { ids: Set<string> }
 
   function bringToFront(note, obj) {
     const maxZ = note.objects.reduce((m, o) => Math.max(m, o.z || 0), 0);
@@ -628,6 +642,7 @@
         childEl.style.top = `${childObj.y}px`;
       }
     }
+    redrawInk(note);
   }
 
   function onObjectDragEnd(e) {
@@ -723,6 +738,7 @@
         childEl.style.height = `${child.h}px`;
       }
     }
+    redrawInk(note);
   }
 
   function onObjectResizeEnd(e) {
@@ -807,8 +823,18 @@
     el.inkLayer.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  function drawStrokeAbs(ctx, stroke) {
-    const pts = stroke.points;
+  function strokeAbsolutePoints(note, stroke) {
+    if (!stroke.parentId) return stroke.points;
+    const parent = getObj(note, stroke.parentId);
+    if (!parent) return stroke.points;
+    return stroke.points.map((p) => ({
+      x: parent.x + p.x * parent.w,
+      y: parent.y + p.y * parent.h,
+      width: p.width * parent.w,
+    }));
+  }
+
+  function drawStrokeAbs(ctx, stroke, pts) {
     if (!pts || pts.length === 0) return;
     ctx.globalCompositeOperation = stroke.eraser ? 'destination-out' : 'source-over';
     ctx.strokeStyle = stroke.color;
@@ -830,13 +856,27 @@
     ctx.globalCompositeOperation = 'source-over';
   }
 
+  function drawLassoPath(ctx, points) {
+    if (points.length < 2) return;
+    ctx.save();
+    ctx.setLineDash([5, 4]);
+    ctx.strokeStyle = 'rgba(0, 122, 255, 0.9)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function redrawInk(note) {
     const ctx = el.inkLayer.getContext('2d');
     ctx.save();
     ctx.clearRect(0, 0, SURFACE_W, SURFACE_H);
     for (const stroke of (note.ink && note.ink.strokes) || []) {
-      drawStrokeAbs(ctx, stroke);
+      drawStrokeAbs(ctx, stroke, strokeAbsolutePoints(note, stroke));
     }
+    if (lassoPoints && lassoPoints.length > 1) drawLassoPath(ctx, lassoPoints);
     ctx.restore();
   }
 
@@ -847,7 +887,7 @@
     const rect = el.canvasSurface.getBoundingClientRect();
     const widthPx = widthForPointer(e.pointerType, e.pressure, drawIsEraser);
     const point = { x: e.clientX - rect.left, y: e.clientY - rect.top, width: widthPx };
-    const stroke = { color: drawColor, eraser: drawIsEraser, points: [point] };
+    const stroke = { id: uid(), color: drawColor, eraser: drawIsEraser, parentId: null, points: [point] };
     note.ink.strokes.push(stroke);
     inkStrokeState = { note };
     try {
@@ -888,6 +928,7 @@
     el.canvasSurface.classList.add('draw-mode');
     el.drawModeBtn.classList.add('active');
     el.drawToolbar.hidden = false;
+    setDrawTool('pen');
   }
 
   function deactivateDrawMode() {
@@ -896,11 +937,19 @@
     el.canvasSurface.classList.remove('draw-mode');
     el.drawModeBtn.classList.remove('active');
     el.drawToolbar.hidden = true;
+    clearStrokeSelection();
   }
 
   function toggleDrawMode() {
     if (drawModeActive) deactivateDrawMode();
     else activateDrawMode();
+  }
+
+  function setDrawTool(tool) {
+    drawTool = tool;
+    clearStrokeSelection();
+    el.drawPenToolBtn.classList.toggle('active', tool === 'pen');
+    el.drawSelectToolBtn.classList.toggle('active', tool === 'select');
   }
 
   function setDrawColor(color) {
@@ -931,9 +980,313 @@
     if (!note) return;
     if (!confirm('Alle Zeichnungen auf dieser Fläche löschen?')) return;
     note.ink.strokes = [];
+    clearStrokeSelection();
     redrawInk(note);
     schedulePersist();
     renderNoteList();
+  }
+
+  // ----- Lasso-Auswahl einzelner Striche -----
+
+  function pointInPolygon(pt, poly) {
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const xi = poly[i].x;
+      const yi = poly[i].y;
+      const xj = poly[j].x;
+      const yj = poly[j].y;
+      const intersect = yi > pt.y !== yj > pt.y && pt.x < ((xj - xi) * (pt.y - yi)) / (yj - yi) + xi;
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
+  function startLasso(e) {
+    const note = currentNote();
+    if (!note || !drawModeActive) return;
+    e.preventDefault();
+    clearStrokeSelection();
+    const rect = el.canvasSurface.getBoundingClientRect();
+    lassoPoints = [{ x: e.clientX - rect.left, y: e.clientY - rect.top }];
+    try {
+      el.inkLayer.setPointerCapture(e.pointerId);
+    } catch (err) {
+      // ignorieren
+    }
+    el.inkLayer.addEventListener('pointermove', onLassoMove);
+    el.inkLayer.addEventListener('pointerup', onLassoEnd);
+    el.inkLayer.addEventListener('pointercancel', onLassoCancel);
+    redrawInk(note);
+  }
+
+  function onLassoMove(e) {
+    if (!lassoPoints) return;
+    const rect = el.canvasSurface.getBoundingClientRect();
+    lassoPoints.push({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+    redrawInk(currentNote());
+  }
+
+  function onLassoEnd() {
+    if (!lassoPoints) return;
+    el.inkLayer.removeEventListener('pointermove', onLassoMove);
+    el.inkLayer.removeEventListener('pointerup', onLassoEnd);
+    el.inkLayer.removeEventListener('pointercancel', onLassoCancel);
+    const note = currentNote();
+    const lasso = lassoPoints;
+    lassoPoints = null;
+    if (note && lasso.length > 2) selectStrokesInLasso(note, lasso);
+    redrawInk(note);
+  }
+
+  function onLassoCancel() {
+    el.inkLayer.removeEventListener('pointermove', onLassoMove);
+    el.inkLayer.removeEventListener('pointerup', onLassoEnd);
+    el.inkLayer.removeEventListener('pointercancel', onLassoCancel);
+    lassoPoints = null;
+    redrawInk(currentNote());
+  }
+
+  function selectStrokesInLasso(note, lasso) {
+    const ids = new Set();
+    for (const stroke of note.ink.strokes) {
+      const pts = strokeAbsolutePoints(note, stroke);
+      if (!pts.length) continue;
+      const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+      const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+      if (pointInPolygon({ x: cx, y: cy }, lasso)) ids.add(stroke.id);
+    }
+    if (ids.size === 0) return;
+    strokeSelection = { ids };
+    renderStrokeSelectionBox(note);
+  }
+
+  function selectionBoundingBox(note) {
+    if (!strokeSelection) return null;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const stroke of note.ink.strokes) {
+      if (!strokeSelection.ids.has(stroke.id)) continue;
+      for (const p of strokeAbsolutePoints(note, stroke)) {
+        minX = Math.min(minX, p.x - p.width / 2);
+        minY = Math.min(minY, p.y - p.width / 2);
+        maxX = Math.max(maxX, p.x + p.width / 2);
+        maxY = Math.max(maxY, p.y + p.width / 2);
+      }
+    }
+    if (!isFinite(minX)) return null;
+    const pad = 6;
+    return { x: minX - pad, y: minY - pad, w: maxX - minX + pad * 2, h: maxY - minY + pad * 2 };
+  }
+
+  function commonParentId(note) {
+    let pid;
+    for (const s of note.ink.strokes) {
+      if (!strokeSelection.ids.has(s.id)) continue;
+      const spid = s.parentId || null;
+      if (pid === undefined) pid = spid;
+      else if (pid !== spid) return null;
+    }
+    return pid || null;
+  }
+
+  function findAttachTarget(note, box) {
+    const cx = box.x + box.w / 2;
+    const cy = box.y + box.h / 2;
+    let target = null;
+    for (const o of note.objects) {
+      if (o.type !== 'image' && o.type !== 'pdf') continue;
+      if (cx >= o.x && cx <= o.x + o.w && cy >= o.y && cy <= o.y + o.h) {
+        if (!target || (o.z || 0) > (target.z || 0)) target = o;
+      }
+    }
+    return target;
+  }
+
+  function bakeSelectionAbsolute(note) {
+    for (const stroke of note.ink.strokes) {
+      if (!strokeSelection.ids.has(stroke.id)) continue;
+      if (stroke.parentId) {
+        stroke.points = strokeAbsolutePoints(note, stroke);
+        stroke.parentId = null;
+      }
+    }
+  }
+
+  function attachSelection(note, target) {
+    if (!target) return;
+    for (const s of note.ink.strokes) {
+      if (!strokeSelection.ids.has(s.id)) continue;
+      const abs = strokeAbsolutePoints(note, s);
+      s.points = abs.map((p) => ({
+        x: (p.x - target.x) / target.w,
+        y: (p.y - target.y) / target.h,
+        width: p.width / target.w,
+      }));
+      s.parentId = target.id;
+    }
+    schedulePersist();
+    redrawInk(note);
+    renderStrokeSelectionBox(note);
+    renderNoteList();
+  }
+
+  function detachSelection(note) {
+    bakeSelectionAbsolute(note);
+    schedulePersist();
+    redrawInk(note);
+    renderStrokeSelectionBox(note);
+  }
+
+  function deleteSelection(note) {
+    if (!strokeSelection) return;
+    note.ink.strokes = note.ink.strokes.filter((s) => !strokeSelection.ids.has(s.id));
+    clearStrokeSelection();
+    redrawInk(note);
+    schedulePersist();
+    renderNoteList();
+  }
+
+  function clearStrokeSelection() {
+    strokeSelection = null;
+    const existing = document.getElementById('strokeSelectionBox');
+    if (existing) existing.remove();
+  }
+
+  function renderStrokeSelectionBox(note) {
+    const existing = document.getElementById('strokeSelectionBox');
+    if (existing) existing.remove();
+    if (!strokeSelection) return;
+    const box = selectionBoundingBox(note);
+    if (!box) {
+      strokeSelection = null;
+      return;
+    }
+
+    const boxEl = document.createElement('div');
+    boxEl.className = 'stroke-selection-box';
+    boxEl.id = 'strokeSelectionBox';
+    boxEl.style.left = `${box.x}px`;
+    boxEl.style.top = `${box.y}px`;
+    boxEl.style.width = `${box.w}px`;
+    boxEl.style.height = `${box.h}px`;
+
+    const toolbar = document.createElement('div');
+    toolbar.className = 'object-toolbar';
+    const parentId = commonParentId(note);
+    if (parentId) {
+      toolbar.appendChild(makeToolbarBtn(ICONS.unlink, false, () => detachSelection(note)));
+    } else {
+      const target = findAttachTarget(note, box);
+      const btn = makeToolbarBtn(ICONS.link, false, () => attachSelection(note, target));
+      if (!target) btn.disabled = true;
+      toolbar.appendChild(btn);
+    }
+    toolbar.appendChild(makeToolbarBtn(ICONS.trash, true, () => deleteSelection(note)));
+    boxEl.appendChild(toolbar);
+
+    const handle = document.createElement('div');
+    handle.className = 'resize-handle';
+    handle.addEventListener('pointerdown', (e) => startSelectionResize(e, box));
+    boxEl.appendChild(handle);
+
+    boxEl.addEventListener('pointerdown', (e) => startSelectionDrag(e));
+
+    el.canvasSurface.appendChild(boxEl);
+  }
+
+  function startSelectionDrag(e) {
+    const note = currentNote();
+    if (!note || !strokeSelection) return;
+    e.preventDefault();
+    bakeSelectionAbsolute(note);
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const snapshot = note.ink.strokes
+      .filter((s) => strokeSelection.ids.has(s.id))
+      .map((s) => ({ stroke: s, points: s.points.map((p) => ({ ...p })) }));
+    const boxEl = document.getElementById('strokeSelectionBox');
+    try {
+      boxEl.setPointerCapture(e.pointerId);
+    } catch (err) {
+      // ignorieren
+    }
+
+    function onMove(ev) {
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      for (const { stroke, points } of snapshot) {
+        stroke.points = points.map((p) => ({ ...p, x: p.x + dx, y: p.y + dy }));
+      }
+      redrawInk(note);
+      const box = selectionBoundingBox(note);
+      if (box) {
+        boxEl.style.left = `${box.x}px`;
+        boxEl.style.top = `${box.y}px`;
+        boxEl.style.width = `${box.w}px`;
+        boxEl.style.height = `${box.h}px`;
+      }
+    }
+    function onUp() {
+      boxEl.removeEventListener('pointermove', onMove);
+      boxEl.removeEventListener('pointerup', onUp);
+      boxEl.removeEventListener('pointercancel', onUp);
+      schedulePersist();
+      renderNoteList();
+    }
+    boxEl.addEventListener('pointermove', onMove);
+    boxEl.addEventListener('pointerup', onUp);
+    boxEl.addEventListener('pointercancel', onUp);
+  }
+
+  function startSelectionResize(e, startBox) {
+    e.preventDefault();
+    e.stopPropagation();
+    const note = currentNote();
+    if (!note || !strokeSelection) return;
+    bakeSelectionAbsolute(note);
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const snapshot = note.ink.strokes
+      .filter((s) => strokeSelection.ids.has(s.id))
+      .map((s) => ({ stroke: s, points: s.points.map((p) => ({ ...p })) }));
+    const handle = e.currentTarget;
+    try {
+      handle.setPointerCapture(e.pointerId);
+    } catch (err) {
+      // ignorieren
+    }
+    const boxEl = document.getElementById('strokeSelectionBox');
+
+    function onMove(ev) {
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      const newW = Math.max(20, startBox.w + dx);
+      const newH = Math.max(20, startBox.h + dy);
+      const sx = newW / startBox.w;
+      const sy = newH / startBox.h;
+      const savg = (sx + sy) / 2;
+      for (const { stroke, points } of snapshot) {
+        stroke.points = points.map((p) => ({
+          x: startBox.x + (p.x - startBox.x) * sx,
+          y: startBox.y + (p.y - startBox.y) * sy,
+          width: p.width * savg,
+        }));
+      }
+      redrawInk(note);
+      boxEl.style.width = `${newW}px`;
+      boxEl.style.height = `${newH}px`;
+    }
+    function onUp() {
+      handle.removeEventListener('pointermove', onMove);
+      handle.removeEventListener('pointerup', onUp);
+      handle.removeEventListener('pointercancel', onUp);
+      schedulePersist();
+    }
+    handle.addEventListener('pointermove', onMove);
+    handle.addEventListener('pointerup', onUp);
+    handle.addEventListener('pointercancel', onUp);
   }
 
   // ----- Bild-Objekt -----
@@ -1075,12 +1428,20 @@
     for (const o of note.objects) {
       if (o.parentId === id) o.parentId = null;
     }
+    // Angeheftete Zeichen-Striche lösen (in absolute Koordinaten umrechnen), bevor das Objekt verschwindet
+    for (const s of note.ink.strokes) {
+      if (s.parentId === id) {
+        s.points = strokeAbsolutePoints(note, s);
+        s.parentId = null;
+      }
+    }
     note.objects = note.objects.filter((o) => o.id !== id);
     if (selectedObjectId === id) selectedObjectId = null;
     const objEl = findObjEl(id);
     if (objEl) objEl.remove();
     note.updatedAt = Date.now();
     schedulePersist();
+    redrawInk(note);
     renderNoteList();
   }
 
@@ -1202,7 +1563,12 @@
     });
 
     el.drawModeBtn.addEventListener('click', toggleDrawMode);
-    el.inkLayer.addEventListener('pointerdown', startInkStroke);
+    el.inkLayer.addEventListener('pointerdown', (e) => {
+      if (drawTool === 'select') startLasso(e);
+      else startInkStroke(e);
+    });
+    el.drawPenToolBtn.addEventListener('click', () => setDrawTool('pen'));
+    el.drawSelectToolBtn.addEventListener('click', () => setDrawTool('select'));
     el.drawEraserBtn.addEventListener('click', toggleDrawEraser);
     el.drawUndoBtn.addEventListener('click', undoInk);
     el.drawClearBtn.addEventListener('click', clearInk);

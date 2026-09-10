@@ -622,6 +622,35 @@ textarea {
   color: var(--accent);
 }
 
+.draw-tools-switch {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: 8px;
+  margin-right: 2px;
+  border-right: 1px solid var(--border);
+}
+
+/* Auswahl-Box für lassierte Zeichen-Striche */
+
+.stroke-selection-box {
+  position: absolute;
+  border: 2px dashed var(--accent);
+  border-radius: 6px;
+  z-index: 5600;
+  cursor: grab;
+  background: rgba(0, 0, 0, 0.02);
+  touch-action: none;
+}
+
+.stroke-selection-box .resize-handle {
+  display: block;
+}
+
+.stroke-selection-box .object-toolbar {
+  display: flex;
+}
+
 .canvas-object {
   position: absolute;
   box-sizing: border-box;
@@ -676,6 +705,11 @@ textarea {
 
 .object-toolbar-btn.danger {
   color: var(--danger);
+}
+
+.object-toolbar-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 .object-toolbar-btn .icon {

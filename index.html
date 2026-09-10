@@ -107,6 +107,14 @@
 
           <div class="canvas-workspace" id="canvasWorkspace">
             <div class="draw-toolbar" id="drawToolbar" hidden>
+              <div class="draw-tools-switch">
+                <button type="button" class="draw-tool-btn active" id="drawPenToolBtn" aria-label="Stift" title="Stift">
+                  <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M13.6 2.4a1.9 1.9 0 0 1 2.7 2.7L7.4 14 4 15l1-3.4 8.6-9.2zM3 17.5h14V19H3v-1.5z"/></svg>
+                </button>
+                <button type="button" class="draw-tool-btn" id="drawSelectToolBtn" aria-label="Auswählen (Lasso)" title="Auswählen (Lasso)">
+                  <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2.5 2"/><circle cx="10" cy="10" r="1.4" fill="currentColor"/></svg>
+                </button>
+              </div>
               <div class="draw-colors" id="drawColors">
                 <button type="button" class="draw-color active" data-color="#1c1c1e" style="--swatch:#1c1c1e" aria-label="Schwarz"></button>
                 <button type="button" class="draw-color" data-color="#ff3b30" style="--swatch:#ff3b30" aria-label="Rot"></button>
