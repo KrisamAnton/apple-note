@@ -45,6 +45,12 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
       je 3 Stärken (Leicht/Mittel/Stark). Hervorhebungen, Farbe und
       Schriftgröße lassen sich über die jeweilige „Entfernen"/
       „Standard"-Option wieder aufheben
+- **Werkzeugleiste im Ribbon-Stil** (an OneNote angelehnt): gruppierte
+  Buttons mit Trennlinien (Notiz/Formatvorlagen/Einfügen/Seite). Die
+  Formatierungswerkzeuge (Überschrift, Fett, Kursiv, Textfarbe,
+  Markieren, Schriftgröße) sitzen dauerhaft in der Leiste – aktivieren
+  sich automatisch, sobald ein Text-Objekt bearbeitet wird, statt nur
+  in einem Popup am ausgewählten Objekt zu erscheinen
   - **Bild**: aus der Fotomediathek/Dateien einfügen
   - **PDF**: einfügen als Vorschaubild der ersten Seite (mit Datei-
     /Seitenzahl-Badge); wird wie ein Bild-Objekt behandelt

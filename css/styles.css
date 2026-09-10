@@ -109,7 +109,11 @@ textarea {
 }
 
 .sidebar-header {
-  padding: 20px 20px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 20px 14px 8px 20px;
 }
 
 .sidebar-title {
@@ -117,6 +121,29 @@ textarea {
   font-weight: 700;
   margin: 0;
   letter-spacing: -0.02em;
+}
+
+.sidebar-add-btn {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.sidebar-add-btn:hover {
+  background: var(--hover-bg);
+}
+
+.sidebar-add-btn .icon {
+  width: 18px;
+  height: 18px;
 }
 
 .folder-list {
@@ -237,29 +264,6 @@ textarea {
 .folder-delete:hover {
   background: rgba(0, 0, 0, 0.08);
   color: var(--danger);
-}
-
-.sidebar-footer {
-  padding: 10px;
-  border-top: 1px solid var(--border);
-}
-
-.sidebar-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: none;
-  background: transparent;
-  color: var(--accent);
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.sidebar-btn:hover {
-  background: var(--hover-bg);
 }
 
 /* ---------- Notizliste (Spalte 2) ---------- */
@@ -525,12 +529,31 @@ textarea {
   min-height: 0;
 }
 
-.editor-toolbar {
+.editor-toolbar.ribbon {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 10px 18px;
+  gap: 2px;
+  padding: 8px 14px;
+  background: var(--bg-list);
   border-bottom: 1px solid var(--border);
+  flex: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ribbon-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+
+.ribbon-divider {
+  width: 1px;
+  align-self: stretch;
+  margin: 4px 8px;
+  background: var(--border);
   flex: none;
 }
 
@@ -538,11 +561,14 @@ textarea {
   font-size: 12px;
   color: var(--text-tertiary);
   font-weight: 500;
+  padding: 0 8px 0 4px;
+  white-space: nowrap;
 }
 
 .toolbar-btn {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
+  flex: none;
   border-radius: 8px;
   border: none;
   background: transparent;
@@ -556,7 +582,16 @@ textarea {
   background: var(--hover-bg);
 }
 
-#deleteNoteBtn {
+.toolbar-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.toolbar-btn:disabled:hover {
+  background: transparent;
+}
+
+.toolbar-btn.danger {
   color: var(--danger);
 }
 

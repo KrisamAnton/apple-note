@@ -267,6 +267,12 @@
     movePopover: document.getElementById('movePopover'),
     movePopoverList: document.getElementById('movePopoverList'),
     addTextBtn: document.getElementById('addTextBtn'),
+    headingBtn: document.getElementById('headingBtn'),
+    boldBtn: document.getElementById('boldBtn'),
+    italicBtn: document.getElementById('italicBtn'),
+    ribbonColorBtn: document.getElementById('ribbonColorBtn'),
+    ribbonMarkerBtn: document.getElementById('ribbonMarkerBtn'),
+    ribbonFontSizeBtn: document.getElementById('ribbonFontSizeBtn'),
     textStylePopoverBackdrop: document.getElementById('textStylePopoverBackdrop'),
     textStylePopover: document.getElementById('textStylePopover'),
     folderColorPopoverBackdrop: document.getElementById('folderColorPopoverBackdrop'),
@@ -729,7 +735,7 @@
 
   let selectedObjectId = null;
   let dragState = null;
-  let activeTextEdit = null; // { note, obj, objEl, body, overlay, formatBtns: [], headingBtn }
+  let activeTextEdit = null; // { note, obj, objEl, body, overlay } – Formatierungs-Buttons sitzen global im Ribbon
   let lastSelectionRange = null;
   let headingTargetNode = null;
   let inkStrokeState = null;
@@ -784,6 +790,14 @@
     objEl.style.zIndex = obj.z || 1;
   }
 
+  // Für bereits im HTML vorhandene Buttons (die globale Formatierungs-Ribbon-Leiste):
+  // verhindert wie makeToolbarBtn, dass ein Klick den Fokus aus dem bearbeiteten
+  // Text-Objekt entfernt und damit die gemerkte Textauswahl verliert.
+  function wireRibbonBtn(btn, onClick) {
+    btn.addEventListener('pointerdown', (e) => e.preventDefault());
+    btn.addEventListener('click', onClick);
+  }
+
   function makeToolbarBtn(icon, danger, onClick, label) {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -819,7 +833,7 @@
     mainToolbar.appendChild(makeToolbarBtn(ICONS.trash, true, () => deleteObject(note, obj.id), 'Löschen'));
     objEl.appendChild(mainToolbar);
 
-    if (obj.type === 'text') buildTextContent(note, obj, objEl, mainToolbar, autoFocusText);
+    if (obj.type === 'text') buildTextContent(note, obj, objEl, autoFocusText);
     else if (obj.type === 'image') buildImageContent(note, obj, objEl);
     else if (obj.type === 'pdf') buildPdfContent(note, obj, objEl);
 
@@ -1095,7 +1109,7 @@
     }
   }
 
-  function buildTextContent(note, obj, objEl, mainToolbar, autoFocus) {
+  function buildTextContent(note, obj, objEl, autoFocus) {
     const body = document.createElement('div');
     body.className = 'canvas-text-body';
     body.dataset.placeholder = 'Text …';
@@ -1109,20 +1123,6 @@
     overlay.className = 'text-drag-overlay';
     objEl.appendChild(overlay);
 
-    const headingBtn = makeToolbarBtn(ICONS.heading, false, () => openHeadingPopover(headingBtn), 'Formatvorlage (Überschrift)');
-    const boldBtn = makeToolbarBtn(ICONS.bold, false, () => applyInlineCommand('bold'), 'Fett');
-    const italicBtn = makeToolbarBtn(ICONS.italic, false, () => applyInlineCommand('italic'), 'Kursiv');
-    const markerBtn = makeToolbarBtn(ICONS.marker, false, () => openFormatPopover(el.markerPopoverBackdrop, el.markerPopover, markerBtn), 'Markieren');
-    const colorBtn = makeToolbarBtn(ICONS.textColor, false, () => openFormatPopover(el.colorPopoverBackdrop, el.colorPopover, colorBtn), 'Textfarbe');
-    const fontSizeBtn = makeToolbarBtn(ICONS.fontSize, false, () => openFormatPopover(el.fontSizePopoverBackdrop, el.fontSizePopover, fontSizeBtn), 'Schriftgröße');
-    const formatBtns = [boldBtn, italicBtn, markerBtn, colorBtn, fontSizeBtn];
-    headingBtn.disabled = true;
-    mainToolbar.appendChild(headingBtn);
-    for (const btn of formatBtns) {
-      btn.disabled = true;
-      mainToolbar.appendChild(btn);
-    }
-
     // Eigene Doppelklick-Erkennung (zeitbasiert): Das native "dblclick"-Ereignis kann durch
     // die Pointer-Capture des Zieh-Handlers verschluckt werden, sobald der erste Klick bereits
     // ein Drag gestartet hat. Diese Variante ist davon unabhängig.
@@ -1133,14 +1133,14 @@
         lastTapAt = 0;
         e.preventDefault();
         e.stopPropagation();
-        enterTextEdit(note, obj, objEl, body, overlay, formatBtns, headingBtn);
+        enterTextEdit(note, obj, objEl, body, overlay);
         return;
       }
       lastTapAt = now;
       startObjectDrag(e, note, obj, objEl);
     });
 
-    body.addEventListener('blur', () => exitTextEdit(obj, body, overlay, formatBtns, headingBtn));
+    body.addEventListener('blur', () => exitTextEdit(obj, body, overlay));
     body.addEventListener('input', () => {
       stripInheritedHeadingOnFreshLine(body);
       saveTextObjContent(note, obj, body);
@@ -1158,7 +1158,7 @@
     // Fokussieren funktioniert nur auf Elementen, die bereits im DOM hängen – zu
     // diesem Zeitpunkt ist objEl (bei Neuerstellung) meist noch nicht eingefügt.
     // Der Aufrufer muss daher nach dem Einfügen selbst enterTextEdit() aufrufen.
-    if (autoFocus) queueMicrotask(() => { if (objEl.isConnected) enterTextEdit(note, obj, objEl, body, overlay, formatBtns, headingBtn); });
+    if (autoFocus) queueMicrotask(() => { if (objEl.isConnected) enterTextEdit(note, obj, objEl, body, overlay); });
   }
 
   // contentEditable übernimmt beim Zeilenumbruch (Enter) die Klasse der aktuellen
@@ -1216,28 +1216,34 @@
     sel.addRange(range);
   }
 
-  function enterTextEdit(note, obj, objEl, body, overlay, formatBtns, headingBtn) {
+  // Formatierungs-Buttons, die eine echte (nicht eingeklappte) Textauswahl brauchen –
+  // sitzen fest in der oberen Werkzeugleiste (Ribbon), nicht mehr pro Text-Objekt.
+  function selectionFormatBtns() {
+    return [el.boldBtn, el.italicBtn, el.ribbonMarkerBtn, el.ribbonColorBtn, el.ribbonFontSizeBtn];
+  }
+
+  function enterTextEdit(note, obj, objEl, body, overlay) {
     selectObject(note, obj, objEl);
     body.contentEditable = 'true';
     body.classList.add('editing');
     overlay.style.display = 'none';
     body.focus();
-    activeTextEdit = { note, obj, objEl, body, overlay, formatBtns, headingBtn };
+    activeTextEdit = { note, obj, objEl, body, overlay };
     lastSelectionRange = null;
-    for (const btn of formatBtns) btn.disabled = true;
+    for (const btn of selectionFormatBtns()) btn.disabled = true;
     // Die Formatvorlage (Überschrift) gilt für die ganze Zeile und braucht daher
     // keine Textauswahl – sie ist während des ganzen Bearbeitens nutzbar.
-    headingBtn.disabled = false;
+    el.headingBtn.disabled = false;
   }
 
-  function exitTextEdit(obj, body, overlay, formatBtns, headingBtn) {
+  function exitTextEdit(obj, body, overlay) {
     body.contentEditable = 'false';
     body.classList.remove('editing');
     overlay.style.display = '';
     const note = currentNote();
     if (note) saveTextObjContent(note, obj, body);
-    for (const btn of formatBtns) btn.disabled = true;
-    headingBtn.disabled = true;
+    for (const btn of selectionFormatBtns()) btn.disabled = true;
+    el.headingBtn.disabled = true;
     if (activeTextEdit && activeTextEdit.obj.id === obj.id) {
       activeTextEdit = null;
       lastSelectionRange = null;
@@ -1255,7 +1261,7 @@
       sel && sel.rangeCount > 0 && !sel.isCollapsed &&
       activeTextEdit.body.contains(sel.getRangeAt(0).commonAncestorContainer);
     lastSelectionRange = valid ? sel.getRangeAt(0).cloneRange() : null;
-    for (const btn of activeTextEdit.formatBtns) btn.disabled = !valid;
+    for (const btn of selectionFormatBtns()) btn.disabled = !valid;
   });
 
   // Erweitert die Range-Grenzen nach außen auf die nächste Element-Ebene, solange sie
@@ -1351,7 +1357,7 @@
     saveTextObjContent(note, obj, body);
     updateTextEmptyState(body);
     lastSelectionRange = null;
-    for (const btn of activeTextEdit.formatBtns) btn.disabled = true;
+    for (const btn of selectionFormatBtns()) btn.disabled = true;
     closeAllFormatPopovers();
     body.focus();
   }
@@ -2401,6 +2407,12 @@
     });
 
     el.addTextBtn.addEventListener('click', openTextStylePopover);
+    wireRibbonBtn(el.headingBtn, () => openHeadingPopover(el.headingBtn));
+    wireRibbonBtn(el.boldBtn, () => applyInlineCommand('bold'));
+    wireRibbonBtn(el.italicBtn, () => applyInlineCommand('italic'));
+    wireRibbonBtn(el.ribbonMarkerBtn, () => openFormatPopover(el.markerPopoverBackdrop, el.markerPopover, el.ribbonMarkerBtn));
+    wireRibbonBtn(el.ribbonColorBtn, () => openFormatPopover(el.colorPopoverBackdrop, el.colorPopover, el.ribbonColorBtn));
+    wireRibbonBtn(el.ribbonFontSizeBtn, () => openFormatPopover(el.fontSizePopoverBackdrop, el.fontSizePopover, el.ribbonFontSizeBtn));
     el.addImageBtn.addEventListener('click', () => el.imageFileInput.click());
     el.imageFileInput.addEventListener('change', () => {
       const file = el.imageFileInput.files[0];
