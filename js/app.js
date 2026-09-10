@@ -500,6 +500,7 @@
 
   function renderCanvas(note) {
     deactivateDrawMode();
+    clearStrokeSelection();
     selectedObjectId = null;
     for (const child of [...el.canvasSurface.children]) {
       if (child !== el.inkLayer) child.remove();
@@ -526,11 +527,15 @@
     objEl.style.zIndex = obj.z || 1;
   }
 
-  function makeToolbarBtn(icon, danger, onClick) {
+  function makeToolbarBtn(icon, danger, onClick, label) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'object-toolbar-btn' + (danger ? ' danger' : '');
     btn.innerHTML = `<svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${icon}</svg>`;
+    if (label) {
+      btn.title = label;
+      btn.setAttribute('aria-label', label);
+    }
     btn.addEventListener('pointerdown', (e) => e.stopPropagation());
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -548,7 +553,7 @@
 
     const mainToolbar = document.createElement('div');
     mainToolbar.className = 'object-toolbar object-toolbar-main';
-    mainToolbar.appendChild(makeToolbarBtn(ICONS.trash, true, () => deleteObject(note, obj.id)));
+    mainToolbar.appendChild(makeToolbarBtn(ICONS.trash, true, () => deleteObject(note, obj.id), 'Löschen'));
     objEl.appendChild(mainToolbar);
 
     if (obj.type === 'text') buildTextContent(note, obj, objEl);
@@ -569,6 +574,7 @@
   // ----- Auswahl -----
 
   function selectObject(note, obj, objEl) {
+    clearStrokeSelection();
     if (selectedObjectId !== obj.id) {
       const prev = el.canvasSurface.querySelector('.canvas-object.selected');
       if (prev && prev !== objEl) prev.classList.remove('selected');
@@ -584,6 +590,7 @@
     const prev = el.canvasSurface.querySelector('.canvas-object.selected');
     if (prev) prev.classList.remove('selected');
     selectedObjectId = null;
+    clearStrokeSelection();
   }
 
   // ----- Verschieben -----
@@ -986,6 +993,46 @@
     renderNoteList();
   }
 
+  // ----- Striche direkt anklicken (auch außerhalb des Zeichnen-Modus) -----
+
+  function distanceToSegment(p, a, b) {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const lengthSq = dx * dx + dy * dy;
+    if (lengthSq === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+    let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / lengthSq;
+    t = Math.max(0, Math.min(1, t));
+    const cx = a.x + t * dx;
+    const cy = a.y + t * dy;
+    return Math.hypot(p.x - cx, p.y - cy);
+  }
+
+  function hitTestStroke(note, point) {
+    const tolerance = 10;
+    for (let i = note.ink.strokes.length - 1; i >= 0; i--) {
+      const stroke = note.ink.strokes[i];
+      const pts = strokeAbsolutePoints(note, stroke);
+      if (pts.length === 0) continue;
+      if (pts.length === 1) {
+        if (Math.hypot(point.x - pts[0].x, point.y - pts[0].y) <= pts[0].width / 2 + tolerance) {
+          return stroke.id;
+        }
+        continue;
+      }
+      for (let j = 1; j < pts.length; j++) {
+        const w = pts[j].width / 2 + tolerance;
+        if (distanceToSegment(point, pts[j - 1], pts[j]) <= w) return stroke.id;
+      }
+    }
+    return null;
+  }
+
+  function selectSingleStroke(note, id) {
+    deselectAll();
+    strokeSelection = { ids: new Set([id]) };
+    renderStrokeSelectionBox(note);
+  }
+
   // ----- Lasso-Auswahl einzelner Striche -----
 
   function pointInPolygon(pt, poly) {
@@ -1148,16 +1195,24 @@
     renderNoteList();
   }
 
+  function updateClearButtonLabel() {
+    const label = strokeSelection ? 'Auswahl löschen' : 'Alles löschen';
+    el.drawClearBtn.title = label;
+    el.drawClearBtn.setAttribute('aria-label', label);
+  }
+
   function clearStrokeSelection() {
     strokeSelection = null;
     const existing = document.getElementById('strokeSelectionBox');
     if (existing) existing.remove();
+    updateClearButtonLabel();
   }
 
   function renderStrokeSelectionBox(note) {
     const existing = document.getElementById('strokeSelectionBox');
     if (existing) existing.remove();
     if (!strokeSelection) return;
+    updateClearButtonLabel();
     const box = selectionBoundingBox(note);
     if (!box) {
       strokeSelection = null;
@@ -1176,14 +1231,23 @@
     toolbar.className = 'object-toolbar';
     const parentId = commonParentId(note);
     if (parentId) {
-      toolbar.appendChild(makeToolbarBtn(ICONS.unlink, false, () => detachSelection(note)));
+      toolbar.appendChild(
+        makeToolbarBtn(ICONS.unlink, false, () => detachSelection(note), 'Vom Bild/PDF lösen')
+      );
     } else {
       const target = findAttachTarget(note, box);
-      const btn = makeToolbarBtn(ICONS.link, false, () => attachSelection(note, target));
+      const btn = makeToolbarBtn(
+        ICONS.link,
+        false,
+        () => attachSelection(note, target),
+        target
+          ? 'An diesem Bild/PDF anheften (bewegt und skaliert sich dann mit)'
+          : 'Anheften nur möglich, wenn die Auswahl auf einem Bild/PDF liegt'
+      );
       if (!target) btn.disabled = true;
       toolbar.appendChild(btn);
     }
-    toolbar.appendChild(makeToolbarBtn(ICONS.trash, true, () => deleteSelection(note)));
+    toolbar.appendChild(makeToolbarBtn(ICONS.trash, true, () => deleteSelection(note), 'Auswahl löschen'));
     boxEl.appendChild(toolbar);
 
     const handle = document.createElement('div');
@@ -1559,7 +1623,18 @@
       el.pdfFileInput.value = '';
     });
     el.canvasSurface.addEventListener('pointerdown', (e) => {
-      if (e.target === el.canvasSurface) deselectAll();
+      if (e.target !== el.canvasSurface) return;
+      const note = currentNote();
+      if (note && !drawModeActive) {
+        const rect = el.canvasSurface.getBoundingClientRect();
+        const point = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        const hitId = hitTestStroke(note, point);
+        if (hitId) {
+          selectSingleStroke(note, hitId);
+          return;
+        }
+      }
+      deselectAll();
     });
 
     el.drawModeBtn.addEventListener('click', toggleDrawMode);
@@ -1571,7 +1646,14 @@
     el.drawSelectToolBtn.addEventListener('click', () => setDrawTool('select'));
     el.drawEraserBtn.addEventListener('click', toggleDrawEraser);
     el.drawUndoBtn.addEventListener('click', undoInk);
-    el.drawClearBtn.addEventListener('click', clearInk);
+    el.drawClearBtn.addEventListener('click', () => {
+      if (strokeSelection) {
+        const note = currentNote();
+        if (note) deleteSelection(note);
+      } else {
+        clearInk();
+      }
+    });
     el.drawDoneBtn.addEventListener('click', deactivateDrawMode);
     el.drawColors.addEventListener('click', (e) => {
       const btn = e.target.closest('.draw-color');
