@@ -83,18 +83,43 @@ textarea {
 /* ---------- App Layout ---------- */
 
 .app {
+  --sidebar-width: 240px;
+  --list-width: 300px;
   display: grid;
-  grid-template-columns: 240px 1px minmax(260px, 320px) 1fr;
-  grid-template-areas: "sidebar resizer list editor";
+  grid-template-columns: var(--sidebar-width) 1px var(--list-width) 1px 1fr;
+  grid-template-areas: "sidebar resizer list listResizer editor";
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
 }
 
 .sidebar-resizer {
-  grid-area: resizer;
   background: var(--border);
   cursor: col-resize;
+  position: relative;
+}
+
+/* Größere unsichtbare Ziehfläche, damit der 1px schmale Trenner leicht zu treffen ist */
+.sidebar-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  right: -4px;
+}
+
+#sidebarResizer {
+  grid-area: resizer;
+}
+
+#listResizer {
+  grid-area: listResizer;
+}
+
+.sidebar-resizer:hover,
+.sidebar-resizer.dragging {
+  background: var(--accent);
 }
 
 /* ---------- Sidebar (Spalte 1) ---------- */
@@ -106,6 +131,7 @@ textarea {
   flex-direction: column;
   padding: env(safe-area-inset-top, 0) 0 env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0);
   min-width: 0;
+  min-height: 0;
 }
 
 .sidebar-header {
@@ -275,11 +301,14 @@ textarea {
   flex-direction: column;
   border-right: 1px solid var(--border);
   min-width: 0;
+  min-height: 0;
 }
 
 .note-list-header {
-  padding: 12px 14px 8px;
-  border-bottom: 1px solid transparent;
+  padding: 8px 14px;
+  background: var(--bg-list);
+  border-bottom: 1px solid var(--border);
+  flex: none;
 }
 
 .search-field {
@@ -317,6 +346,7 @@ textarea {
   font-weight: 600;
   color: var(--text-tertiary);
   margin: 10px 0 2px;
+  padding: 0 14px;
   text-transform: uppercase;
   letter-spacing: 0.02em;
 }
@@ -348,15 +378,15 @@ textarea {
 .note-toggle,
 .note-toggle-spacer {
   flex: none;
-  width: 18px;
-  height: 18px;
-  margin-top: 1px;
+  width: 20px;
+  height: 20px;
+  margin-top: 0;
 }
 
 .note-toggle {
   border: none;
   background: transparent;
-  color: var(--text-tertiary);
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -369,8 +399,8 @@ textarea {
 }
 
 .note-toggle .icon {
-  width: 12px;
-  height: 12px;
+  width: 17px;
+  height: 17px;
   transition: transform 0.15s;
 }
 
@@ -405,6 +435,36 @@ textarea {
 }
 
 .note-add-sub .icon {
+  width: 13px;
+  height: 13px;
+}
+
+.note-delete-btn {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -1px;
+  border: none;
+  background: transparent;
+  color: var(--danger);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.note-item:hover .note-delete-btn,
+.note-item:focus-within .note-delete-btn {
+  opacity: 1;
+}
+
+.note-delete-btn:hover {
+  background: rgba(255, 59, 48, 0.14);
+}
+
+.note-delete-btn .icon {
   width: 13px;
   height: 13px;
 }
@@ -504,6 +564,7 @@ textarea {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
 }
 
 .editor-empty {
@@ -915,6 +976,16 @@ textarea {
   margin: 2px 0;
 }
 
+.canvas-text-body ul,
+.canvas-text-body ol {
+  margin: 2px 0;
+  padding-left: 22px;
+}
+
+.canvas-text-body li {
+  margin: 0;
+}
+
 .heading-option.heading-1 {
   font-size: 17px;
   font-weight: 700;
@@ -1103,7 +1174,7 @@ textarea {
 
 @media (max-width: 1000px) {
   .app {
-    grid-template-columns: 210px 1px minmax(220px, 280px) 1fr;
+    grid-template-columns: var(--sidebar-width) 1px var(--list-width) 1px 1fr;
   }
 }
 

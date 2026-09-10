@@ -37,20 +37,41 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
       wie die Formatvorlagen in Word/OneNote. Wirkt auf die ganze Zeile,
       keine Textauswahl nötig
     - **Textformatierung** (Auswahl markieren, dann in der Werkzeugleiste
-      wählen): **Fett**, *Kursiv*, **Textfarbe** (8 Farben) und
-      **Schriftgröße** (Klein/Standard/Groß/Sehr groß) – wie in einer
-      Textverarbeitung
+      wählen): **Fett**, *Kursiv*, **Unterstrichen**, **Durchgestrichen**,
+      **Hoch-/Tiefgestellt**, **Schriftart** (5 Schriftfamilien), 
+      **Textfarbe** (8 Farben) und **Schriftgröße** (Klein/Standard/Groß/
+      Sehr groß) – wie in einer Textverarbeitung
+    - **Aufzählungszeichen** und **Nummerierung**: wirken auf die aktuelle
+      Zeile bzw. Auswahl, wie in Word/OneNote
     - **Textmarker**: einen Textabschnitt markieren und über das
       Marker-Symbol in der Werkzeugleiste hervorheben – 5 Farben in
       je 3 Stärken (Leicht/Mittel/Stark). Hervorhebungen, Farbe und
       Schriftgröße lassen sich über die jeweilige „Entfernen"/
       „Standard"-Option wieder aufheben
 - **Werkzeugleiste im Ribbon-Stil** (an OneNote angelehnt): gruppierte
-  Buttons mit Trennlinien (Notiz/Formatvorlagen/Einfügen/Seite). Die
-  Formatierungswerkzeuge (Überschrift, Fett, Kursiv, Textfarbe,
-  Markieren, Schriftgröße) sitzen dauerhaft in der Leiste – aktivieren
-  sich automatisch, sobald ein Text-Objekt bearbeitet wird, statt nur
-  in einem Popup am ausgewählten Objekt zu erscheinen
+  Buttons mit Trennlinien (Formatvorlagen/Listen/Einfügen/Seite). Die
+  Formatierungswerkzeuge (Überschrift, Schriftart, Fett, Kursiv,
+  Unterstrichen, Durchgestrichen, Hoch-/Tiefgestellt, Textfarbe,
+  Markieren, Schriftgröße, Aufzählung, Nummerierung) sitzen dauerhaft
+  in der Leiste – aktivieren sich automatisch, sobald ein Text-Objekt
+  bearbeitet wird, statt nur in einem Popup am ausgewählten Objekt zu
+  erscheinen. Das Suchfeld über der Notizliste ist optisch in dieselbe
+  Kopfleiste eingebunden (gleiche Höhe, Hintergrund und Trennlinie wie
+  das Ribbon), sodass beides wie eine durchgehende Leiste wirkt
+- **Direkt lostippen**: ein Klick auf eine leere Stelle der Fläche legt
+  sofort ein freies Textobjekt an diesem Punkt an und aktiviert den
+  Bearbeitungsmodus – wie in OneNote. Bleibt die Stelle leer, verschwindet
+  das Textobjekt beim Verlassen automatisch wieder
+- **Notiz-/Unterseiten-Zeile**: das Löschen einer Notiz oder Unterseite
+  erfolgt ausschließlich über den roten Papierkorb-Button ganz rechts in
+  der jeweiligen Zeile (nicht mehr über die Werkzeugleiste), damit eine
+  komplexe Seite nicht versehentlich gelöscht wird. Der Auf-/Zuklapp-Pfeil
+  bei Notizen mit Unterseiten ist bewusst groß und kräftig gehalten, damit
+  auf den ersten Blick erkennbar ist, dass Unterseiten vorhanden sind
+- **Spaltenbreiten manuell anpassbar**: die Trennlinien zwischen Ordnern,
+  Notizliste und Editor lassen sich per Maus/Touch nach links oder rechts
+  ziehen; die eingestellten Breiten bleiben über einen Neuladen hinweg
+  erhalten
   - **Bild**: aus der Fotomediathek/Dateien einfügen
   - **PDF**: einfügen als Vorschaubild der ersten Seite (mit Datei-
     /Seitenzahl-Badge); wird wie ein Bild-Objekt behandelt

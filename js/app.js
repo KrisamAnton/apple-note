@@ -68,6 +68,14 @@
     { px: 26, label: 'Sehr groß' },
   ];
 
+  const FONT_FAMILIES = [
+    { css: null, label: 'Standard' },
+    { css: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Arial, sans-serif', label: 'Serifenlos' },
+    { css: 'Georgia, "Times New Roman", Times, serif', label: 'Serif' },
+    { css: '"Courier New", Courier, monospace', label: 'Monospace' },
+    { css: '"Marker Felt", "Segoe Script", cursive', label: 'Handschrift' },
+  ];
+
   function hexToRgba(hex, alpha) {
     const r = parseInt(hex.slice(1, 3), 16);
     const g = parseInt(hex.slice(3, 5), 16);
@@ -233,6 +241,12 @@
   let selectedNoteId = state.notes[0] ? state.notes[0].id : null;
   let searchQuery = '';
   let collapsedNoteIds = new Set();
+  // Doppelklick-Erkennung für Ordner-Umbenennung: da jeder Klick renderFolders()
+  // (kompletten DOM-Neuaufbau) auslöst, würde ein natives "dblclick"-Event nie
+  // ankommen, weil das Eingabefeld zwischen den beiden Klicks ausgetauscht wird.
+  // Daher zeitbasiert über die Ordner-id verfolgen statt über den DOM-Knoten.
+  let lastFolderTapAt = 0;
+  let lastFolderTapId = null;
   let saveTimer = null;
 
   function persist() {
@@ -251,6 +265,8 @@
   // ---------- DOM refs ----------
   const el = {
     app: document.getElementById('app'),
+    sidebarResizer: document.getElementById('sidebarResizer'),
+    listResizer: document.getElementById('listResizer'),
     folderList: document.getElementById('folderList'),
     newFolderBtn: document.getElementById('newFolderBtn'),
     noteList: document.getElementById('noteList'),
@@ -261,7 +277,6 @@
     editor: document.getElementById('editor'),
     titleInput: document.getElementById('titleInput'),
     editorDate: document.getElementById('editorDate'),
-    deleteNoteBtn: document.getElementById('deleteNoteBtn'),
     moveNoteBtn: document.getElementById('moveNoteBtn'),
     popoverBackdrop: document.getElementById('popoverBackdrop'),
     movePopover: document.getElementById('movePopover'),
@@ -270,9 +285,19 @@
     headingBtn: document.getElementById('headingBtn'),
     boldBtn: document.getElementById('boldBtn'),
     italicBtn: document.getElementById('italicBtn'),
+    underlineBtn: document.getElementById('underlineBtn'),
+    strikeBtn: document.getElementById('strikeBtn'),
+    superscriptBtn: document.getElementById('superscriptBtn'),
+    subscriptBtn: document.getElementById('subscriptBtn'),
+    bulletListBtn: document.getElementById('bulletListBtn'),
+    numberedListBtn: document.getElementById('numberedListBtn'),
     ribbonColorBtn: document.getElementById('ribbonColorBtn'),
     ribbonMarkerBtn: document.getElementById('ribbonMarkerBtn'),
     ribbonFontSizeBtn: document.getElementById('ribbonFontSizeBtn'),
+    ribbonFontFamilyBtn: document.getElementById('ribbonFontFamilyBtn'),
+    fontFamilyPopoverBackdrop: document.getElementById('fontFamilyPopoverBackdrop'),
+    fontFamilyPopover: document.getElementById('fontFamilyPopover'),
+    fontFamilyList: document.getElementById('fontFamilyList'),
     textStylePopoverBackdrop: document.getElementById('textStylePopoverBackdrop'),
     textStylePopover: document.getElementById('textStylePopover'),
     folderColorPopoverBackdrop: document.getElementById('folderColorPopoverBackdrop'),
@@ -461,16 +486,32 @@
         e.stopPropagation();
         openFolderColorPopover(folder, e.currentTarget);
       });
-      item.addEventListener('click', (e) => {
-        if (e.target === nameInput && nameInput.readOnly === false) return;
-        if (e.target.closest('.folder-delete') || e.target.closest('.folder-color-dot')) return;
-        selectFolder(folder.id);
-      });
-      nameInput.addEventListener('dblclick', (e) => {
-        e.stopPropagation();
+      function enterFolderRename() {
         nameInput.readOnly = false;
         nameInput.focus();
         nameInput.select();
+      }
+      item.addEventListener('click', (e) => {
+        if (e.target === nameInput && nameInput.readOnly === false) return;
+        if (e.target.closest('.folder-delete') || e.target.closest('.folder-color-dot')) return;
+        if (e.target === nameInput || e.target.closest('.folder-name')) {
+          const now = Date.now();
+          if (lastFolderTapId === folder.id && now - lastFolderTapAt < 400) {
+            lastFolderTapAt = 0;
+            lastFolderTapId = null;
+            enterFolderRename();
+            return;
+          }
+          lastFolderTapAt = now;
+          lastFolderTapId = folder.id;
+        }
+        selectFolder(folder.id);
+      });
+      // Zusätzlich das native "dblclick" behalten (z. B. bei Maus-Doppelklicks, die
+      // schnell genug sind, dass der DOM-Neuaufbau dazwischen nicht stört).
+      nameInput.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        enterFolderRename();
       });
       nameInput.addEventListener('blur', () => {
         nameInput.readOnly = true;
@@ -500,8 +541,15 @@
 
   function selectFolder(folderId) {
     selectedFolderId = folderId;
+    // Die offene Notiz gehört evtl. gar nicht zum neu gewählten Ordner – dann den
+    // Editor leeren, statt eine Notiz aus einem anderen Ordner weiter anzuzeigen.
+    const note = findNote(selectedNoteId);
+    if (!note || (folderId !== null && note.folderId !== folderId)) {
+      selectedNoteId = null;
+    }
     renderFolders();
     renderNoteList();
+    renderEditor();
     goToView('notes');
   }
 
@@ -640,6 +688,18 @@
         createNote(note.id);
       });
       item.appendChild(addSubBtn);
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.className = 'note-delete-btn';
+      deleteBtn.title = 'Notiz löschen';
+      deleteBtn.setAttribute('aria-label', 'Notiz löschen');
+      deleteBtn.innerHTML = `<svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.trash}</svg>`;
+      deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteNote(note.id);
+      });
+      item.appendChild(deleteBtn);
 
       item.addEventListener('click', () => selectNote(note.id));
       el.noteList.appendChild(item);
@@ -1189,7 +1249,7 @@
 
   function bodyToPlainText(body) {
     const clone = body.cloneNode(true);
-    clone.querySelectorAll('div, p, br').forEach((el) => el.insertAdjacentText('beforebegin', '\n'));
+    clone.querySelectorAll('div, p, br, li').forEach((el) => el.insertAdjacentText('beforebegin', '\n'));
     return clone.textContent.replace(/^\n/, '');
   }
 
@@ -1219,7 +1279,16 @@
   // Formatierungs-Buttons, die eine echte (nicht eingeklappte) Textauswahl brauchen –
   // sitzen fest in der oberen Werkzeugleiste (Ribbon), nicht mehr pro Text-Objekt.
   function selectionFormatBtns() {
-    return [el.boldBtn, el.italicBtn, el.ribbonMarkerBtn, el.ribbonColorBtn, el.ribbonFontSizeBtn];
+    return [
+      el.boldBtn, el.italicBtn, el.underlineBtn, el.strikeBtn, el.superscriptBtn, el.subscriptBtn,
+      el.ribbonMarkerBtn, el.ribbonColorBtn, el.ribbonFontSizeBtn, el.ribbonFontFamilyBtn,
+    ];
+  }
+
+  // Formatierungs-Buttons, die auf die ganze Zeile wirken und daher schon nutzbar
+  // sind, sobald ein Text-Objekt bearbeitet wird – keine Auswahl nötig.
+  function editingOnlyFormatBtns() {
+    return [el.headingBtn, el.bulletListBtn, el.numberedListBtn];
   }
 
   function enterTextEdit(note, obj, objEl, body, overlay) {
@@ -1231,9 +1300,10 @@
     activeTextEdit = { note, obj, objEl, body, overlay };
     lastSelectionRange = null;
     for (const btn of selectionFormatBtns()) btn.disabled = true;
-    // Die Formatvorlage (Überschrift) gilt für die ganze Zeile und braucht daher
-    // keine Textauswahl – sie ist während des ganzen Bearbeitens nutzbar.
-    el.headingBtn.disabled = false;
+    // Zeilen-weite Formatvorlagen (Überschrift, Listen) gelten für die ganze Zeile
+    // und brauchen daher keine Textauswahl – sie sind während des ganzen
+    // Bearbeitens nutzbar.
+    for (const btn of editingOnlyFormatBtns()) btn.disabled = false;
   }
 
   function exitTextEdit(obj, body, overlay) {
@@ -1243,12 +1313,28 @@
     const note = currentNote();
     if (note) saveTextObjContent(note, obj, body);
     for (const btn of selectionFormatBtns()) btn.disabled = true;
-    el.headingBtn.disabled = true;
+    for (const btn of editingOnlyFormatBtns()) btn.disabled = true;
     if (activeTextEdit && activeTextEdit.obj.id === obj.id) {
       activeTextEdit = null;
       lastSelectionRange = null;
     }
     closeAllFormatPopovers();
+    // Ein leer gebliebenes Textobjekt (z. B. durch Klick auf die Fläche ohne
+    // anschließende Eingabe) hinterlässt keine unsichtbare Karteileiche.
+    if (note && !obj.text.trim() && !hasAttachedContent(note, obj.id)) {
+      note.objects = note.objects.filter((o) => o.id !== obj.id);
+      if (selectedObjectId === obj.id) selectedObjectId = null;
+      const objEl = findObjEl(obj.id);
+      if (objEl) objEl.remove();
+      schedulePersist();
+      renderNoteList();
+    }
+  }
+
+  function hasAttachedContent(note, objId) {
+    if (note.objects.some((o) => o.parentId === objId)) return true;
+    if (note.ink.strokes.some((s) => s.parentId === objId)) return true;
+    return false;
   }
 
   // Merkt sich die zuletzt markierte (nicht eingeklappte) Textauswahl im gerade
@@ -1375,6 +1461,20 @@
     saveTextObjContent(activeTextEdit.note, activeTextEdit.obj, body);
   }
 
+  function applyListCommand(command) {
+    if (!activeTextEdit) return;
+    const { body } = activeTextEdit;
+    body.focus();
+    if (lastSelectionRange) {
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(lastSelectionRange);
+    }
+    document.execCommand(command);
+    updateTextEmptyState(body);
+    saveTextObjContent(activeTextEdit.note, activeTextEdit.obj, body);
+  }
+
   function wrapSelectionWithStyle(range, styleProp, styleValue) {
     const span = document.createElement('span');
     span.style[styleProp] = styleValue;
@@ -1458,11 +1558,27 @@
     }
   }
 
+  function buildFontFamilyList() {
+    if (el.fontFamilyList.childElementCount > 0) return;
+    for (const font of FONT_FAMILIES) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'popover-item';
+      btn.textContent = font.label;
+      if (font.css) {
+        btn.dataset.family = font.css;
+        btn.style.fontFamily = font.css;
+      }
+      el.fontFamilyList.appendChild(btn);
+    }
+  }
+
   function openFormatPopover(backdropEl, popoverEl, anchorBtn) {
     if (!activeTextEdit || !lastSelectionRange) return;
     buildMarkerGrid();
     buildColorGrid();
     buildFontSizeList();
+    buildFontFamilyList();
     closeAllFormatPopovers();
     const btnRect = anchorBtn.getBoundingClientRect();
     backdropEl.hidden = false;
@@ -1477,6 +1593,7 @@
     el.colorPopoverBackdrop.hidden = true;
     el.fontSizePopoverBackdrop.hidden = true;
     el.headingPopoverBackdrop.hidden = true;
+    el.fontFamilyPopoverBackdrop.hidden = true;
   }
 
   // Sammelt alle Top-Level-Knoten (direkte Kinder von root), die zur "Zeile" des
@@ -1578,6 +1695,13 @@
     withActiveSelection((range) => {
       if (px) wrapSelectionWithStyle(range, 'fontSize', `${px}px`);
       else unwrapStyleFromRange(range, 'fontSize');
+    });
+  }
+
+  function applyFontFamilyChoice(css) {
+    withActiveSelection((range) => {
+      if (css) wrapSelectionWithStyle(range, 'fontFamily', css);
+      else unwrapStyleFromRange(range, 'fontFamily');
     });
   }
 
@@ -2218,9 +2342,20 @@
     const note = currentNote();
     if (!note) return;
     const { x, y } = nextPlacement(note, 220, 120);
+    addTextObjectAt(note, x, y, style);
+  }
+
+  // Erstellt sofort ein freies Textobjekt an der übergebenen Stelle und aktiviert
+  // direkt den Bearbeitungsmodus – für das OneNote-artige "irgendwo hinklicken und
+  // lostippen". Bleibt das Objekt leer, entfernt exitTextEdit() es beim Verlassen
+  // wieder automatisch, sodass kein unsichtbarer "Müll" auf der Fläche zurückbleibt.
+  function addTextObjectAt(note, x, y, style) {
+    const w = 220, h = 120;
+    const clampedX = clamp(x, 0, Math.max(0, SURFACE_W - w));
+    const clampedY = clamp(y, 0, Math.max(0, SURFACE_H - h));
     const obj = {
-      id: uid(), type: 'text', x, y, w: 220, h: 120, z: 0, text: '', html: '', parentId: null,
-      style: style === 'free' ? 'free' : 'boxed',
+      id: uid(), type: 'text', x: clampedX, y: clampedY, w, h, z: 0, text: '', html: '', parentId: null,
+      style: style === 'boxed' ? 'boxed' : 'free',
     };
     bringToFront(note, obj);
     note.objects.push(obj);
@@ -2228,6 +2363,7 @@
     el.canvasSurface.insertBefore(objEl, el.inkLayer);
     schedulePersist();
     renderNoteList();
+    return obj;
   }
 
   function addImageObjectFromFile(file) {
@@ -2388,10 +2524,81 @@
     document.querySelector('.editor-toolbar').prepend(editorBack);
   }
 
+  // ---------- Spaltentrenner (manuell verschiebbar) ----------
+
+  const LAYOUT_STORAGE_KEY = 'appleNotesPwa.layout.v1';
+
+  function loadLayoutPrefs() {
+    try {
+      const raw = localStorage.getItem(LAYOUT_STORAGE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {
+      // ignorieren, Standardbreiten verwenden
+    }
+    return {};
+  }
+
+  function saveLayoutPrefs(prefs) {
+    try {
+      localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(prefs));
+    } catch (e) {
+      // ignorieren
+    }
+  }
+
+  function makeColumnResizer(resizerEl, cssVar, min, max) {
+    let startX = 0;
+    let startWidth = 0;
+
+    function onMove(e) {
+      const dx = e.clientX - startX;
+      el.app.style.setProperty(cssVar, `${clamp(startWidth + dx, min, max)}px`);
+    }
+
+    function onUp(e) {
+      resizerEl.classList.remove('dragging');
+      try {
+        resizerEl.releasePointerCapture(e.pointerId);
+      } catch (err) {
+        // ignorieren
+      }
+      resizerEl.removeEventListener('pointermove', onMove);
+      resizerEl.removeEventListener('pointerup', onUp);
+      resizerEl.removeEventListener('pointercancel', onUp);
+      const prefs = loadLayoutPrefs();
+      prefs[cssVar] = getComputedStyle(el.app).getPropertyValue(cssVar).trim();
+      saveLayoutPrefs(prefs);
+    }
+
+    resizerEl.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      startX = e.clientX;
+      startWidth = parseFloat(getComputedStyle(el.app).getPropertyValue(cssVar)) || min;
+      resizerEl.classList.add('dragging');
+      try {
+        resizerEl.setPointerCapture(e.pointerId);
+      } catch (err) {
+        // ignorieren
+      }
+      resizerEl.addEventListener('pointermove', onMove);
+      resizerEl.addEventListener('pointerup', onUp);
+      resizerEl.addEventListener('pointercancel', onUp);
+    });
+  }
+
+  function initColumnResizers() {
+    const prefs = loadLayoutPrefs();
+    if (prefs['--sidebar-width']) el.app.style.setProperty('--sidebar-width', prefs['--sidebar-width']);
+    if (prefs['--list-width']) el.app.style.setProperty('--list-width', prefs['--list-width']);
+    makeColumnResizer(el.sidebarResizer, '--sidebar-width', 180, 420);
+    makeColumnResizer(el.listResizer, '--list-width', 220, 520);
+  }
+
   // ---------- Event wiring ----------
 
   function init() {
     setupBackButtons();
+    initColumnResizers();
     goToView(isMobileLayout() ? 'folders' : 'notes');
 
     renderFolders();
@@ -2400,7 +2607,6 @@
 
     el.newFolderBtn.addEventListener('click', createFolder);
     el.newNoteBtn.addEventListener('click', createNote);
-    el.deleteNoteBtn.addEventListener('click', () => selectedNoteId && deleteNote(selectedNoteId));
     el.moveNoteBtn.addEventListener('click', openMovePopover);
     el.popoverBackdrop.addEventListener('click', (e) => {
       if (e.target === el.popoverBackdrop) closeMovePopover();
@@ -2410,9 +2616,16 @@
     wireRibbonBtn(el.headingBtn, () => openHeadingPopover(el.headingBtn));
     wireRibbonBtn(el.boldBtn, () => applyInlineCommand('bold'));
     wireRibbonBtn(el.italicBtn, () => applyInlineCommand('italic'));
+    wireRibbonBtn(el.underlineBtn, () => applyInlineCommand('underline'));
+    wireRibbonBtn(el.strikeBtn, () => applyInlineCommand('strikeThrough'));
+    wireRibbonBtn(el.superscriptBtn, () => applyInlineCommand('superscript'));
+    wireRibbonBtn(el.subscriptBtn, () => applyInlineCommand('subscript'));
+    wireRibbonBtn(el.bulletListBtn, () => applyListCommand('insertUnorderedList'));
+    wireRibbonBtn(el.numberedListBtn, () => applyListCommand('insertOrderedList'));
     wireRibbonBtn(el.ribbonMarkerBtn, () => openFormatPopover(el.markerPopoverBackdrop, el.markerPopover, el.ribbonMarkerBtn));
     wireRibbonBtn(el.ribbonColorBtn, () => openFormatPopover(el.colorPopoverBackdrop, el.colorPopover, el.ribbonColorBtn));
     wireRibbonBtn(el.ribbonFontSizeBtn, () => openFormatPopover(el.fontSizePopoverBackdrop, el.fontSizePopover, el.ribbonFontSizeBtn));
+    wireRibbonBtn(el.ribbonFontFamilyBtn, () => openFormatPopover(el.fontFamilyPopoverBackdrop, el.fontFamilyPopover, el.ribbonFontFamilyBtn));
     el.addImageBtn.addEventListener('click', () => el.imageFileInput.click());
     el.imageFileInput.addEventListener('change', () => {
       const file = el.imageFileInput.files[0];
@@ -2436,6 +2649,13 @@
           selectSingleStroke(note, hitId);
           return;
         }
+        // Standardmäßig würde der Browser den Fokus beim Klick auf dieses (nicht
+        // fokussierbare) Element wieder verwerfen – das würde das neue Textobjekt
+        // sofort wieder aus dem Bearbeitungsmodus werfen, bevor der Nutzer tippen kann.
+        e.preventDefault();
+        deselectAll();
+        addTextObjectAt(note, point.x - 10, point.y - 10, 'free');
+        return;
       }
       deselectAll();
     });
@@ -2527,6 +2747,15 @@
     el.fontSizeList.addEventListener('click', (e) => {
       const item = e.target.closest('.popover-item');
       if (item) applyFontSizeChoice(item.dataset.px ? Number(item.dataset.px) : null);
+    });
+
+    el.fontFamilyPopover.addEventListener('pointerdown', (e) => e.preventDefault());
+    el.fontFamilyPopoverBackdrop.addEventListener('click', (e) => {
+      if (e.target === el.fontFamilyPopoverBackdrop) closeAllFormatPopovers();
+    });
+    el.fontFamilyList.addEventListener('click', (e) => {
+      const item = e.target.closest('.popover-item');
+      if (item) applyFontFamilyChoice(item.dataset.family || null);
     });
 
     el.headingPopover.addEventListener('pointerdown', (e) => e.preventDefault());
