@@ -17,7 +17,10 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
 - Notizen zwischen Ordnern verschieben
 - Volltextsuche über alle Notizen
 - **Freie Zeichenfläche pro Notiz** mit beliebig vielen Objekten:
-  - **Text**: per Doppelklick bearbeiten, frei positionieren und skalieren
+  - **Text**: per Doppelklick bearbeiten, frei positionieren und skalieren.
+    Beim Hinzufügen wählbar zwischen **Textfeld** (mit Rahmen/Hintergrund)
+    und **Freier Text** (ohne sichtbaren Rahmen, liegt direkt auf der
+    Fläche – z. B. zum Beschriften auf linierten Seiten)
   - **Bild**: aus der Fotomediathek/Dateien einfügen
   - **PDF**: einfügen als Vorschaubild der ersten Seite (mit Datei-
     /Seitenzahl-Badge); wird wie ein Bild-Objekt behandelt

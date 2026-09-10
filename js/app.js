@@ -72,6 +72,10 @@
       if (!stroke.id) stroke.id = uid();
       if (stroke.parentId === undefined) stroke.parentId = null;
     }
+    // Text-Objekte ohne Stil (ältere Version) auf "Textfeld" setzen
+    for (const obj of note.objects) {
+      if (obj.type === 'text' && !obj.style) obj.style = 'boxed';
+    }
     return note;
   }
 
@@ -102,12 +106,13 @@
           title: 'Willkommen bei KrisNote',
           objects: [
             {
-              id: uid(), type: 'text', x: 24, y: 24, w: 560, h: 360, z: 1, parentId: null,
+              id: uid(), type: 'text', x: 24, y: 24, w: 560, h: 360, z: 1, parentId: null, style: 'boxed',
               text:
                 'Willkommen bei deiner neuen Notizen-App!\n\n' +
                 '- Oben: Text, Bild oder PDF hinzufügen. Objekte per Ziehen verschieben, ' +
                 'an der Ecke unten rechts in der Größe ändern.\n' +
-                '- Text per Doppelklick bearbeiten.\n' +
+                '- Text per Doppelklick bearbeiten. Beim Hinzufügen wählst du zwischen "Textfeld" ' +
+                '(mit Rahmen) und "Freier Text" (ohne Rahmen, direkt auf der Fläche – z. B. auf Linien).\n' +
                 '- Stift-Symbol = Zeichnen-Modus: dann kannst du überall auf der Fläche zeichnen, ' +
                 'auch direkt auf einem Bild.\n' +
                 '- Ziehe einen Text auf ein Bild oder PDF, um ihn dort als Beschriftung anzuheften ' +
@@ -164,6 +169,8 @@
     movePopover: document.getElementById('movePopover'),
     movePopoverList: document.getElementById('movePopoverList'),
     addTextBtn: document.getElementById('addTextBtn'),
+    textStylePopoverBackdrop: document.getElementById('textStylePopoverBackdrop'),
+    textStylePopover: document.getElementById('textStylePopover'),
     drawModeBtn: document.getElementById('drawModeBtn'),
     addImageBtn: document.getElementById('addImageBtn'),
     imageFileInput: document.getElementById('imageFileInput'),
@@ -549,6 +556,7 @@
     objEl.className = 'canvas-object';
     objEl.dataset.id = obj.id;
     objEl.dataset.type = obj.type;
+    if (obj.type === 'text') objEl.dataset.style = obj.style || 'boxed';
     applyObjRect(objEl, obj);
 
     const mainToolbar = document.createElement('div');
@@ -662,6 +670,11 @@
       objEl.removeEventListener('pointermove', onObjectDragMove);
       objEl.removeEventListener('pointerup', onObjectDragEnd);
       objEl.removeEventListener('pointercancel', onObjectDragEnd);
+      try {
+        objEl.releasePointerCapture(e.pointerId);
+      } catch (err) {
+        // ignorieren
+      }
     }
     if (note && obj && obj.type === 'text' && dragState.moved) {
       updateAttachment(note, obj);
@@ -776,10 +789,21 @@
     overlay.className = 'text-drag-overlay';
     objEl.appendChild(overlay);
 
-    overlay.addEventListener('pointerdown', (e) => startObjectDrag(e, note, obj, objEl));
-    overlay.addEventListener('dblclick', (e) => {
-      e.stopPropagation();
-      enterTextEdit(note, obj, objEl, textarea, overlay);
+    // Eigene Doppelklick-Erkennung (zeitbasiert): Das native "dblclick"-Ereignis kann durch
+    // die Pointer-Capture des Zieh-Handlers verschluckt werden, sobald der erste Klick bereits
+    // ein Drag gestartet hat. Diese Variante ist davon unabhängig.
+    let lastTapAt = 0;
+    overlay.addEventListener('pointerdown', (e) => {
+      const now = Date.now();
+      if (now - lastTapAt < 400) {
+        lastTapAt = 0;
+        e.preventDefault();
+        e.stopPropagation();
+        enterTextEdit(note, obj, objEl, textarea, overlay);
+        return;
+      }
+      lastTapAt = now;
+      startObjectDrag(e, note, obj, objEl);
     });
 
     textarea.addEventListener('blur', () => exitTextEdit(obj, textarea, overlay));
@@ -1444,11 +1468,14 @@
 
   // ----- Objekte hinzufügen / löschen -----
 
-  function addTextObject() {
+  function addTextObject(style) {
     const note = currentNote();
     if (!note) return;
     const { x, y } = nextPlacement(note, 220, 120);
-    const obj = { id: uid(), type: 'text', x, y, w: 220, h: 120, z: 0, text: '', parentId: null };
+    const obj = {
+      id: uid(), type: 'text', x, y, w: 220, h: 120, z: 0, text: '', parentId: null,
+      style: style === 'free' ? 'free' : 'boxed',
+    };
     bringToFront(note, obj);
     note.objects.push(obj);
     const objEl = buildObjectEl(note, obj);
@@ -1566,6 +1593,21 @@
     closeBackgroundPopover();
   }
 
+  // ---------- Textart-Popover ----------
+
+  function openTextStylePopover() {
+    const btnRect = el.addTextBtn.getBoundingClientRect();
+    el.textStylePopoverBackdrop.hidden = false;
+    const popoverWidth = 320; // entspricht max-width in .popover-wide
+    const left = Math.min(Math.max(8, btnRect.left), window.innerWidth - popoverWidth - 8);
+    el.textStylePopover.style.top = `${btnRect.bottom + 6}px`;
+    el.textStylePopover.style.left = `${Math.max(8, left)}px`;
+  }
+
+  function closeTextStylePopover() {
+    el.textStylePopoverBackdrop.hidden = true;
+  }
+
   // ---------- Responsive view state (mobile) ----------
 
   function goToView(view) {
@@ -1609,7 +1651,7 @@
       if (e.target === el.popoverBackdrop) closeMovePopover();
     });
 
-    el.addTextBtn.addEventListener('click', addTextObject);
+    el.addTextBtn.addEventListener('click', openTextStylePopover);
     el.addImageBtn.addEventListener('click', () => el.imageFileInput.click());
     el.imageFileInput.addEventListener('change', () => {
       const file = el.imageFileInput.files[0];
@@ -1667,6 +1709,17 @@
     el.backgroundPopover.addEventListener('click', (e) => {
       const item = e.target.closest('.popover-item');
       if (item) setBackground(item.dataset.bg);
+    });
+
+    el.textStylePopoverBackdrop.addEventListener('click', (e) => {
+      if (e.target === el.textStylePopoverBackdrop) closeTextStylePopover();
+    });
+    el.textStylePopover.addEventListener('click', (e) => {
+      const item = e.target.closest('.popover-item-rich');
+      if (item) {
+        closeTextStylePopover();
+        addTextObject(item.dataset.style);
+      }
     });
 
     el.titleInput.addEventListener('input', () => {

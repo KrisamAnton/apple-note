@@ -768,9 +768,14 @@ textarea {
   cursor: grab;
 }
 
-.canvas-object[data-type="text"] {
+.canvas-object[data-type="text"][data-style="boxed"] {
   background: var(--bg-elevated);
   border-color: var(--border);
+}
+
+.canvas-object[data-type="text"][data-style="free"] {
+  background: transparent;
+  border-color: transparent;
 }
 
 .canvas-object[data-type="text"].selected {
@@ -868,6 +873,42 @@ textarea {
 .popover-item .folder-icon {
   width: 18px;
   height: 18px;
+}
+
+.popover-wide {
+  min-width: 280px;
+  max-width: 320px;
+}
+
+.popover-item-rich {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  padding: 9px 10px;
+  border-radius: 8px;
+}
+
+.popover-item-rich:hover {
+  background: var(--hover-bg);
+}
+
+.popover-item-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.popover-item-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.35;
 }
 
 .popover-item.current {
