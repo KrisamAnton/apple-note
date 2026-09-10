@@ -294,7 +294,9 @@
     ribbonColorBtn: document.getElementById('ribbonColorBtn'),
     ribbonMarkerBtn: document.getElementById('ribbonMarkerBtn'),
     ribbonFontSizeBtn: document.getElementById('ribbonFontSizeBtn'),
+    ribbonFontSizeLabel: document.getElementById('ribbonFontSizeLabel'),
     ribbonFontFamilyBtn: document.getElementById('ribbonFontFamilyBtn'),
+    ribbonFontFamilyLabel: document.getElementById('ribbonFontFamilyLabel'),
     fontFamilyPopoverBackdrop: document.getElementById('fontFamilyPopoverBackdrop'),
     fontFamilyPopover: document.getElementById('fontFamilyPopover'),
     fontFamilyList: document.getElementById('fontFamilyList'),
@@ -1299,6 +1301,8 @@
     body.focus();
     activeTextEdit = { note, obj, objEl, body, overlay };
     lastSelectionRange = null;
+    el.ribbonFontFamilyLabel.textContent = 'Standard';
+    el.ribbonFontSizeLabel.textContent = 'Standard';
     for (const btn of selectionFormatBtns()) btn.disabled = true;
     // Zeilen-weite Formatvorlagen (Überschrift, Listen) gelten für die ganze Zeile
     // und brauchen daher keine Textauswahl – sie sind während des ganzen
@@ -1696,6 +1700,8 @@
       if (px) wrapSelectionWithStyle(range, 'fontSize', `${px}px`);
       else unwrapStyleFromRange(range, 'fontSize');
     });
+    const entry = FONT_SIZES.find((s) => s.px === px);
+    el.ribbonFontSizeLabel.textContent = entry ? entry.label : 'Standard';
   }
 
   function applyFontFamilyChoice(css) {
@@ -1703,6 +1709,8 @@
       if (css) wrapSelectionWithStyle(range, 'fontFamily', css);
       else unwrapStyleFromRange(range, 'fontFamily');
     });
+    const entry = FONT_FAMILIES.find((f) => f.css === css);
+    el.ribbonFontFamilyLabel.textContent = entry ? entry.label : 'Standard';
   }
 
   // ----- Zeichnen (globale Tinten-Ebene über der ganzen Fläche) -----
