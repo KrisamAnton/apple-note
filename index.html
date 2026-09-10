@@ -44,12 +44,14 @@
           <svg viewBox="0 0 20 20" class="icon icon-search" aria-hidden="true"><path fill-rule="evenodd" d="M13.6 12.3a6 6 0 1 1 1.3-1.3l3.9 3.9-1.3 1.3-3.9-3.9zM14 8a6 6 0 1 0-12 0 6 6 0 0 0 12 0z" clip-rule="evenodd"/></svg>
           <input type="search" id="searchInput" placeholder="Suchen" autocomplete="off" />
         </div>
+      </div>
+
+      <div class="note-count-row">
+        <p class="note-count" id="noteCount"></p>
         <button class="sidebar-add-btn" id="newNoteBtn" type="button" aria-label="Neue Notiz" title="Neue Notiz">
           <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M9.2 2.5h1.6v6.7h6.7v1.6h-6.7v6.7H9.2v-6.7H2.5V9.2h6.7z"/></svg>
         </button>
       </div>
-
-      <p class="note-count" id="noteCount"></p>
 
       <div class="note-list" id="noteList">
         <!-- Notiz-Einträge werden hier per JS eingefügt -->
@@ -109,10 +111,10 @@
               <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><text x="2" y="12" font-size="13" font-weight="700" fill="currentColor">x</text><text x="10.5" y="17" font-size="8" font-weight="700" fill="currentColor">2</text></svg>
             </button>
             <button class="toolbar-btn" id="ribbonColorBtn" type="button" disabled aria-label="Textfarbe" title="Textfarbe">
-              <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><text x="2.5" y="14.5" font-size="13" font-weight="700" fill="currentColor">A</text><rect x="2" y="16.6" width="14" height="2.2" rx="1"/></svg>
+              <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><text x="2.5" y="14.5" font-size="13" font-weight="700" fill="currentColor">A</text><rect x="2" y="16.6" width="14" height="2.2" rx="1" fill="#e0402c"/></svg>
             </button>
             <button class="toolbar-btn" id="ribbonMarkerBtn" type="button" disabled aria-label="Markieren" title="Markieren">
-              <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M4.4 12.6 11 3.3c.5-.7 1.5-.8 2.2-.3l2.1 1.5c.7.5.8 1.5.3 2.2l-6.6 9.3-5.2.9.6-4.3z"/><rect x="2" y="17.4" width="16" height="1.5" rx="0.75" opacity="0.45"/></svg>
+              <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M4.4 12.6 11 3.3c.5-.7 1.5-.8 2.2-.3l2.1 1.5c.7.5.8 1.5.3 2.2l-6.6 9.3-5.2.9.6-4.3z" fill="currentColor"/><rect x="2" y="17.4" width="16" height="1.8" rx="0.9" fill="#ffd400"/></svg>
             </button>
           </div>
 
