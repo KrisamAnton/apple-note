@@ -13,9 +13,18 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
 ## Funktionen
 
 - Notizen erstellen, bearbeiten und löschen
-- Ordner anlegen, umbenennen (Doppelklick) und löschen
-- Notizen zwischen Ordnern verschieben
-- Volltextsuche über alle Notizen
+- **Unterseiten**: jede Notiz kann beliebig viele Unterseiten bekommen,
+  und diese wiederum eigene Unterseiten (wie in OneNote) – über das
+  „+"-Symbol, das beim Überfahren einer Notiz in der Liste erscheint.
+  Die Notizliste zeigt das Ganze als ein- und ausklappbaren Baum;
+  Löschen fragt nach und entfernt dann die gesamte Unterseiten-Kette,
+  Verschieben in einen anderen Ordner nimmt den Unterbaum automatisch mit
+- Ordner anlegen, umbenennen (Doppelklick), farblich kennzeichnen
+  (Klick auf den Farbpunkt) und löschen
+- Notizen (samt Unterseiten) zwischen Ordnern verschieben
+- Volltextsuche über Titel **und** Inhalt aller Notizen – durchsucht
+  bei aktiver Suche bewusst alle Ordner und Unterseiten, nicht nur den
+  gerade geöffneten Ordner
 - **Freie Zeichenfläche pro Notiz** mit beliebig vielen Objekten:
   - **Text**: per Doppelklick bearbeiten, frei positionieren und skalieren.
     Beim Hinzufügen wählbar zwischen **Textfeld** (mit Rahmen/Hintergrund)
@@ -23,6 +32,10 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
     Fläche – z. B. zum Beschriften auf linierten Seiten). Bei „Freier
     Text" auf linierten Notizen richtet sich die Schrift automatisch an
     den Linien aus, sodass es wie handschriftlich auf dem Papier wirkt
+    - **Formatvorlagen**: eine Zeile als „Überschrift 1"/„Überschrift 2"
+      auszeichnen (größer/fett) oder wieder auf „Normal" zurücksetzen –
+      wie die Formatvorlagen in Word/OneNote. Wirkt auf die ganze Zeile,
+      keine Textauswahl nötig
     - **Textformatierung** (Auswahl markieren, dann in der Werkzeugleiste
       wählen): **Fett**, *Kursiv*, **Textfarbe** (8 Farben) und
       **Schriftgröße** (Klein/Standard/Groß/Sehr groß) – wie in einer

@@ -22,6 +22,9 @@
     italic: '<svg viewBox="0 0 20 20"><text x="5.5" y="15.5" font-size="14" font-style="italic" font-weight="600" fill="currentColor">I</text></svg>',
     textColor: '<svg viewBox="0 0 20 20"><text x="2.5" y="14.5" font-size="13" font-weight="700" fill="currentColor">A</text><rect x="2" y="16.6" width="14" height="2.2" rx="1"/></svg>',
     fontSize: '<svg viewBox="0 0 20 20"><text x="1" y="15" font-size="13" font-weight="700" fill="currentColor">A</text><text x="10.5" y="15" font-size="8.5" font-weight="700" fill="currentColor">a</text></svg>',
+    chevron: '<svg viewBox="0 0 20 20"><path d="M7 4.5 13 10l-6 5.5v-2.2L10.4 10 7 6.7z"/></svg>',
+    plus: '<svg viewBox="0 0 20 20"><path d="M9.2 2.5h1.6v6.7h6.7v1.6h-6.7v6.7H9.2v-6.7H2.5V9.2h6.7z"/></svg>',
+    heading: '<svg viewBox="0 0 20 20"><text x="1.5" y="15" font-size="13" font-weight="800" fill="currentColor">H</text></svg>',
   };
 
   const MARKER_COLORS = [
@@ -48,6 +51,16 @@
     { hex: '#af52de', name: 'Lila' },
   ];
 
+  const FOLDER_COLORS = [
+    { hex: '#ff9500', name: 'Orange' },
+    { hex: '#ff3b30', name: 'Rot' },
+    { hex: '#af52de', name: 'Lila' },
+    { hex: '#0a84ff', name: 'Blau' },
+    { hex: '#34c759', name: 'Grün' },
+    { hex: '#ffcc00', name: 'Gelb' },
+    { hex: '#6e6e73', name: 'Grau' },
+  ];
+
   const FONT_SIZES = [
     { px: 12, label: 'Klein' },
     { px: null, label: 'Standard' },
@@ -66,8 +79,8 @@
    * @typedef {{id:string, type:'text', x:number, y:number, w:number, h:number, z:number, text:string, html:string, parentId:?string, relX?:number, relY?:number, relW?:number, relH?:number}} TextObject
    * @typedef {{id:string, type:'image', x:number, y:number, w:number, h:number, z:number, src:string}} ImageObject
    * @typedef {{id:string, color:string, eraser:boolean, points:Array<{x:number,y:number,width:number}>, parentId:?string}} Stroke
-   * @typedef {{id:string, title:string, objects:Array, ink:{strokes:Stroke[]}, background:'dots'|'lines'|'blank', folderId:?string, createdAt:number, updatedAt:number}} Note
-   * @typedef {{id:string, name:string}} Folder
+   * @typedef {{id:string, title:string, objects:Array, ink:{strokes:Stroke[]}, background:'dots'|'lines'|'blank', folderId:?string, parentNoteId:?string, createdAt:number, updatedAt:number}} Note
+   * @typedef {{id:string, name:string, color:?string}} Folder
    */
 
   const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
@@ -94,6 +107,7 @@
     }
     if (!note.ink) note.ink = { strokes: [] };
     if (!note.background) note.background = 'dots';
+    if (note.parentNoteId === undefined) note.parentNoteId = null;
 
     // Alte, auf ein Objekt begrenzte Zeichnungen (Vorversion) in die globale Tinten-Ebene übernehmen
     const oldDrawings = note.objects.filter((o) => o.type === 'drawing');
@@ -130,6 +144,30 @@
     return note;
   }
 
+  // Hängende (Eltern-Notiz existiert nicht mehr) oder zyklische parentNoteId-Referenzen
+  // kappen, damit der Notizbaum nicht in eine Endlosschleife läuft.
+  function sanitizeNoteParents(notes) {
+    const byId = new Map(notes.map((n) => [n.id, n]));
+    for (const note of notes) {
+      if (!note.parentNoteId) continue;
+      if (!byId.has(note.parentNoteId)) {
+        note.parentNoteId = null;
+        continue;
+      }
+      const seen = new Set([note.id]);
+      let cur = note.parentNoteId;
+      while (cur) {
+        if (seen.has(cur)) {
+          note.parentNoteId = null;
+          break;
+        }
+        seen.add(cur);
+        const parent = byId.get(cur);
+        cur = parent ? parent.parentNoteId : null;
+      }
+    }
+  }
+
   function loadState() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -137,6 +175,10 @@
         const parsed = JSON.parse(raw);
         if (parsed && Array.isArray(parsed.notes) && Array.isArray(parsed.folders)) {
           parsed.notes.forEach(migrateNote);
+          sanitizeNoteParents(parsed.notes);
+          parsed.folders.forEach((f, i) => {
+            if (!f.color) f.color = FOLDER_COLORS[i % FOLDER_COLORS.length].hex;
+          });
           return parsed;
         }
       }
@@ -178,6 +220,7 @@
           ink: { strokes: [] },
           background: 'dots',
           folderId: null,
+          parentNoteId: null,
           createdAt: now,
           updatedAt: now,
         },
@@ -189,6 +232,7 @@
   let selectedFolderId = null; // null = "Alle Notizen"
   let selectedNoteId = state.notes[0] ? state.notes[0].id : null;
   let searchQuery = '';
+  let collapsedNoteIds = new Set();
   let saveTimer = null;
 
   function persist() {
@@ -225,6 +269,9 @@
     addTextBtn: document.getElementById('addTextBtn'),
     textStylePopoverBackdrop: document.getElementById('textStylePopoverBackdrop'),
     textStylePopover: document.getElementById('textStylePopover'),
+    folderColorPopoverBackdrop: document.getElementById('folderColorPopoverBackdrop'),
+    folderColorPopover: document.getElementById('folderColorPopover'),
+    folderColorGrid: document.getElementById('folderColorGrid'),
     markerPopoverBackdrop: document.getElementById('markerPopoverBackdrop'),
     markerPopover: document.getElementById('markerPopover'),
     markerGrid: document.getElementById('markerGrid'),
@@ -236,6 +283,9 @@
     fontSizePopoverBackdrop: document.getElementById('fontSizePopoverBackdrop'),
     fontSizePopover: document.getElementById('fontSizePopover'),
     fontSizeList: document.getElementById('fontSizeList'),
+    headingPopoverBackdrop: document.getElementById('headingPopoverBackdrop'),
+    headingPopover: document.getElementById('headingPopover'),
+    headingList: document.getElementById('headingList'),
     drawModeBtn: document.getElementById('drawModeBtn'),
     addImageBtn: document.getElementById('addImageBtn'),
     imageFileInput: document.getElementById('imageFileInput'),
@@ -264,10 +314,11 @@
   }
 
   function noteSearchableText(note) {
-    return note.objects
+    const objectText = note.objects
       .filter((o) => o.type === 'text')
       .map((o) => o.text || '')
       .join(' ');
+    return `${note.title || ''} ${objectText}`;
   }
 
   function notePreviewText(note) {
@@ -279,14 +330,57 @@
     return '';
   }
 
-  function getVisibleNotes() {
-    let list = notesInFolder(selectedFolderId);
-    const q = searchQuery.trim().toLowerCase();
-    if (q) {
-      list = list.filter(
-        (n) => n.title.toLowerCase().includes(q) || noteSearchableText(n).toLowerCase().includes(q)
-      );
+  // Baut aus einer flachen Notizliste (z. B. eines Ordners) eine Tiefensuche-Reihenfolge
+  // mit Einrückungstiefe je Notiz auf, sodass Unterseiten (und deren Unterseiten) direkt
+  // unter ihrer übergeordneten Seite erscheinen. Eine Notiz, deren Eltern-Notiz nicht in
+  // der übergebenen Liste ist (z. B. weil sie in einem anderen Ordner liegt), wird als
+  // eigene Wurzel behandelt, damit sie nicht aus der Liste verschwindet.
+  function buildNoteTree(notes) {
+    const idsInList = new Set(notes.map((n) => n.id));
+    const childrenOf = new Map();
+    const roots = [];
+    for (const note of notes) {
+      const parentId = note.parentNoteId && idsInList.has(note.parentNoteId) ? note.parentNoteId : null;
+      if (parentId) {
+        if (!childrenOf.has(parentId)) childrenOf.set(parentId, []);
+        childrenOf.get(parentId).push(note);
+      } else {
+        roots.push(note);
+      }
     }
+    const byUpdatedDesc = (a, b) => b.updatedAt - a.updatedAt;
+    roots.sort(byUpdatedDesc);
+    for (const list of childrenOf.values()) list.sort(byUpdatedDesc);
+
+    const result = [];
+    function visit(note, depth) {
+      result.push({ note, depth, hasChildren: childrenOf.has(note.id) });
+      if (collapsedNoteIds.has(note.id)) return;
+      for (const kid of childrenOf.get(note.id) || []) visit(kid, depth + 1);
+    }
+    for (const root of roots) visit(root, 0);
+    return result;
+  }
+
+  // Alle Nachfahren einer Notiz (Unterseiten, Unter-Unterseiten, …) über den
+  // gesamten Notizbestand hinweg, unabhängig vom aktuell gewählten Ordner.
+  function descendantNoteIds(id) {
+    const ids = [];
+    const stack = state.notes.filter((n) => n.parentNoteId === id).map((n) => n.id);
+    while (stack.length > 0) {
+      const nid = stack.pop();
+      ids.push(nid);
+      for (const child of state.notes.filter((n) => n.parentNoteId === nid)) stack.push(child.id);
+    }
+    return ids;
+  }
+
+  function getVisibleNotes() {
+    const q = searchQuery.trim().toLowerCase();
+    // Bei aktiver Suche werden bewusst ALLE Notizen durchsucht (nicht nur der
+    // gerade geöffnete Ordner), damit man wirklich überall etwas findet.
+    let list = q ? state.notes : notesInFolder(selectedFolderId);
+    if (q) list = list.filter((n) => noteSearchableText(n).toLowerCase().includes(q));
     return list.slice().sort((a, b) => b.updatedAt - a.updatedAt);
   }
 
@@ -349,7 +443,7 @@
       item.className = 'folder-item' + (selectedFolderId === folder.id ? ' active' : '');
       const count = notesInFolder(folder.id).length;
       item.innerHTML = `
-        <span class="folder-icon">${ICONS.folder}</span>
+        <button class="folder-color-dot" type="button" style="background:${folder.color || '#8e8e93'}" title="Ordnerfarbe ändern" aria-label="Ordnerfarbe ändern"></button>
         <input class="folder-name" value="${escapeHtml(folder.name)}" readonly />
         <span class="folder-count">${count}</span>
         <button class="folder-delete" type="button" aria-label="Ordner löschen" title="Ordner löschen">
@@ -357,9 +451,13 @@
         </button>
       `;
       const nameInput = item.querySelector('.folder-name');
+      item.querySelector('.folder-color-dot').addEventListener('click', (e) => {
+        e.stopPropagation();
+        openFolderColorPopover(folder, e.currentTarget);
+      });
       item.addEventListener('click', (e) => {
         if (e.target === nameInput && nameInput.readOnly === false) return;
-        if (e.target.closest('.folder-delete')) return;
+        if (e.target.closest('.folder-delete') || e.target.closest('.folder-color-dot')) return;
         selectFolder(folder.id);
       });
       nameInput.addEventListener('dblclick', (e) => {
@@ -402,7 +500,8 @@
   }
 
   function createFolder() {
-    const folder = { id: uid(), name: 'Neuer Ordner' };
+    const color = FOLDER_COLORS[state.folders.length % FOLDER_COLORS.length].hex;
+    const folder = { id: uid(), name: 'Neuer Ordner', color };
     state.folders.push(folder);
     schedulePersist();
     renderFolders();
@@ -434,6 +533,35 @@
     renderNoteList();
   }
 
+  // ---------- Ordnerfarbe-Popover ----------
+
+  function buildFolderColorGrid() {
+    el.folderColorGrid.innerHTML = '';
+    for (const color of FOLDER_COLORS) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'format-swatch';
+      btn.style.backgroundColor = color.hex;
+      btn.title = color.name;
+      btn.setAttribute('aria-label', `Ordner ${color.name} färben`);
+      btn.dataset.hex = color.hex;
+      el.folderColorGrid.appendChild(btn);
+    }
+  }
+
+  function openFolderColorPopover(folder, anchorBtn) {
+    buildFolderColorGrid();
+    el.folderColorPopover.dataset.folderId = folder.id;
+    const btnRect = anchorBtn.getBoundingClientRect();
+    el.folderColorPopoverBackdrop.hidden = false;
+    el.folderColorPopover.style.top = `${btnRect.bottom + 6}px`;
+    el.folderColorPopover.style.left = `${Math.max(8, btnRect.left)}px`;
+  }
+
+  function closeFolderColorPopover() {
+    el.folderColorPopoverBackdrop.hidden = true;
+  }
+
   // ---------- Rendering: Note list ----------
 
   function renderNoteList() {
@@ -451,17 +579,62 @@
       return;
     }
 
-    for (const note of notes) {
+    // Während der Suche flach anzeigen (Trefferrelevanz statt Hierarchie zählt hier),
+    // sonst als Baum mit Unterseiten.
+    const rows = searchQuery.trim()
+      ? notes.map((note) => ({ note, depth: 0, hasChildren: false }))
+      : buildNoteTree(notes);
+
+    for (const { note, depth, hasChildren } of rows) {
       const item = document.createElement('div');
       item.className = 'note-item' + (note.id === selectedNoteId ? ' active' : '');
+      item.style.paddingLeft = `${10 + depth * 16}px`;
       const preview = notePreviewText(note);
-      item.innerHTML = `
+
+      if (hasChildren) {
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'note-toggle' + (collapsedNoteIds.has(note.id) ? '' : ' expanded');
+        toggle.innerHTML = `<svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.chevron}</svg>`;
+        const label = collapsedNoteIds.has(note.id) ? 'Unterseiten einblenden' : 'Unterseiten ausblenden';
+        toggle.title = label;
+        toggle.setAttribute('aria-label', label);
+        toggle.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (collapsedNoteIds.has(note.id)) collapsedNoteIds.delete(note.id);
+          else collapsedNoteIds.add(note.id);
+          renderNoteList();
+        });
+        item.appendChild(toggle);
+      } else {
+        const spacer = document.createElement('span');
+        spacer.className = 'note-toggle-spacer';
+        item.appendChild(spacer);
+      }
+
+      const main = document.createElement('div');
+      main.className = 'note-item-main';
+      main.innerHTML = `
         <div class="note-title">${escapeHtml(note.title)}</div>
         <div class="note-meta">
           <span>${formatDate(note.updatedAt)}</span>
           <span class="note-preview">${escapeHtml(preview)}</span>
         </div>
       `;
+      item.appendChild(main);
+
+      const addSubBtn = document.createElement('button');
+      addSubBtn.type = 'button';
+      addSubBtn.className = 'note-add-sub';
+      addSubBtn.title = 'Unterseite hinzufügen';
+      addSubBtn.setAttribute('aria-label', 'Unterseite hinzufügen');
+      addSubBtn.innerHTML = `<svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.plus}</svg>`;
+      addSubBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        createNote(note.id);
+      });
+      item.appendChild(addSubBtn);
+
       item.addEventListener('click', () => selectNote(note.id));
       el.noteList.appendChild(item);
     }
@@ -496,19 +669,22 @@
     textarea.style.height = `${textarea.scrollHeight}px`;
   }
 
-  function createNote() {
+  function createNote(parentNoteId) {
     const now = Date.now();
+    const parent = parentNoteId ? findNote(parentNoteId) : null;
     const note = {
       id: uid(),
       title: '',
       objects: [],
       ink: { strokes: [] },
       background: 'dots',
-      folderId: selectedFolderId,
+      folderId: parent ? parent.folderId : selectedFolderId,
+      parentNoteId: parent ? parent.id : null,
       createdAt: now,
       updatedAt: now,
     };
     state.notes.unshift(note);
+    if (parent) collapsedNoteIds.delete(parent.id);
     schedulePersist();
     selectedNoteId = note.id;
     goToView('editor');
@@ -531,10 +707,16 @@
   function deleteNote(id) {
     const note = findNote(id);
     if (!note) return;
-    if (!confirm('Diese Notiz löschen?')) return;
-    state.notes = state.notes.filter((n) => n.id !== id);
+    const descendants = descendantNoteIds(id);
+    const msg =
+      descendants.length > 0
+        ? `Diese Notiz und ${descendants.length} Unterseite(n) löschen?`
+        : 'Diese Notiz löschen?';
+    if (!confirm(msg)) return;
+    const toDelete = new Set([id, ...descendants]);
+    state.notes = state.notes.filter((n) => !toDelete.has(n.id));
     schedulePersist();
-    if (selectedNoteId === id) {
+    if (toDelete.has(selectedNoteId)) {
       selectedNoteId = null;
     }
     renderFolders();
@@ -547,8 +729,9 @@
 
   let selectedObjectId = null;
   let dragState = null;
-  let activeTextEdit = null; // { note, obj, objEl, body, overlay, formatBtns: [] }
+  let activeTextEdit = null; // { note, obj, objEl, body, overlay, formatBtns: [], headingBtn }
   let lastSelectionRange = null;
+  let headingTargetNode = null;
   let inkStrokeState = null;
   let drawColor = '#1c1c1e';
   let drawIsEraser = false;
@@ -926,12 +1109,15 @@
     overlay.className = 'text-drag-overlay';
     objEl.appendChild(overlay);
 
+    const headingBtn = makeToolbarBtn(ICONS.heading, false, () => openHeadingPopover(headingBtn), 'Formatvorlage (Überschrift)');
     const boldBtn = makeToolbarBtn(ICONS.bold, false, () => applyInlineCommand('bold'), 'Fett');
     const italicBtn = makeToolbarBtn(ICONS.italic, false, () => applyInlineCommand('italic'), 'Kursiv');
     const markerBtn = makeToolbarBtn(ICONS.marker, false, () => openFormatPopover(el.markerPopoverBackdrop, el.markerPopover, markerBtn), 'Markieren');
     const colorBtn = makeToolbarBtn(ICONS.textColor, false, () => openFormatPopover(el.colorPopoverBackdrop, el.colorPopover, colorBtn), 'Textfarbe');
     const fontSizeBtn = makeToolbarBtn(ICONS.fontSize, false, () => openFormatPopover(el.fontSizePopoverBackdrop, el.fontSizePopover, fontSizeBtn), 'Schriftgröße');
     const formatBtns = [boldBtn, italicBtn, markerBtn, colorBtn, fontSizeBtn];
+    headingBtn.disabled = true;
+    mainToolbar.appendChild(headingBtn);
     for (const btn of formatBtns) {
       btn.disabled = true;
       mainToolbar.appendChild(btn);
@@ -947,15 +1133,16 @@
         lastTapAt = 0;
         e.preventDefault();
         e.stopPropagation();
-        enterTextEdit(note, obj, objEl, body, overlay, formatBtns);
+        enterTextEdit(note, obj, objEl, body, overlay, formatBtns, headingBtn);
         return;
       }
       lastTapAt = now;
       startObjectDrag(e, note, obj, objEl);
     });
 
-    body.addEventListener('blur', () => exitTextEdit(obj, body, overlay, formatBtns));
+    body.addEventListener('blur', () => exitTextEdit(obj, body, overlay, formatBtns, headingBtn));
     body.addEventListener('input', () => {
+      stripInheritedHeadingOnFreshLine(body);
       saveTextObjContent(note, obj, body);
       updateTextEmptyState(body);
     });
@@ -971,7 +1158,33 @@
     // Fokussieren funktioniert nur auf Elementen, die bereits im DOM hängen – zu
     // diesem Zeitpunkt ist objEl (bei Neuerstellung) meist noch nicht eingefügt.
     // Der Aufrufer muss daher nach dem Einfügen selbst enterTextEdit() aufrufen.
-    if (autoFocus) queueMicrotask(() => { if (objEl.isConnected) enterTextEdit(note, obj, objEl, body, overlay, formatBtns); });
+    if (autoFocus) queueMicrotask(() => { if (objEl.isConnected) enterTextEdit(note, obj, objEl, body, overlay, formatBtns, headingBtn); });
+  }
+
+  // contentEditable übernimmt beim Zeilenumbruch (Enter) die Klasse der aktuellen
+  // Zeile 1:1 in die neue Zeile – eine Überschrift würde sich sonst auf jede
+  // folgende Zeile "vererben". Direkt nach dem Split (Cursor steht am Anfang der
+  // frisch erzeugten Zeile, deren vorherige Geschwister-Zeile dieselbe Überschrift
+  // trägt) wird die geerbte Überschrift-Klasse daher wieder entfernt.
+  function stripInheritedHeadingOnFreshLine(body) {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !sel.isCollapsed) return;
+    const range = sel.getRangeAt(0);
+    if (!body.contains(range.startContainer)) return;
+    const lineEl = lineBlockOf(range.startContainer, body);
+    if (!isLineBlockEl(lineEl)) return;
+    if (!lineEl.classList.contains('heading-1') && !lineEl.classList.contains('heading-2')) return;
+    const atStart =
+      (range.startContainer === lineEl && range.startOffset === 0) ||
+      (range.startContainer.nodeType === Node.TEXT_NODE &&
+        range.startContainer === lineEl.firstChild &&
+        range.startOffset === 0);
+    if (!atStart) return;
+    const prev = lineEl.previousSibling;
+    if (prev && prev.nodeType !== Node.TEXT_NODE && (prev.classList.contains('heading-1') || prev.classList.contains('heading-2'))) {
+      lineEl.classList.remove('heading-1', 'heading-2');
+      if (lineEl.classList.length === 0) lineEl.removeAttribute('class');
+    }
   }
 
   function bodyToPlainText(body) {
@@ -1003,24 +1216,28 @@
     sel.addRange(range);
   }
 
-  function enterTextEdit(note, obj, objEl, body, overlay, formatBtns) {
+  function enterTextEdit(note, obj, objEl, body, overlay, formatBtns, headingBtn) {
     selectObject(note, obj, objEl);
     body.contentEditable = 'true';
     body.classList.add('editing');
     overlay.style.display = 'none';
     body.focus();
-    activeTextEdit = { note, obj, objEl, body, overlay, formatBtns };
+    activeTextEdit = { note, obj, objEl, body, overlay, formatBtns, headingBtn };
     lastSelectionRange = null;
     for (const btn of formatBtns) btn.disabled = true;
+    // Die Formatvorlage (Überschrift) gilt für die ganze Zeile und braucht daher
+    // keine Textauswahl – sie ist während des ganzen Bearbeitens nutzbar.
+    headingBtn.disabled = false;
   }
 
-  function exitTextEdit(obj, body, overlay, formatBtns) {
+  function exitTextEdit(obj, body, overlay, formatBtns, headingBtn) {
     body.contentEditable = 'false';
     body.classList.remove('editing');
     overlay.style.display = '';
     const note = currentNote();
     if (note) saveTextObjContent(note, obj, body);
     for (const btn of formatBtns) btn.disabled = true;
+    headingBtn.disabled = true;
     if (activeTextEdit && activeTextEdit.obj.id === obj.id) {
       activeTextEdit = null;
       lastSelectionRange = null;
@@ -1253,6 +1470,87 @@
     el.markerPopoverBackdrop.hidden = true;
     el.colorPopoverBackdrop.hidden = true;
     el.fontSizePopoverBackdrop.hidden = true;
+    el.headingPopoverBackdrop.hidden = true;
+  }
+
+  // Sammelt alle Top-Level-Knoten (direkte Kinder von root), die zur "Zeile" des
+  // übergebenen Knotens gehören. Bei einer bereits umhüllten Zeile (<div>/<p>,
+  // von contentEditable pro Enter erzeugt) ist das genau dieser eine Block. Bei der
+  // ersten, noch unumhüllten Zeile können es mehrere Geschwister-Knoten sein (z. B.
+  // "<b>Fett</b> Rest" ohne umschließendes <div>), daher werden alle Nachbarn bis
+  // zum nächsten Zeilen-Block gesammelt.
+  function getCurrentLineNodes(caretNode, root) {
+    const anchor = lineBlockOf(caretNode, root);
+    if (isLineBlockEl(anchor)) return [anchor];
+    const children = Array.prototype.slice.call(root.childNodes);
+    const idx = children.indexOf(anchor);
+    if (idx === -1) return [anchor];
+    let start = idx;
+    let end = idx;
+    while (start > 0 && !isLineBlockEl(children[start - 1])) start--;
+    while (end < children.length - 1 && !isLineBlockEl(children[end + 1])) end++;
+    return children.slice(start, end + 1);
+  }
+
+  // Stellt sicher, dass die aktuelle Zeile ein eigenes Element (<div>) ist, das eine
+  // CSS-Klasse (z. B. für eine Überschrift-Formatvorlage) tragen kann, und gibt es
+  // zurück. Eine noch unumhüllte erste Zeile wird dafür einmalig in ein <div> verpackt.
+  function ensureLineWrapper(caretNode, root) {
+    const nodes = getCurrentLineNodes(caretNode, root);
+    if (nodes.length === 1 && isLineBlockEl(nodes[0])) return nodes[0];
+    const div = document.createElement('div');
+    nodes[0].parentNode.insertBefore(div, nodes[0]);
+    for (const n of nodes) div.appendChild(n);
+    return div;
+  }
+
+  function buildHeadingList() {
+    if (el.headingList.childElementCount > 0) return;
+    const options = [
+      { level: null, label: 'Normal' },
+      { level: 1, label: 'Überschrift 1' },
+      { level: 2, label: 'Überschrift 2' },
+    ];
+    for (const opt of options) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'popover-item heading-option' + (opt.level ? ` heading-${opt.level}` : '');
+      btn.textContent = opt.label;
+      if (opt.level) btn.dataset.level = String(opt.level);
+      el.headingList.appendChild(btn);
+    }
+  }
+
+  function openHeadingPopover(headingBtn) {
+    if (!activeTextEdit) return;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !activeTextEdit.body.contains(sel.getRangeAt(0).startContainer)) return;
+    headingTargetNode = sel.getRangeAt(0).startContainer;
+    buildHeadingList();
+    closeAllFormatPopovers();
+    const btnRect = headingBtn.getBoundingClientRect();
+    el.headingPopoverBackdrop.hidden = false;
+    el.headingPopover.style.top = `${btnRect.bottom + 6}px`;
+    el.headingPopover.style.left = `${Math.max(8, btnRect.left)}px`;
+  }
+
+  function applyHeadingLevel(level) {
+    if (!activeTextEdit || !headingTargetNode) {
+      closeAllFormatPopovers();
+      return;
+    }
+    const { note, obj, body } = activeTextEdit;
+    if (body.contains(headingTargetNode)) {
+      const lineEl = ensureLineWrapper(headingTargetNode, body);
+      lineEl.classList.remove('heading-1', 'heading-2');
+      if (level) lineEl.classList.add(`heading-${level}`);
+      else if (lineEl.classList.length === 0) lineEl.removeAttribute('class');
+      saveTextObjContent(note, obj, body);
+      updateTextEmptyState(body);
+    }
+    headingTargetNode = null;
+    closeAllFormatPopovers();
+    body.focus();
   }
 
   function applyMarkerChoice(hex, alpha) {
@@ -1988,7 +2286,18 @@
       item.className = 'popover-item' + (note.folderId === opt.id ? ' current' : '');
       item.innerHTML = `<span class="folder-icon">${opt.id === null ? ICONS.allNotes : ICONS.folder}</span><span>${escapeHtml(opt.name)}</span>`;
       item.addEventListener('click', () => {
-        note.folderId = opt.id;
+        // Unterseiten ziehen beim Verschieben mit, damit die Seite mitsamt ihrem
+        // Unterbaum im selben Ordner bleibt. Die verschobene Notiz selbst wird von
+        // ihrer bisherigen Eltern-Notiz gelöst (sonst bliebe eine Referenz auf eine
+        // Notiz in einem anderen Ordner bestehen, die z. B. beim späteren Löschen
+        // der alten Eltern-Notiz ungewollt mitgelöscht würde).
+        if (note.folderId !== opt.id) {
+          const subtreeIds = new Set([note.id, ...descendantNoteIds(note.id)]);
+          for (const n of state.notes) {
+            if (subtreeIds.has(n.id)) n.folderId = opt.id;
+          }
+          note.parentNoteId = null;
+        }
         note.updatedAt = Date.now();
         schedulePersist();
         closeMovePopover();
@@ -2162,6 +2471,21 @@
       }
     });
 
+    el.folderColorPopoverBackdrop.addEventListener('click', (e) => {
+      if (e.target === el.folderColorPopoverBackdrop) closeFolderColorPopover();
+    });
+    el.folderColorGrid.addEventListener('click', (e) => {
+      const swatch = e.target.closest('.format-swatch');
+      if (!swatch) return;
+      const folder = state.folders.find((f) => f.id === el.folderColorPopover.dataset.folderId);
+      if (folder) {
+        folder.color = swatch.dataset.hex;
+        schedulePersist();
+        renderFolders();
+      }
+      closeFolderColorPopover();
+    });
+
     // Verhindert, dass ein Klick in einem Formatierungs-Popover den Fokus (und damit
     // die gemerkte Textauswahl) aus dem bearbeiteten Text-Objekt entfernt.
     el.markerPopover.addEventListener('pointerdown', (e) => e.preventDefault());
@@ -2191,6 +2515,15 @@
     el.fontSizeList.addEventListener('click', (e) => {
       const item = e.target.closest('.popover-item');
       if (item) applyFontSizeChoice(item.dataset.px ? Number(item.dataset.px) : null);
+    });
+
+    el.headingPopover.addEventListener('pointerdown', (e) => e.preventDefault());
+    el.headingPopoverBackdrop.addEventListener('click', (e) => {
+      if (e.target === el.headingPopoverBackdrop) closeAllFormatPopovers();
+    });
+    el.headingList.addEventListener('click', (e) => {
+      const item = e.target.closest('.popover-item');
+      if (item) applyHeadingLevel(item.dataset.level ? Number(item.dataset.level) : null);
     });
 
     el.titleInput.addEventListener('input', () => {
