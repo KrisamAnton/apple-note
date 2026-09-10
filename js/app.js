@@ -1047,11 +1047,21 @@
   // umschließende <mark>/<span> leer zurücklassen, statt es mitzunehmen – wodurch
   // "Markierung entfernen" oder erneutes Formatieren bei exakt getroffenen Wörtern
   // wirkungslos bliebe.
+  function isLineBlockEl(node) {
+    return node.nodeType !== Node.TEXT_NODE && (node.tagName === 'DIV' || node.tagName === 'P');
+  }
+
   function expandRangeToElementBoundaries(range, root) {
     function climb(container, offset, isStart) {
       let node = container;
       let off = offset;
       while (node !== root) {
+        // Ein Zeilen-Container (<div>/<p>, von contentEditable pro Zeile erzeugt) darf
+        // nie als Ganzes erfasst werden – sonst landet ein Block-Element im neuen
+        // <mark>/<span>, was beim Rendern einen ungewollten Zeilenumbruch verursacht.
+        // Die Prüfung muss VOR dem Hochklettern greifen (auf dem aktuellen Knoten,
+        // bevor er zur Einheit seines Elternelements befördert wird).
+        if (isLineBlockEl(node)) break;
         const flush = isStart
           ? off === 0
           : node.nodeType === Node.TEXT_NODE
@@ -1072,14 +1082,55 @@
     range.setEnd(e.node, e.off);
   }
 
+  // Findet den Zeilen-Block (direktes Kind von root, das den Knoten enthält – bei
+  // der ersten, unumhüllten Zeile ist das ggf. ein reiner Textknoten).
+  function lineBlockOf(node, root) {
+    let n = node;
+    while (n.parentNode !== root && n !== root) n = n.parentNode;
+    return n;
+  }
+
+  // Zerlegt eine Range, die über mehrere Zeilen (<div>-Blöcke) hinweggeht, in je
+  // einen Teilbereich pro betroffener Zeile. Ein <mark>/<span> darf nie mehrere
+  // Zeilen gleichzeitig umschließen, sonst landet ein Block-Element im Inline-
+  // Wrapper und erzeugt einen ungewollten Zeilenumbruch.
+  function splitRangeByLine(range, root) {
+    const children = Array.prototype.slice.call(root.childNodes);
+    // Liegt eine Grenze direkt auf root (z. B. durch selectNodeContents(root)), ist
+    // der Offset dort bereits ein Kindindex von root – sonst über den umschließenden
+    // Zeilen-Block auflösen.
+    const startIdx =
+      range.startContainer === root ? range.startOffset : children.indexOf(lineBlockOf(range.startContainer, root));
+    const endIdx =
+      range.endContainer === root ? range.endOffset - 1 : children.indexOf(lineBlockOf(range.endContainer, root));
+    if (startIdx === endIdx) return [range];
+    const fullEnd = (child) => (child.nodeType === Node.TEXT_NODE ? child.textContent.length : child.childNodes.length);
+    const ranges = [];
+    for (let i = startIdx; i <= endIdx; i++) {
+      const child = children[i];
+      const subRange = document.createRange();
+      // Grenzen von root (z. B. selectNodeContents) bedeuten "voller Block" – nur eine
+      // Grenze, die bereits INNERHALB des Blocks liegt, behält ihre genaue Teil-Position.
+      if (i === startIdx && range.startContainer !== root) subRange.setStart(range.startContainer, range.startOffset);
+      else subRange.setStart(child, 0);
+      if (i === endIdx && range.endContainer !== root) subRange.setEnd(range.endContainer, range.endOffset);
+      else subRange.setEnd(child, fullEnd(child));
+      if (!subRange.collapsed) ranges.push(subRange);
+    }
+    return ranges;
+  }
+
   function withActiveSelection(fn) {
     if (!activeTextEdit || !lastSelectionRange) {
       closeAllFormatPopovers();
       return;
     }
     const { note, obj, body } = activeTextEdit;
-    expandRangeToElementBoundaries(lastSelectionRange, body);
-    fn(lastSelectionRange, note, obj, body);
+    const ranges = splitRangeByLine(lastSelectionRange, body);
+    for (const range of ranges) {
+      expandRangeToElementBoundaries(range, body);
+      fn(range, note, obj, body);
+    }
     saveTextObjContent(note, obj, body);
     updateTextEmptyState(body);
     lastSelectionRange = null;
