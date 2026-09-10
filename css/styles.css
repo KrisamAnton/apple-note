@@ -305,6 +305,9 @@ textarea {
 }
 
 .note-list-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 8px 14px;
   background: var(--bg-list);
   border-bottom: 1px solid var(--border);
@@ -312,6 +315,8 @@ textarea {
 }
 
 .search-field {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -525,35 +530,6 @@ textarea {
   text-align: center;
   color: var(--text-tertiary);
   font-size: 14px;
-}
-
-.note-list-footer {
-  padding: 10px 16px;
-  display: flex;
-  justify-content: flex-end;
-  border-top: 1px solid var(--border);
-}
-
-.new-note-btn {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  border: none;
-  background: var(--accent);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
-}
-
-.new-note-btn:hover {
-  background: var(--accent-strong);
-}
-
-.new-note-btn .icon {
-  width: 15px;
-  height: 15px;
 }
 
 /* ---------- Editor (Spalte 3) ---------- */
