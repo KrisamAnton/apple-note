@@ -928,14 +928,14 @@ textarea {
   font-weight: 600;
 }
 
-.marker-grid {
+.format-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 6px;
   padding: 6px 10px 10px;
 }
 
-.marker-swatch {
+.format-swatch {
   width: 100%;
   aspect-ratio: 1;
   border-radius: 7px;
@@ -944,7 +944,7 @@ textarea {
   padding: 0;
 }
 
-.marker-swatch:hover {
+.format-swatch:hover {
   border-color: var(--accent);
 }
 

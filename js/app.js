@@ -5,6 +5,11 @@
   const SURFACE_W = 1600;
   const SURFACE_H = 2200;
   const MIN_SIZES = { text: [140, 60], image: [60, 60], pdf: [60, 60] };
+  // Muss zum Linien-Hintergrund (.canvas-surface[data-bg="lines"]) passen: Zeilenabstand
+  // 28px, die sichtbare Linie liegt am unteren Rand jedes 28px-Bandes (bei 27px).
+  const LINE_PITCH = 28;
+  const LINE_PHASE = 27;
+  const OBJ_BORDER = 2; // .canvas-object border-width
 
   const ICONS = {
     allNotes: '<svg viewBox="0 0 20 20"><path d="M4 3a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6.41a1 1 0 0 0-.29-.71l-2.41-2.41A1 1 0 0 0 13.59 3H4zm2 4h8v1.5H6V7zm0 3h8v1.5H6V10zm0 3h5v1.5H6V13z"/></svg>',
@@ -13,6 +18,10 @@
     link: '<svg viewBox="0 0 20 20"><rect x="1" y="7" width="9" height="4.5" rx="2.25" transform="rotate(-45 5.5 9.25)" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="9.5" y="8.5" width="9" height="4.5" rx="2.25" transform="rotate(-45 14 10.75)" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
     unlink: '<svg viewBox="0 0 20 20"><rect x="1" y="7" width="9" height="4.5" rx="2.25" transform="rotate(-45 5.5 9.25)" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="9.5" y="8.5" width="9" height="4.5" rx="2.25" transform="rotate(-45 14 10.75)" fill="none" stroke="currentColor" stroke-width="1.6"/><line x1="3" y1="17" x2="17" y2="3" stroke="currentColor" stroke-width="1.8"/></svg>',
     marker: '<svg viewBox="0 0 20 20"><path d="M4.4 12.6 11 3.3c.5-.7 1.5-.8 2.2-.3l2.1 1.5c.7.5.8 1.5.3 2.2l-6.6 9.3-5.2.9.6-4.3z"/><rect x="2" y="17.4" width="16" height="1.5" rx="0.75" opacity="0.45"/></svg>',
+    bold: '<svg viewBox="0 0 20 20"><text x="4" y="15.5" font-size="14" font-weight="800" fill="currentColor">B</text></svg>',
+    italic: '<svg viewBox="0 0 20 20"><text x="5.5" y="15.5" font-size="14" font-style="italic" font-weight="600" fill="currentColor">I</text></svg>',
+    textColor: '<svg viewBox="0 0 20 20"><text x="2.5" y="14.5" font-size="13" font-weight="700" fill="currentColor">A</text><rect x="2" y="16.6" width="14" height="2.2" rx="1"/></svg>',
+    fontSize: '<svg viewBox="0 0 20 20"><text x="1" y="15" font-size="13" font-weight="700" fill="currentColor">A</text><text x="10.5" y="15" font-size="8.5" font-weight="700" fill="currentColor">a</text></svg>',
   };
 
   const MARKER_COLORS = [
@@ -26,6 +35,24 @@
     { alpha: 0.35, label: 'Leicht' },
     { alpha: 0.55, label: 'Mittel' },
     { alpha: 0.8, label: 'Stark' },
+  ];
+
+  const TEXT_COLORS = [
+    { hex: '#1c1c1e', name: 'Schwarz' },
+    { hex: '#6e6e73', name: 'Grau' },
+    { hex: '#ff3b30', name: 'Rot' },
+    { hex: '#ff9500', name: 'Orange' },
+    { hex: '#ffcc00', name: 'Gelb' },
+    { hex: '#34c759', name: 'Grün' },
+    { hex: '#0a84ff', name: 'Blau' },
+    { hex: '#af52de', name: 'Lila' },
+  ];
+
+  const FONT_SIZES = [
+    { px: 12, label: 'Klein' },
+    { px: null, label: 'Standard' },
+    { px: 19, label: 'Groß' },
+    { px: 26, label: 'Sehr groß' },
   ];
 
   function hexToRgba(hex, alpha) {
@@ -202,6 +229,13 @@
     markerPopover: document.getElementById('markerPopover'),
     markerGrid: document.getElementById('markerGrid'),
     markerRemoveBtn: document.getElementById('markerRemoveBtn'),
+    colorPopoverBackdrop: document.getElementById('colorPopoverBackdrop'),
+    colorPopover: document.getElementById('colorPopover'),
+    colorGrid: document.getElementById('colorGrid'),
+    colorResetBtn: document.getElementById('colorResetBtn'),
+    fontSizePopoverBackdrop: document.getElementById('fontSizePopoverBackdrop'),
+    fontSizePopover: document.getElementById('fontSizePopover'),
+    fontSizeList: document.getElementById('fontSizeList'),
     drawModeBtn: document.getElementById('drawModeBtn'),
     addImageBtn: document.getElementById('addImageBtn'),
     imageFileInput: document.getElementById('imageFileInput'),
@@ -513,7 +547,7 @@
 
   let selectedObjectId = null;
   let dragState = null;
-  let activeTextEdit = null; // { note, obj, objEl, body, overlay, markerBtn }
+  let activeTextEdit = null; // { note, obj, objEl, body, overlay, formatBtns: [] }
   let lastSelectionRange = null;
   let inkStrokeState = null;
   let drawColor = '#1c1c1e';
@@ -589,7 +623,7 @@
     return btn;
   }
 
-  function buildObjectEl(note, obj) {
+  function buildObjectEl(note, obj, autoFocusText) {
     const objEl = document.createElement('div');
     objEl.className = 'canvas-object';
     objEl.dataset.id = obj.id;
@@ -602,7 +636,7 @@
     mainToolbar.appendChild(makeToolbarBtn(ICONS.trash, true, () => deleteObject(note, obj.id), 'Löschen'));
     objEl.appendChild(mainToolbar);
 
-    if (obj.type === 'text') buildTextContent(note, obj, objEl, mainToolbar);
+    if (obj.type === 'text') buildTextContent(note, obj, objEl, mainToolbar, autoFocusText);
     else if (obj.type === 'image') buildImageContent(note, obj, objEl);
     else if (obj.type === 'pdf') buildPdfContent(note, obj, objEl);
 
@@ -717,6 +751,15 @@
     if (note && obj && obj.type === 'text' && dragState.moved) {
       updateAttachment(note, obj);
     }
+    if (note && obj && dragState.moved) {
+      const movedTextObjs = [obj, ...dragState.children.map((c) => getObj(note, c.id))]
+        .filter((o) => o && o.type === 'text' && o.style === 'free');
+      for (const textObj of movedTextObjs) {
+        const textEl = findObjEl(textObj.id);
+        const body = textEl && textEl.querySelector('.canvas-text-body');
+        if (body) applyFreeLinesAlignment(note, textObj, body);
+      }
+    }
     dragState = null;
     if (note) schedulePersist();
   }
@@ -809,28 +852,90 @@
     handle.removeEventListener('pointermove', onObjectResizeMove);
     handle.removeEventListener('pointerup', onObjectResizeEnd);
     handle.removeEventListener('pointercancel', onObjectResizeEnd);
+    if (note && obj) {
+      for (const child of note.objects) {
+        if (child.parentId !== obj.id || child.type !== 'text' || child.style !== 'free') continue;
+        const childEl = findObjEl(child.id);
+        const body = childEl && childEl.querySelector('.canvas-text-body');
+        if (body) applyFreeLinesAlignment(note, child, body);
+      }
+    }
     dragState = null;
     if (note) schedulePersist();
   }
 
   // ----- Text-Objekt -----
 
-  function buildTextContent(note, obj, objEl, mainToolbar) {
+  const fontMetricsCache = new Map();
+  const metricsCanvas = document.createElement('canvas');
+
+  function measureFontMetrics(fontCss) {
+    if (fontMetricsCache.has(fontCss)) return fontMetricsCache.get(fontCss);
+    const ctx = metricsCanvas.getContext('2d');
+    ctx.font = fontCss;
+    const m = ctx.measureText('Hg');
+    const metrics = {
+      ascent: m.actualBoundingBoxAscent || m.fontBoundingBoxAscent || 12,
+      descent: m.actualBoundingBoxDescent || m.fontBoundingBoxDescent || 4,
+    };
+    fontMetricsCache.set(fontCss, metrics);
+    return metrics;
+  }
+
+  // Lässt "Freien Text" auf linierten Notizen wie handschriftlich auf den Linien
+  // wirken: Zeilenabstand = Linienabstand, und die erste Zeile wird per
+  // Innenabstand auf die nächste sichtbare Linie ausgerichtet.
+  function applyFreeLinesAlignment(note, obj, body) {
+    const useLines = obj.style === 'free' && note.background === 'lines';
+    if (!useLines) {
+      body.style.lineHeight = '';
+      body.style.paddingTop = '';
+      return;
+    }
+    const cs = getComputedStyle(body);
+    const fontCss = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    const { ascent, descent } = measureFontMetrics(fontCss);
+    const baselineOffset = (LINE_PITCH - (ascent + descent)) / 2 + ascent;
+    const bodyTopAbs = obj.y + OBJ_BORDER;
+    const paddingTop = ((LINE_PHASE - bodyTopAbs - baselineOffset) % LINE_PITCH + LINE_PITCH) % LINE_PITCH;
+    body.style.lineHeight = `${LINE_PITCH}px`;
+    body.style.paddingTop = `${paddingTop}px`;
+  }
+
+  function realignFreeLinesForNote(note) {
+    if (!note) return;
+    for (const obj of note.objects) {
+      if (obj.type !== 'text' || obj.style !== 'free') continue;
+      const objEl = findObjEl(obj.id);
+      const body = objEl && objEl.querySelector('.canvas-text-body');
+      if (body) applyFreeLinesAlignment(note, obj, body);
+    }
+  }
+
+  function buildTextContent(note, obj, objEl, mainToolbar, autoFocus) {
     const body = document.createElement('div');
     body.className = 'canvas-text-body';
     body.dataset.placeholder = 'Text …';
     body.contentEditable = 'false';
     body.innerHTML = obj.html || '';
     updateTextEmptyState(body);
+    applyFreeLinesAlignment(note, obj, body);
     objEl.appendChild(body);
 
     const overlay = document.createElement('div');
     overlay.className = 'text-drag-overlay';
     objEl.appendChild(overlay);
 
-    const markerBtn = makeToolbarBtn(ICONS.marker, false, () => openMarkerPopover(markerBtn), 'Markieren');
-    markerBtn.disabled = true;
-    mainToolbar.appendChild(markerBtn);
+    const boldBtn = makeToolbarBtn(ICONS.bold, false, () => applyInlineCommand('bold'), 'Fett');
+    const italicBtn = makeToolbarBtn(ICONS.italic, false, () => applyInlineCommand('italic'), 'Kursiv');
+    const markerBtn = makeToolbarBtn(ICONS.marker, false, () => openFormatPopover(el.markerPopoverBackdrop, el.markerPopover, markerBtn), 'Markieren');
+    const colorBtn = makeToolbarBtn(ICONS.textColor, false, () => openFormatPopover(el.colorPopoverBackdrop, el.colorPopover, colorBtn), 'Textfarbe');
+    const fontSizeBtn = makeToolbarBtn(ICONS.fontSize, false, () => openFormatPopover(el.fontSizePopoverBackdrop, el.fontSizePopover, fontSizeBtn), 'Schriftgröße');
+    const formatBtns = [boldBtn, italicBtn, markerBtn, colorBtn, fontSizeBtn];
+    for (const btn of formatBtns) {
+      btn.disabled = true;
+      mainToolbar.appendChild(btn);
+    }
 
     // Eigene Doppelklick-Erkennung (zeitbasiert): Das native "dblclick"-Ereignis kann durch
     // die Pointer-Capture des Zieh-Handlers verschluckt werden, sobald der erste Klick bereits
@@ -842,14 +947,14 @@
         lastTapAt = 0;
         e.preventDefault();
         e.stopPropagation();
-        enterTextEdit(note, obj, objEl, body, overlay, markerBtn);
+        enterTextEdit(note, obj, objEl, body, overlay, formatBtns);
         return;
       }
       lastTapAt = now;
       startObjectDrag(e, note, obj, objEl);
     });
 
-    body.addEventListener('blur', () => exitTextEdit(obj, body, overlay, markerBtn));
+    body.addEventListener('blur', () => exitTextEdit(obj, body, overlay, formatBtns));
     body.addEventListener('input', () => {
       saveTextObjContent(note, obj, body);
       updateTextEmptyState(body);
@@ -862,11 +967,22 @@
       const text = (e.clipboardData || window.clipboardData).getData('text/plain');
       insertPlainTextAtCaret(text);
     });
+
+    // Fokussieren funktioniert nur auf Elementen, die bereits im DOM hängen – zu
+    // diesem Zeitpunkt ist objEl (bei Neuerstellung) meist noch nicht eingefügt.
+    // Der Aufrufer muss daher nach dem Einfügen selbst enterTextEdit() aufrufen.
+    if (autoFocus) queueMicrotask(() => { if (objEl.isConnected) enterTextEdit(note, obj, objEl, body, overlay, formatBtns); });
+  }
+
+  function bodyToPlainText(body) {
+    const clone = body.cloneNode(true);
+    clone.querySelectorAll('div, p, br').forEach((el) => el.insertAdjacentText('beforebegin', '\n'));
+    return clone.textContent.replace(/^\n/, '');
   }
 
   function saveTextObjContent(note, obj, body) {
     obj.html = body.innerHTML;
-    obj.text = body.textContent;
+    obj.text = bodyToPlainText(body);
     note.updatedAt = Date.now();
     schedulePersist();
     renderNoteList();
@@ -887,51 +1003,124 @@
     sel.addRange(range);
   }
 
-  function enterTextEdit(note, obj, objEl, body, overlay, markerBtn) {
+  function enterTextEdit(note, obj, objEl, body, overlay, formatBtns) {
     selectObject(note, obj, objEl);
     body.contentEditable = 'true';
     body.classList.add('editing');
     overlay.style.display = 'none';
     body.focus();
-    activeTextEdit = { note, obj, objEl, body, overlay, markerBtn };
+    activeTextEdit = { note, obj, objEl, body, overlay, formatBtns };
     lastSelectionRange = null;
-    if (markerBtn) markerBtn.disabled = true;
+    for (const btn of formatBtns) btn.disabled = true;
   }
 
-  function exitTextEdit(obj, body, overlay, markerBtn) {
+  function exitTextEdit(obj, body, overlay, formatBtns) {
     body.contentEditable = 'false';
     body.classList.remove('editing');
     overlay.style.display = '';
     const note = currentNote();
     if (note) saveTextObjContent(note, obj, body);
-    if (markerBtn) markerBtn.disabled = true;
+    for (const btn of formatBtns) btn.disabled = true;
     if (activeTextEdit && activeTextEdit.obj.id === obj.id) {
       activeTextEdit = null;
       lastSelectionRange = null;
     }
-    closeMarkerPopover();
+    closeAllFormatPopovers();
   }
 
   // Merkt sich die zuletzt markierte (nicht eingeklappte) Textauswahl im gerade
-  // bearbeiteten Text-Objekt, damit der Markieren-Button auch nach einem Klick
-  // in die Werkzeugleiste noch weiß, was hervorgehoben werden soll.
+  // bearbeiteten Text-Objekt, damit die Formatierungs-Buttons auch nach einem Klick
+  // in die Werkzeugleiste noch wissen, was formatiert werden soll.
   document.addEventListener('selectionchange', () => {
     if (!activeTextEdit) return;
     const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
-      lastSelectionRange = null;
-      activeTextEdit.markerBtn.disabled = true;
-      return;
-    }
-    const range = sel.getRangeAt(0);
-    if (!activeTextEdit.body.contains(range.commonAncestorContainer)) {
-      lastSelectionRange = null;
-      activeTextEdit.markerBtn.disabled = true;
-      return;
-    }
-    lastSelectionRange = range.cloneRange();
-    activeTextEdit.markerBtn.disabled = false;
+    const valid =
+      sel && sel.rangeCount > 0 && !sel.isCollapsed &&
+      activeTextEdit.body.contains(sel.getRangeAt(0).commonAncestorContainer);
+    lastSelectionRange = valid ? sel.getRangeAt(0).cloneRange() : null;
+    for (const btn of activeTextEdit.formatBtns) btn.disabled = !valid;
   });
+
+  // Erweitert die Range-Grenzen nach außen auf die nächste Element-Ebene, solange sie
+  // exakt am Rand eines umschließenden Elements liegen (z. B. ein komplett markiertes
+  // Wort). Ohne das würde extractContents() nur den Text herauslösen und das
+  // umschließende <mark>/<span> leer zurücklassen, statt es mitzunehmen – wodurch
+  // "Markierung entfernen" oder erneutes Formatieren bei exakt getroffenen Wörtern
+  // wirkungslos bliebe.
+  function expandRangeToElementBoundaries(range, root) {
+    function climb(container, offset, isStart) {
+      let node = container;
+      let off = offset;
+      while (node !== root) {
+        const flush = isStart
+          ? off === 0
+          : node.nodeType === Node.TEXT_NODE
+            ? off === node.textContent.length
+            : off === node.childNodes.length;
+        if (!flush) break;
+        const parent = node.parentNode;
+        if (!parent) break;
+        const idx = Array.prototype.indexOf.call(parent.childNodes, node);
+        node = parent;
+        off = isStart ? idx : idx + 1;
+      }
+      return { node, off };
+    }
+    const s = climb(range.startContainer, range.startOffset, true);
+    const e = climb(range.endContainer, range.endOffset, false);
+    range.setStart(s.node, s.off);
+    range.setEnd(e.node, e.off);
+  }
+
+  function withActiveSelection(fn) {
+    if (!activeTextEdit || !lastSelectionRange) {
+      closeAllFormatPopovers();
+      return;
+    }
+    const { note, obj, body } = activeTextEdit;
+    expandRangeToElementBoundaries(lastSelectionRange, body);
+    fn(lastSelectionRange, note, obj, body);
+    saveTextObjContent(note, obj, body);
+    updateTextEmptyState(body);
+    lastSelectionRange = null;
+    for (const btn of activeTextEdit.formatBtns) btn.disabled = true;
+    closeAllFormatPopovers();
+    body.focus();
+  }
+
+  function applyInlineCommand(command) {
+    if (!activeTextEdit) return;
+    const { body } = activeTextEdit;
+    body.focus();
+    if (lastSelectionRange) {
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(lastSelectionRange);
+    }
+    document.execCommand(command);
+    saveTextObjContent(activeTextEdit.note, activeTextEdit.obj, body);
+  }
+
+  function wrapSelectionWithStyle(range, styleProp, styleValue) {
+    const span = document.createElement('span');
+    span.style[styleProp] = styleValue;
+    const frag = range.extractContents();
+    span.appendChild(frag);
+    range.insertNode(span);
+  }
+
+  function unwrapStyleFromRange(range, styleProp) {
+    const frag = range.extractContents();
+    frag.querySelectorAll('span').forEach((spanEl) => {
+      spanEl.style[styleProp] = '';
+      if (!spanEl.getAttribute('style')) {
+        const parent = spanEl.parentNode;
+        while (spanEl.firstChild) parent.insertBefore(spanEl.firstChild, spanEl);
+        parent.removeChild(spanEl);
+      }
+    });
+    range.insertNode(frag);
+  }
 
   function applyHighlightToRange(range, hex, alpha) {
     const mark = document.createElement('mark');
@@ -958,7 +1147,7 @@
       for (const color of MARKER_COLORS) {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'marker-swatch';
+        btn.className = 'format-swatch';
         btn.style.backgroundColor = hexToRgba(color.hex, strength.alpha);
         btn.title = `${color.name} · ${strength.label}`;
         btn.setAttribute('aria-label', `${color.name}, ${strength.label} markieren`);
@@ -969,47 +1158,72 @@
     }
   }
 
-  function openMarkerPopover(markerBtn) {
-    if (!activeTextEdit || !lastSelectionRange) return;
-    buildMarkerGrid();
-    const btnRect = markerBtn.getBoundingClientRect();
-    el.markerPopoverBackdrop.hidden = false;
-    const popoverWidth = 320; // entspricht max-width in .popover-wide
-    const left = Math.min(Math.max(8, btnRect.left), window.innerWidth - popoverWidth - 8);
-    el.markerPopover.style.top = `${btnRect.bottom + 6}px`;
-    el.markerPopover.style.left = `${Math.max(8, left)}px`;
+  function buildColorGrid() {
+    if (el.colorGrid.childElementCount > 0) return;
+    for (const color of TEXT_COLORS) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'format-swatch';
+      btn.style.backgroundColor = color.hex;
+      btn.title = color.name;
+      btn.setAttribute('aria-label', `Text in ${color.name} färben`);
+      btn.dataset.hex = color.hex;
+      el.colorGrid.appendChild(btn);
+    }
   }
 
-  function closeMarkerPopover() {
+  function buildFontSizeList() {
+    if (el.fontSizeList.childElementCount > 0) return;
+    for (const size of FONT_SIZES) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'popover-item';
+      btn.textContent = size.px ? `${size.label} (${size.px}px)` : size.label;
+      if (size.px) btn.dataset.px = String(size.px);
+      el.fontSizeList.appendChild(btn);
+    }
+  }
+
+  function openFormatPopover(backdropEl, popoverEl, anchorBtn) {
+    if (!activeTextEdit || !lastSelectionRange) return;
+    buildMarkerGrid();
+    buildColorGrid();
+    buildFontSizeList();
+    closeAllFormatPopovers();
+    const btnRect = anchorBtn.getBoundingClientRect();
+    backdropEl.hidden = false;
+    const popoverWidth = 320; // entspricht max-width in .popover-wide
+    const left = Math.min(Math.max(8, btnRect.left), window.innerWidth - popoverWidth - 8);
+    popoverEl.style.top = `${btnRect.bottom + 6}px`;
+    popoverEl.style.left = `${Math.max(8, left)}px`;
+  }
+
+  function closeAllFormatPopovers() {
     el.markerPopoverBackdrop.hidden = true;
+    el.colorPopoverBackdrop.hidden = true;
+    el.fontSizePopoverBackdrop.hidden = true;
   }
 
   function applyMarkerChoice(hex, alpha) {
-    if (!activeTextEdit || !lastSelectionRange) {
-      closeMarkerPopover();
-      return;
-    }
-    const { note, obj, body } = activeTextEdit;
-    applyHighlightToRange(lastSelectionRange, hex, alpha);
-    saveTextObjContent(note, obj, body);
-    lastSelectionRange = null;
-    activeTextEdit.markerBtn.disabled = true;
-    closeMarkerPopover();
-    body.focus();
+    withActiveSelection((range) => applyHighlightToRange(range, hex, alpha));
   }
 
   function removeMarkerFromSelection() {
-    if (!activeTextEdit || !lastSelectionRange) {
-      closeMarkerPopover();
-      return;
-    }
-    const { note, obj, body } = activeTextEdit;
-    removeHighlightFromRange(lastSelectionRange);
-    saveTextObjContent(note, obj, body);
-    lastSelectionRange = null;
-    activeTextEdit.markerBtn.disabled = true;
-    closeMarkerPopover();
-    body.focus();
+    withActiveSelection((range) => removeHighlightFromRange(range));
+  }
+
+  function applyColorChoice(hex) {
+    withActiveSelection((range) => {
+      if (hex) wrapSelectionWithStyle(range, 'color', hex);
+      else unwrapStyleFromRange(range, 'color');
+    });
+  }
+
+  function applyFontSizeChoice(px) {
+    withActiveSelection((range) => {
+      if (px) wrapSelectionWithStyle(range, 'fontSize', `${px}px`);
+      else unwrapStyleFromRange(range, 'fontSize');
+    });
   }
 
   // ----- Zeichnen (globale Tinten-Ebene über der ganzen Fläche) -----
@@ -1655,14 +1869,10 @@
     };
     bringToFront(note, obj);
     note.objects.push(obj);
-    const objEl = buildObjectEl(note, obj);
+    const objEl = buildObjectEl(note, obj, true);
     el.canvasSurface.insertBefore(objEl, el.inkLayer);
     schedulePersist();
     renderNoteList();
-    const body = objEl.querySelector('.canvas-text-body');
-    const overlay = objEl.querySelector('.text-drag-overlay');
-    const markerBtn = objEl.querySelector('.object-toolbar-main .object-toolbar-btn:last-child');
-    enterTextEdit(note, obj, objEl, body, overlay, markerBtn);
   }
 
   function addImageObjectFromFile(file) {
@@ -1767,6 +1977,7 @@
     note.background = value;
     note.updatedAt = Date.now();
     el.canvasSurface.dataset.bg = value;
+    realignFreeLinesForNote(note);
     schedulePersist();
     closeBackgroundPopover();
   }
@@ -1900,17 +2111,36 @@
       }
     });
 
-    // Verhindert, dass ein Klick im Marker-Popover den Fokus (und damit die
-    // gemerkte Textauswahl) aus dem bearbeiteten Text-Objekt entfernt.
+    // Verhindert, dass ein Klick in einem Formatierungs-Popover den Fokus (und damit
+    // die gemerkte Textauswahl) aus dem bearbeiteten Text-Objekt entfernt.
     el.markerPopover.addEventListener('pointerdown', (e) => e.preventDefault());
     el.markerPopoverBackdrop.addEventListener('click', (e) => {
-      if (e.target === el.markerPopoverBackdrop) closeMarkerPopover();
+      if (e.target === el.markerPopoverBackdrop) closeAllFormatPopovers();
     });
     el.markerGrid.addEventListener('click', (e) => {
-      const swatch = e.target.closest('.marker-swatch');
+      const swatch = e.target.closest('.format-swatch');
       if (swatch) applyMarkerChoice(swatch.dataset.hex, Number(swatch.dataset.alpha));
     });
     el.markerRemoveBtn.addEventListener('click', removeMarkerFromSelection);
+
+    el.colorPopover.addEventListener('pointerdown', (e) => e.preventDefault());
+    el.colorPopoverBackdrop.addEventListener('click', (e) => {
+      if (e.target === el.colorPopoverBackdrop) closeAllFormatPopovers();
+    });
+    el.colorGrid.addEventListener('click', (e) => {
+      const swatch = e.target.closest('.format-swatch');
+      if (swatch) applyColorChoice(swatch.dataset.hex);
+    });
+    el.colorResetBtn.addEventListener('click', () => applyColorChoice(null));
+
+    el.fontSizePopover.addEventListener('pointerdown', (e) => e.preventDefault());
+    el.fontSizePopoverBackdrop.addEventListener('click', (e) => {
+      if (e.target === el.fontSizePopoverBackdrop) closeAllFormatPopovers();
+    });
+    el.fontSizeList.addEventListener('click', (e) => {
+      const item = e.target.closest('.popover-item');
+      if (item) applyFontSizeChoice(item.dataset.px ? Number(item.dataset.px) : null);
+    });
 
     el.titleInput.addEventListener('input', () => {
       autoGrow(el.titleInput);

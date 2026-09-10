@@ -20,11 +20,18 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
   - **Text**: per Doppelklick bearbeiten, frei positionieren und skalieren.
     Beim Hinzufügen wählbar zwischen **Textfeld** (mit Rahmen/Hintergrund)
     und **Freier Text** (ohne sichtbaren Rahmen, liegt direkt auf der
-    Fläche – z. B. zum Beschriften auf linierten Seiten)
+    Fläche – z. B. zum Beschriften auf linierten Seiten). Bei „Freier
+    Text" auf linierten Notizen richtet sich die Schrift automatisch an
+    den Linien aus, sodass es wie handschriftlich auf dem Papier wirkt
+    - **Textformatierung** (Auswahl markieren, dann in der Werkzeugleiste
+      wählen): **Fett**, *Kursiv*, **Textfarbe** (8 Farben) und
+      **Schriftgröße** (Klein/Standard/Groß/Sehr groß) – wie in einer
+      Textverarbeitung
     - **Textmarker**: einen Textabschnitt markieren und über das
       Marker-Symbol in der Werkzeugleiste hervorheben – 5 Farben in
-      je 3 Stärken (Leicht/Mittel/Stark). Hervorhebungen lassen sich
-      über „Markierung entfernen" wieder aufheben
+      je 3 Stärken (Leicht/Mittel/Stark). Hervorhebungen, Farbe und
+      Schriftgröße lassen sich über die jeweilige „Entfernen"/
+      „Standard"-Option wieder aufheben
   - **Bild**: aus der Fotomediathek/Dateien einfügen
   - **PDF**: einfügen als Vorschaubild der ersten Seite (mit Datei-
     /Seitenzahl-Badge); wird wie ein Bild-Objekt behandelt
