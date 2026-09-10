@@ -21,6 +21,10 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
     Beim Hinzufügen wählbar zwischen **Textfeld** (mit Rahmen/Hintergrund)
     und **Freier Text** (ohne sichtbaren Rahmen, liegt direkt auf der
     Fläche – z. B. zum Beschriften auf linierten Seiten)
+    - **Textmarker**: einen Textabschnitt markieren und über das
+      Marker-Symbol in der Werkzeugleiste hervorheben – 5 Farben in
+      je 3 Stärken (Leicht/Mittel/Stark). Hervorhebungen lassen sich
+      über „Markierung entfernen" wieder aufheben
   - **Bild**: aus der Fotomediathek/Dateien einfügen
   - **PDF**: einfügen als Vorschaubild der ersten Seite (mit Datei-
     /Seitenzahl-Badge); wird wie ein Bild-Objekt behandelt

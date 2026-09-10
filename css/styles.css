@@ -762,6 +762,18 @@ textarea {
   background: var(--selection-bg);
 }
 
+.canvas-text-body.is-empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+
+.canvas-text-body mark {
+  border-radius: 2px;
+  padding: 0 1px;
+  color: inherit;
+}
+
 .text-drag-overlay {
   position: absolute;
   inset: 0;
@@ -828,7 +840,7 @@ textarea {
 .popover-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: 9000;
   background: rgba(0, 0, 0, 0.001);
 }
 
@@ -914,6 +926,26 @@ textarea {
 .popover-item.current {
   color: var(--accent);
   font-weight: 600;
+}
+
+.marker-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  padding: 6px 10px 10px;
+}
+
+.marker-swatch {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  padding: 0;
+}
+
+.marker-swatch:hover {
+  border-color: var(--accent);
 }
 
 /* ---------- Responsive: iPad Portrait / kleinere Screens ---------- */

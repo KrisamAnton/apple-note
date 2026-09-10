@@ -12,10 +12,31 @@
     trash: '<svg viewBox="0 0 20 20"><path d="M6 2.5h8l.5 1.5H16v1.5H4V4h1.5L6 2.5zM5 7h10l-.7 10.1c-.05.7-.63 1.4-1.5 1.4H7.2c-.87 0-1.45-.7-1.5-1.4L5 7z"/></svg>',
     link: '<svg viewBox="0 0 20 20"><rect x="1" y="7" width="9" height="4.5" rx="2.25" transform="rotate(-45 5.5 9.25)" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="9.5" y="8.5" width="9" height="4.5" rx="2.25" transform="rotate(-45 14 10.75)" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
     unlink: '<svg viewBox="0 0 20 20"><rect x="1" y="7" width="9" height="4.5" rx="2.25" transform="rotate(-45 5.5 9.25)" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="9.5" y="8.5" width="9" height="4.5" rx="2.25" transform="rotate(-45 14 10.75)" fill="none" stroke="currentColor" stroke-width="1.6"/><line x1="3" y1="17" x2="17" y2="3" stroke="currentColor" stroke-width="1.8"/></svg>',
+    marker: '<svg viewBox="0 0 20 20"><path d="M4.4 12.6 11 3.3c.5-.7 1.5-.8 2.2-.3l2.1 1.5c.7.5.8 1.5.3 2.2l-6.6 9.3-5.2.9.6-4.3z"/><rect x="2" y="17.4" width="16" height="1.5" rx="0.75" opacity="0.45"/></svg>',
   };
 
+  const MARKER_COLORS = [
+    { hex: '#ffd60a', name: 'Gelb' },
+    { hex: '#34c759', name: 'Grün' },
+    { hex: '#64d2ff', name: 'Blau' },
+    { hex: '#ff375f', name: 'Pink' },
+    { hex: '#ff9f0a', name: 'Orange' },
+  ];
+  const MARKER_STRENGTHS = [
+    { alpha: 0.35, label: 'Leicht' },
+    { alpha: 0.55, label: 'Mittel' },
+    { alpha: 0.8, label: 'Stark' },
+  ];
+
+  function hexToRgba(hex, alpha) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+
   /**
-   * @typedef {{id:string, type:'text', x:number, y:number, w:number, h:number, z:number, text:string, parentId:?string, relX?:number, relY?:number, relW?:number, relH?:number}} TextObject
+   * @typedef {{id:string, type:'text', x:number, y:number, w:number, h:number, z:number, text:string, html:string, parentId:?string, relX?:number, relY?:number, relW?:number, relH?:number}} TextObject
    * @typedef {{id:string, type:'image', x:number, y:number, w:number, h:number, z:number, src:string}} ImageObject
    * @typedef {{id:string, color:string, eraser:boolean, points:Array<{x:number,y:number,width:number}>, parentId:?string}} Stroke
    * @typedef {{id:string, title:string, objects:Array, ink:{strokes:Stroke[]}, background:'dots'|'lines'|'blank', folderId:?string, createdAt:number, updatedAt:number}} Note
@@ -72,9 +93,12 @@
       if (!stroke.id) stroke.id = uid();
       if (stroke.parentId === undefined) stroke.parentId = null;
     }
-    // Text-Objekte ohne Stil (ältere Version) auf "Textfeld" setzen
+    // Text-Objekte ohne Stil (ältere Version) auf "Textfeld" setzen; reinen Text
+    // (ältere Version ohne HTML) für die neue formatierbare Anzeige übernehmen
     for (const obj of note.objects) {
-      if (obj.type === 'text' && !obj.style) obj.style = 'boxed';
+      if (obj.type !== 'text') continue;
+      if (!obj.style) obj.style = 'boxed';
+      if (typeof obj.html !== 'string') obj.html = escapeHtml(obj.text || '');
     }
     return note;
   }
@@ -98,6 +122,19 @@
   function createDefaultState() {
     const now = Date.now();
     const welcomeId = uid();
+    const welcomeText =
+      'Willkommen bei deiner neuen Notizen-App!\n\n' +
+      '- Oben: Text, Bild oder PDF hinzufügen. Objekte per Ziehen verschieben, ' +
+      'an der Ecke unten rechts in der Größe ändern.\n' +
+      '- Text per Doppelklick bearbeiten. Beim Hinzufügen wählst du zwischen "Textfeld" ' +
+      '(mit Rahmen) und "Freier Text" (ohne Rahmen, direkt auf der Fläche – z. B. auf Linien). ' +
+      'Markiere einen Textabschnitt, um ihn über das Marker-Symbol in verschiedenen Farben und Stärken hervorzuheben.\n' +
+      '- Stift-Symbol = Zeichnen-Modus: dann kannst du überall auf der Fläche zeichnen, ' +
+      'auch direkt auf einem Bild.\n' +
+      '- Ziehe einen Text auf ein Bild oder PDF, um ihn dort als Beschriftung anzuheften ' +
+      '– er bewegt und skaliert sich dann mit.\n' +
+      '- Über das Raster-Symbol kannst du den Hintergrund umstellen: Punkte, Linien oder leer.\n\n' +
+      'Alle Notizen werden aktuell nur lokal auf diesem Gerät gespeichert.';
     return {
       folders: [],
       notes: [
@@ -107,18 +144,8 @@
           objects: [
             {
               id: uid(), type: 'text', x: 24, y: 24, w: 560, h: 360, z: 1, parentId: null, style: 'boxed',
-              text:
-                'Willkommen bei deiner neuen Notizen-App!\n\n' +
-                '- Oben: Text, Bild oder PDF hinzufügen. Objekte per Ziehen verschieben, ' +
-                'an der Ecke unten rechts in der Größe ändern.\n' +
-                '- Text per Doppelklick bearbeiten. Beim Hinzufügen wählst du zwischen "Textfeld" ' +
-                '(mit Rahmen) und "Freier Text" (ohne Rahmen, direkt auf der Fläche – z. B. auf Linien).\n' +
-                '- Stift-Symbol = Zeichnen-Modus: dann kannst du überall auf der Fläche zeichnen, ' +
-                'auch direkt auf einem Bild.\n' +
-                '- Ziehe einen Text auf ein Bild oder PDF, um ihn dort als Beschriftung anzuheften ' +
-                '– er bewegt und skaliert sich dann mit.\n' +
-                '- Über das Raster-Symbol kannst du den Hintergrund umstellen: Punkte, Linien oder leer.\n\n' +
-                'Alle Notizen werden aktuell nur lokal auf diesem Gerät gespeichert.',
+              text: welcomeText,
+              html: escapeHtml(welcomeText),
             },
           ],
           ink: { strokes: [] },
@@ -171,6 +198,10 @@
     addTextBtn: document.getElementById('addTextBtn'),
     textStylePopoverBackdrop: document.getElementById('textStylePopoverBackdrop'),
     textStylePopover: document.getElementById('textStylePopover'),
+    markerPopoverBackdrop: document.getElementById('markerPopoverBackdrop'),
+    markerPopover: document.getElementById('markerPopover'),
+    markerGrid: document.getElementById('markerGrid'),
+    markerRemoveBtn: document.getElementById('markerRemoveBtn'),
     drawModeBtn: document.getElementById('drawModeBtn'),
     addImageBtn: document.getElementById('addImageBtn'),
     imageFileInput: document.getElementById('imageFileInput'),
@@ -482,6 +513,8 @@
 
   let selectedObjectId = null;
   let dragState = null;
+  let activeTextEdit = null; // { note, obj, objEl, body, overlay, markerBtn }
+  let lastSelectionRange = null;
   let inkStrokeState = null;
   let drawColor = '#1c1c1e';
   let drawIsEraser = false;
@@ -543,7 +576,12 @@
       btn.title = label;
       btn.setAttribute('aria-label', label);
     }
-    btn.addEventListener('pointerdown', (e) => e.stopPropagation());
+    btn.addEventListener('pointerdown', (e) => {
+      // Verhindert, dass ein Klick auf die Werkzeugleiste den Fokus (und damit die
+      // gerade laufende Textauswahl) aus dem bearbeiteten Text-Objekt entfernt.
+      e.preventDefault();
+      e.stopPropagation();
+    });
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       onClick();
@@ -564,7 +602,7 @@
     mainToolbar.appendChild(makeToolbarBtn(ICONS.trash, true, () => deleteObject(note, obj.id), 'Löschen'));
     objEl.appendChild(mainToolbar);
 
-    if (obj.type === 'text') buildTextContent(note, obj, objEl);
+    if (obj.type === 'text') buildTextContent(note, obj, objEl, mainToolbar);
     else if (obj.type === 'image') buildImageContent(note, obj, objEl);
     else if (obj.type === 'pdf') buildPdfContent(note, obj, objEl);
 
@@ -777,17 +815,22 @@
 
   // ----- Text-Objekt -----
 
-  function buildTextContent(note, obj, objEl) {
-    const textarea = document.createElement('textarea');
-    textarea.className = 'canvas-text-body';
-    textarea.placeholder = 'Text …';
-    textarea.value = obj.text || '';
-    textarea.readOnly = true;
-    objEl.appendChild(textarea);
+  function buildTextContent(note, obj, objEl, mainToolbar) {
+    const body = document.createElement('div');
+    body.className = 'canvas-text-body';
+    body.dataset.placeholder = 'Text …';
+    body.contentEditable = 'false';
+    body.innerHTML = obj.html || '';
+    updateTextEmptyState(body);
+    objEl.appendChild(body);
 
     const overlay = document.createElement('div');
     overlay.className = 'text-drag-overlay';
     objEl.appendChild(overlay);
+
+    const markerBtn = makeToolbarBtn(ICONS.marker, false, () => openMarkerPopover(markerBtn), 'Markieren');
+    markerBtn.disabled = true;
+    mainToolbar.appendChild(markerBtn);
 
     // Eigene Doppelklick-Erkennung (zeitbasiert): Das native "dblclick"-Ereignis kann durch
     // die Pointer-Capture des Zieh-Handlers verschluckt werden, sobald der erste Klick bereits
@@ -799,40 +842,174 @@
         lastTapAt = 0;
         e.preventDefault();
         e.stopPropagation();
-        enterTextEdit(note, obj, objEl, textarea, overlay);
+        enterTextEdit(note, obj, objEl, body, overlay, markerBtn);
         return;
       }
       lastTapAt = now;
       startObjectDrag(e, note, obj, objEl);
     });
 
-    textarea.addEventListener('blur', () => exitTextEdit(obj, textarea, overlay));
-    textarea.addEventListener('input', () => {
-      obj.text = textarea.value;
-      note.updatedAt = Date.now();
-      schedulePersist();
-      renderNoteList();
+    body.addEventListener('blur', () => exitTextEdit(obj, body, overlay, markerBtn));
+    body.addEventListener('input', () => {
+      saveTextObjContent(note, obj, body);
+      updateTextEmptyState(body);
     });
-    textarea.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') textarea.blur();
+    body.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') body.blur();
+    });
+    body.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+      insertPlainTextAtCaret(text);
     });
   }
 
-  function enterTextEdit(note, obj, objEl, textarea, overlay) {
-    selectObject(note, obj, objEl);
-    textarea.readOnly = false;
-    textarea.classList.add('editing');
-    overlay.style.display = 'none';
-    textarea.focus();
-  }
-
-  function exitTextEdit(obj, textarea, overlay) {
-    textarea.readOnly = true;
-    textarea.classList.remove('editing');
-    overlay.style.display = '';
-    obj.text = textarea.value;
+  function saveTextObjContent(note, obj, body) {
+    obj.html = body.innerHTML;
+    obj.text = body.textContent;
+    note.updatedAt = Date.now();
     schedulePersist();
     renderNoteList();
+  }
+
+  function updateTextEmptyState(body) {
+    body.classList.toggle('is-empty', body.textContent.trim() === '');
+  }
+
+  function insertPlainTextAtCaret(text) {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    range.deleteContents();
+    range.insertNode(document.createTextNode(text));
+    range.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  function enterTextEdit(note, obj, objEl, body, overlay, markerBtn) {
+    selectObject(note, obj, objEl);
+    body.contentEditable = 'true';
+    body.classList.add('editing');
+    overlay.style.display = 'none';
+    body.focus();
+    activeTextEdit = { note, obj, objEl, body, overlay, markerBtn };
+    lastSelectionRange = null;
+    if (markerBtn) markerBtn.disabled = true;
+  }
+
+  function exitTextEdit(obj, body, overlay, markerBtn) {
+    body.contentEditable = 'false';
+    body.classList.remove('editing');
+    overlay.style.display = '';
+    const note = currentNote();
+    if (note) saveTextObjContent(note, obj, body);
+    if (markerBtn) markerBtn.disabled = true;
+    if (activeTextEdit && activeTextEdit.obj.id === obj.id) {
+      activeTextEdit = null;
+      lastSelectionRange = null;
+    }
+    closeMarkerPopover();
+  }
+
+  // Merkt sich die zuletzt markierte (nicht eingeklappte) Textauswahl im gerade
+  // bearbeiteten Text-Objekt, damit der Markieren-Button auch nach einem Klick
+  // in die Werkzeugleiste noch weiß, was hervorgehoben werden soll.
+  document.addEventListener('selectionchange', () => {
+    if (!activeTextEdit) return;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+      lastSelectionRange = null;
+      activeTextEdit.markerBtn.disabled = true;
+      return;
+    }
+    const range = sel.getRangeAt(0);
+    if (!activeTextEdit.body.contains(range.commonAncestorContainer)) {
+      lastSelectionRange = null;
+      activeTextEdit.markerBtn.disabled = true;
+      return;
+    }
+    lastSelectionRange = range.cloneRange();
+    activeTextEdit.markerBtn.disabled = false;
+  });
+
+  function applyHighlightToRange(range, hex, alpha) {
+    const mark = document.createElement('mark');
+    mark.className = 'marker';
+    mark.style.backgroundColor = hexToRgba(hex, alpha);
+    const frag = range.extractContents();
+    mark.appendChild(frag);
+    range.insertNode(mark);
+  }
+
+  function removeHighlightFromRange(range) {
+    const frag = range.extractContents();
+    frag.querySelectorAll('mark.marker').forEach((markEl) => {
+      const parent = markEl.parentNode;
+      while (markEl.firstChild) parent.insertBefore(markEl.firstChild, markEl);
+      parent.removeChild(markEl);
+    });
+    range.insertNode(frag);
+  }
+
+  function buildMarkerGrid() {
+    if (el.markerGrid.childElementCount > 0) return;
+    for (const strength of MARKER_STRENGTHS) {
+      for (const color of MARKER_COLORS) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'marker-swatch';
+        btn.style.backgroundColor = hexToRgba(color.hex, strength.alpha);
+        btn.title = `${color.name} · ${strength.label}`;
+        btn.setAttribute('aria-label', `${color.name}, ${strength.label} markieren`);
+        btn.dataset.hex = color.hex;
+        btn.dataset.alpha = String(strength.alpha);
+        el.markerGrid.appendChild(btn);
+      }
+    }
+  }
+
+  function openMarkerPopover(markerBtn) {
+    if (!activeTextEdit || !lastSelectionRange) return;
+    buildMarkerGrid();
+    const btnRect = markerBtn.getBoundingClientRect();
+    el.markerPopoverBackdrop.hidden = false;
+    const popoverWidth = 320; // entspricht max-width in .popover-wide
+    const left = Math.min(Math.max(8, btnRect.left), window.innerWidth - popoverWidth - 8);
+    el.markerPopover.style.top = `${btnRect.bottom + 6}px`;
+    el.markerPopover.style.left = `${Math.max(8, left)}px`;
+  }
+
+  function closeMarkerPopover() {
+    el.markerPopoverBackdrop.hidden = true;
+  }
+
+  function applyMarkerChoice(hex, alpha) {
+    if (!activeTextEdit || !lastSelectionRange) {
+      closeMarkerPopover();
+      return;
+    }
+    const { note, obj, body } = activeTextEdit;
+    applyHighlightToRange(lastSelectionRange, hex, alpha);
+    saveTextObjContent(note, obj, body);
+    lastSelectionRange = null;
+    activeTextEdit.markerBtn.disabled = true;
+    closeMarkerPopover();
+    body.focus();
+  }
+
+  function removeMarkerFromSelection() {
+    if (!activeTextEdit || !lastSelectionRange) {
+      closeMarkerPopover();
+      return;
+    }
+    const { note, obj, body } = activeTextEdit;
+    removeHighlightFromRange(lastSelectionRange);
+    saveTextObjContent(note, obj, body);
+    lastSelectionRange = null;
+    activeTextEdit.markerBtn.disabled = true;
+    closeMarkerPopover();
+    body.focus();
   }
 
   // ----- Zeichnen (globale Tinten-Ebene über der ganzen Fläche) -----
@@ -1473,7 +1650,7 @@
     if (!note) return;
     const { x, y } = nextPlacement(note, 220, 120);
     const obj = {
-      id: uid(), type: 'text', x, y, w: 220, h: 120, z: 0, text: '', parentId: null,
+      id: uid(), type: 'text', x, y, w: 220, h: 120, z: 0, text: '', html: '', parentId: null,
       style: style === 'free' ? 'free' : 'boxed',
     };
     bringToFront(note, obj);
@@ -1482,9 +1659,10 @@
     el.canvasSurface.insertBefore(objEl, el.inkLayer);
     schedulePersist();
     renderNoteList();
-    const textarea = objEl.querySelector('.canvas-text-body');
+    const body = objEl.querySelector('.canvas-text-body');
     const overlay = objEl.querySelector('.text-drag-overlay');
-    enterTextEdit(note, obj, objEl, textarea, overlay);
+    const markerBtn = objEl.querySelector('.object-toolbar-main .object-toolbar-btn:last-child');
+    enterTextEdit(note, obj, objEl, body, overlay, markerBtn);
   }
 
   function addImageObjectFromFile(file) {
@@ -1721,6 +1899,18 @@
         addTextObject(item.dataset.style);
       }
     });
+
+    // Verhindert, dass ein Klick im Marker-Popover den Fokus (und damit die
+    // gemerkte Textauswahl) aus dem bearbeiteten Text-Objekt entfernt.
+    el.markerPopover.addEventListener('pointerdown', (e) => e.preventDefault());
+    el.markerPopoverBackdrop.addEventListener('click', (e) => {
+      if (e.target === el.markerPopoverBackdrop) closeMarkerPopover();
+    });
+    el.markerGrid.addEventListener('click', (e) => {
+      const swatch = e.target.closest('.marker-swatch');
+      if (swatch) applyMarkerChoice(swatch.dataset.hex, Number(swatch.dataset.alpha));
+    });
+    el.markerRemoveBtn.addEventListener('click', removeMarkerFromSelection);
 
     el.titleInput.addEventListener('input', () => {
       autoGrow(el.titleInput);
