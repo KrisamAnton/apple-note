@@ -1055,6 +1055,19 @@ textarea {
   border-color: var(--accent);
 }
 
+/* Solange freier Text leer ist (frisch angelegt, noch nichts getippt), zeigt
+   sich kein Rahmen/keine Werkzeugleiste/kein Ziehpunkt – nur ein blinkender
+   Cursor, wie beim "irgendwo hinklicken und lostippen" in OneNote. Sobald
+   etwas getippt wird, erscheint die übliche Bedienung wieder. */
+.canvas-object[data-type="text"][data-style="free"]:has(.canvas-text-body.is-empty) {
+  border-color: transparent !important;
+}
+
+.canvas-object[data-type="text"][data-style="free"]:has(.canvas-text-body.is-empty) .object-toolbar-main,
+.canvas-object[data-type="text"][data-style="free"]:has(.canvas-text-body.is-empty) .resize-handle {
+  display: none !important;
+}
+
 /* Bild-Objekt */
 
 .canvas-object[data-type="image"] {

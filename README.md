@@ -58,10 +58,16 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
   erscheinen. Das Suchfeld über der Notizliste ist optisch in dieselbe
   Kopfleiste eingebunden (gleiche Höhe, Hintergrund und Trennlinie wie
   das Ribbon), sodass beides wie eine durchgehende Leiste wirkt
-- **Direkt lostippen**: ein Klick auf eine leere Stelle der Fläche legt
-  sofort ein freies Textobjekt an diesem Punkt an und aktiviert den
-  Bearbeitungsmodus – wie in OneNote. Bleibt die Stelle leer, verschwindet
-  das Textobjekt beim Verlassen automatisch wieder
+- **Direkt lostippen**: ein Klick/Tipp auf eine leere Stelle der Fläche
+  legt sofort ein freies Textobjekt an diesem Punkt an und aktiviert den
+  Bearbeitungsmodus – wie in OneNote. Es reagiert dabei erst, wenn
+  feststeht, dass es sich um einen echten Tipp handelt (kurz, ohne
+  Bewegung, nur ein Finger) – ein Wischen zum Scrollen oder eine
+  Zwei-Finger-Geste lösen kein Textobjekt aus. Bleibt die Stelle leer,
+  verschwindet das Textobjekt beim Verlassen automatisch wieder. Solange
+  es leer ist, zeigt sich auch kein Rahmen, keine Werkzeugleiste und kein
+  Ziehpunkt – nur ein blinkender Cursor; die Fläche startet klein und
+  wächst beim Tippen automatisch mit
 - **Notiz-/Unterseiten-Zeile**: das Löschen einer Notiz oder Unterseite
   erfolgt ausschließlich über den roten Papierkorb-Button ganz rechts in
   der jeweiligen Zeile (nicht mehr über die Werkzeugleiste), damit eine

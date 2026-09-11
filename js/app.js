@@ -1307,6 +1307,7 @@
       stripInheritedHeadingOnFreshLine(body);
       saveTextObjContent(note, obj, body);
       updateTextEmptyState(body);
+      growFreeTextToFit(obj, objEl, body);
     });
     body.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') body.blur();
@@ -1365,6 +1366,20 @@
 
   function updateTextEmptyState(body) {
     body.classList.toggle('is-empty', body.textContent.trim() === '');
+  }
+
+  // Lässt freien Text (ohne sichtbaren Rahmen) beim Tippen automatisch in der
+  // Höhe mitwachsen, statt von Anfang an eine feste Kasten-Größe zu belegen –
+  // wie das "irgendwo hinklicken und lostippen" in OneNote. Schrumpft
+  // absichtlich nicht automatisch wieder (das bleibt dem Ziehpunkt
+  // vorbehalten), damit der Text beim Löschen nicht ständig herumspringt.
+  function growFreeTextToFit(obj, objEl, body) {
+    if (obj.style !== 'free') return;
+    const needed = body.scrollHeight;
+    if (needed > obj.h) {
+      obj.h = needed;
+      objEl.style.height = `${obj.h}px`;
+    }
   }
 
   function insertPlainTextAtCaret(text) {
@@ -2675,12 +2690,18 @@
   // lostippen". Bleibt das Objekt leer, entfernt exitTextEdit() es beim Verlassen
   // wieder automatisch, sodass kein unsichtbarer "Müll" auf der Fläche zurückbleibt.
   function addTextObjectAt(note, x, y, style) {
-    const w = 220, h = 120;
+    const isFree = style !== 'boxed';
+    // Freier Text beginnt klein (nur der Cursor ist zu sehen) und wächst beim
+    // Tippen automatisch in der Höhe mit (siehe growFreeTextToFit) – wie in
+    // OneNote. Ein Textfeld (mit sichtbarem Rahmen) startet weiterhin in der
+    // gewohnten Standardgröße.
+    const w = isFree ? 140 : 220;
+    const h = isFree ? 36 : 120;
     const clampedX = clamp(x, 0, Math.max(0, SURFACE_W - w));
     const clampedY = clamp(y, 0, Math.max(0, SURFACE_H - h));
     const obj = {
       id: uid(), type: 'text', x: clampedX, y: clampedY, w, h, z: 0, text: '', html: '', parentId: null,
-      style: style === 'boxed' ? 'boxed' : 'free',
+      style: isFree ? 'free' : 'boxed',
     };
     bringToFront(note, obj);
     note.objects.push(obj);
@@ -2963,26 +2984,65 @@
       if (file) addPdfObjectFromFile(file);
       el.pdfFileInput.value = '';
     });
+    // Klick/Tipp auf die leere Fläche legt sofort freien Text an (wie in OneNote) –
+    // ABER erst, wenn feststeht, dass es wirklich ein Tipp war (kurz, ohne Bewegung,
+    // nur ein Finger). Sonst wäre auf Touch-Geräten jedes Wischen zum Scrollen oder
+    // ein Zwei-Finger-Zoomen unmöglich, weil sofort ein neues Textobjekt entstünde –
+    // deshalb hier NICHT sofort reagieren und NICHT preventDefault() auf pointerdown
+    // aufrufen (das würde native Scroll-/Zoom-Gesten von vornherein blockieren).
+    const TAP_MOVE_THRESHOLD = 10;
+    const TAP_MAX_DURATION = 700;
     el.canvasSurface.addEventListener('pointerdown', (e) => {
       if (e.target !== el.canvasSurface) return;
       const note = currentNote();
-      if (note && !drawModeActive) {
-        const rect = el.canvasSurface.getBoundingClientRect();
-        const point = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      if (!note || drawModeActive) {
+        deselectAll();
+        return;
+      }
+      const rect = el.canvasSurface.getBoundingClientRect();
+      const point = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      const pointerId = e.pointerId;
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startTime = Date.now();
+      let moved = false;
+      let otherPointerJoined = false;
+
+      const onMove = (ev) => {
+        if (ev.pointerId !== pointerId) return;
+        if (Math.abs(ev.clientX - startX) > TAP_MOVE_THRESHOLD || Math.abs(ev.clientY - startY) > TAP_MOVE_THRESHOLD) {
+          moved = true;
+        }
+      };
+      const onOtherPointerDown = (ev) => {
+        if (ev.pointerId !== pointerId) otherPointerJoined = true; // zweiter Finger = Zoomgeste, kein Tipp
+      };
+      const cleanup = () => {
+        el.canvasSurface.removeEventListener('pointermove', onMove);
+        el.canvasSurface.removeEventListener('pointerup', onUp);
+        el.canvasSurface.removeEventListener('pointercancel', onCancel);
+        document.removeEventListener('pointerdown', onOtherPointerDown, true);
+      };
+      const onCancel = () => cleanup();
+      const onUp = (ev) => {
+        if (ev.pointerId !== pointerId) return;
+        cleanup();
+        const elapsed = Date.now() - startTime;
+        if (moved || otherPointerJoined || elapsed > TAP_MAX_DURATION) return;
+        ev.preventDefault();
         const hitId = hitTestStroke(note, point);
         if (hitId) {
           selectSingleStroke(note, hitId);
           return;
         }
-        // Standardmäßig würde der Browser den Fokus beim Klick auf dieses (nicht
-        // fokussierbare) Element wieder verwerfen – das würde das neue Textobjekt
-        // sofort wieder aus dem Bearbeitungsmodus werfen, bevor der Nutzer tippen kann.
-        e.preventDefault();
         deselectAll();
         addTextObjectAt(note, point.x - 10, point.y - 10, 'free');
-        return;
-      }
-      deselectAll();
+      };
+
+      el.canvasSurface.addEventListener('pointermove', onMove);
+      el.canvasSurface.addEventListener('pointerup', onUp);
+      el.canvasSurface.addEventListener('pointercancel', onCancel);
+      document.addEventListener('pointerdown', onOtherPointerDown, true);
     });
 
     // PDF-Dateien lassen sich direkt aus dem Dateisystem auf die Fläche ziehen.
