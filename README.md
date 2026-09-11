@@ -81,7 +81,11 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
     einfügen" in OneNote) – beide Varianten lassen sich frei verschieben.
     Die Original-Datei wird in beiden Fällen mit abgespeichert und lässt
     sich über den „PDF öffnen"-Knopf (bzw. Klick auf die Datei-Ablage)
-    jederzeit im normalen PDF-Reader des Browsers öffnen
+    jederzeit im normalen PDF-Reader des Browsers öffnen. Bei einer als
+    Seiten eingefügten PDF lässt sich der Seiteninhalt unabhängig von der
+    Fenstergröße vergrößern (Mausrad) und verschieben (Umschalt + Ziehen),
+    ohne das Objekt selbst zu bewegen – ein Ziehen ohne Umschalt bewegt
+    weiterhin das ganze Objekt auf der Fläche
   - Text lässt sich auf ein Bild oder ein PDF ziehen, um ihn dort als
     Beschriftung anzuheften – er bewegt und skaliert sich dann mit dem
     Objekt mit, bleibt aber jederzeit per Doppelklick editierbar. Auf

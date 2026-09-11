@@ -2365,16 +2365,87 @@
       text.innerHTML = `<span class="pdf-file-chip-name">${escapeHtml(obj.fileName || 'PDF')}</span><span class="pdf-file-chip-pages">${pages}</span>`;
       objEl.appendChild(text);
     } else {
+      if (typeof obj.viewZoom !== 'number') obj.viewZoom = 1;
+      if (typeof obj.viewPanX !== 'number') obj.viewPanX = 0;
+      if (typeof obj.viewPanY !== 'number') obj.viewPanY = 0;
+
+      const viewport = document.createElement('div');
+      viewport.className = 'pdf-view-viewport';
+      objEl.appendChild(viewport);
+
       const img = document.createElement('img');
       img.className = 'canvas-image-el';
       img.src = obj.src;
       img.draggable = false;
-      objEl.appendChild(img);
+      viewport.appendChild(img);
+
+      const applyViewTransform = () => {
+        img.style.transform = `translate(${obj.viewPanX}px, ${obj.viewPanY}px) scale(${obj.viewZoom})`;
+      };
+      applyViewTransform();
 
       const badge = document.createElement('div');
       badge.className = 'pdf-badge';
       badge.textContent = obj.fileName ? `${pages} · ${obj.fileName}` : pages;
       objEl.appendChild(badge);
+
+      const hint = document.createElement('div');
+      hint.className = 'pdf-zoom-hint';
+      hint.textContent = 'Mausrad: Zoom · Umschalt + Ziehen: Verschieben';
+      objEl.appendChild(hint);
+      let hintTimer = null;
+      viewport.addEventListener('mouseenter', () => {
+        hint.classList.add('visible');
+        clearTimeout(hintTimer);
+        hintTimer = setTimeout(() => hint.classList.remove('visible'), 3000);
+      });
+      viewport.addEventListener('mouseleave', () => {
+        clearTimeout(hintTimer);
+        hint.classList.remove('visible');
+      });
+
+      viewport.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+        const newZoom = clamp(obj.viewZoom * factor, 1, 5);
+        const rect = viewport.getBoundingClientRect();
+        const cx = e.clientX - rect.left;
+        const cy = e.clientY - rect.top;
+        obj.viewPanX = cx - (newZoom / obj.viewZoom) * (cx - obj.viewPanX);
+        obj.viewPanY = cy - (newZoom / obj.viewZoom) * (cy - obj.viewPanY);
+        obj.viewZoom = newZoom;
+        if (obj.viewZoom <= 1.001) {
+          obj.viewZoom = 1;
+          obj.viewPanX = 0;
+          obj.viewPanY = 0;
+        }
+        applyViewTransform();
+        schedulePersist();
+      }, { passive: false });
+
+      viewport.addEventListener('pointerdown', (e) => {
+        if (!e.shiftKey || (e.button !== undefined && e.button !== 0)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        selectObject(note, obj, objEl);
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const startPanX = obj.viewPanX;
+        const startPanY = obj.viewPanY;
+        const onMove = (ev) => {
+          obj.viewPanX = startPanX + (ev.clientX - startX);
+          obj.viewPanY = startPanY + (ev.clientY - startY);
+          applyViewTransform();
+        };
+        const onUp = () => {
+          window.removeEventListener('pointermove', onMove);
+          window.removeEventListener('pointerup', onUp);
+          schedulePersist();
+        };
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+      });
     }
 
     objEl.addEventListener('pointerdown', (e) => startObjectDrag(e, note, obj, objEl));
