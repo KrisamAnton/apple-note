@@ -68,6 +68,10 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
   es leer ist, zeigt sich auch kein Rahmen, keine Werkzeugleiste und kein
   Ziehpunkt – nur ein blinkender Cursor; die Fläche startet klein und
   wächst beim Tippen automatisch mit
+- **Verschieben über einen eigenen Ziehpunkt**: jedes ausgewählte Objekt
+  (Text/Bild/PDF) zeigt oberhalb eine kleine Leiste mit einem
+  Griff-Symbol – daran lässt es sich zuverlässig verschieben, unabhängig
+  vom Inhalt und auch auf Touch-Geräten (wie in OneNote)
 - **Notiz-/Unterseiten-Zeile**: das Löschen einer Notiz oder Unterseite
   erfolgt ausschließlich über den roten Papierkorb-Button ganz rechts in
   der jeweiligen Zeile (nicht mehr über die Werkzeugleiste), damit eine

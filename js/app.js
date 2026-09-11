@@ -31,6 +31,7 @@
     plus: '<svg viewBox="0 0 20 20"><path d="M9.2 2.5h1.6v6.7h6.7v1.6h-6.7v6.7H9.2v-6.7H2.5V9.2h6.7z"/></svg>',
     heading: '<svg viewBox="0 0 20 20"><text x="1.5" y="15" font-size="13" font-weight="800" fill="currentColor">H</text></svg>',
     openFile: '<svg viewBox="0 0 20 20"><path d="M8 3H4.5A1.5 1.5 0 0 0 3 4.5v11A1.5 1.5 0 0 0 4.5 17h11a1.5 1.5 0 0 0 1.5-1.5V12h-1.5v3.5h-11v-11H8V3z" fill="currentColor"/><path d="M11 3h6v6h-1.5V5.6l-6.15 6.15-1.06-1.06L14.44 4.5H11V3z" fill="currentColor"/></svg>',
+    grip: '<svg viewBox="0 0 20 20"><circle cx="6" cy="6" r="1.5"/><circle cx="10" cy="6" r="1.5"/><circle cx="14" cy="6" r="1.5"/><circle cx="6" cy="14" r="1.5"/><circle cx="10" cy="14" r="1.5"/><circle cx="14" cy="14" r="1.5"/></svg>',
   };
 
   const MARKER_COLORS = [
@@ -903,6 +904,25 @@
     return btn;
   }
 
+  // Eigener, kleiner Ziehpunkt oberhalb des Objekts speziell zum Verschieben –
+  // wie die kleine obere Leiste in OneNote. Unabhängig vom Inhaltsbereich
+  // (Text/Bild/PDF), damit ein Ziehen dort zuverlässig funktioniert, auch auf
+  // Touch-Geräten, wo ein Ziehen direkt auf dem Inhalt nicht immer zuverlässig
+  // als Verschieben statt als Scroll-Geste ankommt.
+  function makeMoveHandle(note, obj, objEl) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'object-toolbar-btn object-move-handle';
+    btn.innerHTML = `<svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.grip}</svg>`;
+    btn.title = 'Verschieben';
+    btn.setAttribute('aria-label', 'Verschieben');
+    btn.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      startObjectDrag(e, note, obj, objEl);
+    });
+    return btn;
+  }
+
   function buildObjectEl(note, obj, autoFocusText) {
     const objEl = document.createElement('div');
     objEl.className = 'canvas-object';
@@ -913,6 +933,7 @@
 
     const mainToolbar = document.createElement('div');
     mainToolbar.className = 'object-toolbar object-toolbar-main';
+    mainToolbar.appendChild(makeMoveHandle(note, obj, objEl));
     if (obj.type === 'pdf' && obj.fileData) {
       mainToolbar.appendChild(makeToolbarBtn(ICONS.openFile, false, () => openPdfFile(obj), 'PDF öffnen'));
     }

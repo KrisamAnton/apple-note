@@ -944,6 +944,19 @@ textarea {
   height: 15px;
 }
 
+/* Eigener Ziehpunkt zum Verschieben (kleine Leiste oberhalb des Objekts, wie
+   in OneNote) - unabhängig vom Inhalt, damit Ziehen auf Touch-Geräten
+   zuverlässig als Verschieben statt als Scroll-Geste ankommt. */
+.object-move-handle {
+  color: var(--accent);
+  cursor: grab;
+  touch-action: none;
+}
+
+.object-move-handle:active {
+  cursor: grabbing;
+}
+
 .resize-handle {
   position: absolute;
   right: -8px;
