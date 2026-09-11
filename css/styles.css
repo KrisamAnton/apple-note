@@ -1039,6 +1039,12 @@ textarea {
   position: absolute;
   inset: 0;
   cursor: grab;
+  /* Ohne das würde der Browser einen Ziehversuch mit dem Finger auf einem
+     bereits beschrifteten Textobjekt als Wisch-/Scroll-Geste der Fläche
+     interpretieren, statt ihn unserem eigenen Verschiebe-Handler zu geben –
+     das Objekt ließe sich dann nur noch über den Ziehpunkt in der Größe
+     ändern, aber nicht mehr verschieben. */
+  touch-action: none;
 }
 
 .canvas-object[data-type="text"][data-style="boxed"] {
@@ -1073,6 +1079,9 @@ textarea {
 .canvas-object[data-type="image"] {
   border-color: var(--border);
   background: var(--bg-elevated);
+  /* Wie beim Text-Objekt: sonst schnappt sich der Browser ein Ziehen mit dem
+     Finger als Scroll-Geste, statt es unserem Verschieben-Handler zu geben. */
+  touch-action: none;
 }
 
 .canvas-image-el {
@@ -1090,6 +1099,7 @@ textarea {
 .canvas-object[data-type="pdf"] {
   border-color: var(--border);
   background: var(--bg-elevated);
+  touch-action: none;
 }
 
 .pdf-badge {
