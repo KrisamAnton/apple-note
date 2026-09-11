@@ -129,84 +129,90 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
   auf der leeren Fläche selbst ist dabei nur der Doppel-Tipp-Zoom
   deaktiviert (der würde sonst mit "Tipp erzeugt Text" kollidieren)
 - Als PWA installierbar ("Zum Home-Bildschirm hinzufügen" in Safari)
-- Funktioniert offline (App-Shell wird per Service Worker gecacht)
+- App-Shell wird per Service Worker gecacht (schnellerer Start); für
+  Notizen, Bilder und PDFs ist aber eine Verbindung zum Server nötig,
+  da diese dort gespeichert sind
 
 ## Daten
 
-Alle Notizen und Ordner werden aktuell ausschließlich lokal im Browser
-gespeichert (`localStorage`). Es findet keine Synchronisierung zwischen
-Geräten statt – das ist für einen späteren Schritt vorgesehen.
+Alle Notizen, Ordner, Bilder und PDFs werden auf einem eigenen kleinen
+**Server gespeichert** (nicht mehr im Browser). Das bedeutet:
 
-Es gibt noch **kein Login/Benutzerkonto**. Jedes Gerät bzw. jeder
-Browser hat automatisch seinen eigenen, getrennten lokalen Speicher –
-nutzen also z. B. zwei Personen jeweils ihr eigenes Gerät, sehen sie
-nur ihre eigenen Notizen. Teilen sie sich dasselbe Gerät/denselben
-Browser, sehen sie hingegen dieselben Notizen, da es (noch) keine
-Trennung nach Benutzer auf einem gemeinsamen Gerät gibt.
-
-**Wichtige Einschränkung von `localStorage`:** Browser begrenzen diesen
-Speicher meist auf ca. 5–10 MB pro Seite. Bilder, PDFs und Zeichnungen
-werden eingebettet gespeichert und können dieses Limit bei umfangreichem
-Material (v. a. viele/große Bilder oder mehrseitige, als „Alle Seiten
-anzeigen" eingefügte PDFs) erreichen. Schlägt ein Speichervorgang
-dadurch fehl, erscheint eine deutliche Warnung – die zuletzt gemachte
-Änderung ist dann **nicht** gespeichert und geht beim Neuladen der
-Seite verloren, wenn nicht vorher Platz geschaffen wird (z. B. große
-Anhänge entfernen). Eine robustere Speicherung (z. B. über IndexedDB,
-das deutlich mehr Platz bietet) ist ein sinnvoller nächster Schritt,
-sobald das benötigt wird.
+- Die App ist von jedem Gerät im selben Netzwerk (bzw. über die
+  konfigurierte Adresse) aus mit demselben Datenstand erreichbar –
+  keine getrennten Datenstände pro Gerät/Browser mehr.
+- Es gibt praktisch **kein Speicherlimit** mehr wie beim früheren
+  `localStorage` (ca. 5–10 MB): Bilder und PDFs werden als normale
+  Dateien auf der Festplatte des Servers abgelegt, die Notizdaten
+  selbst (Texte, Positionen) bleiben eine kleine JSON-Datei. Auch
+  viele große PDFs (z. B. 100 Stück à 30 MB) sind kein Problem, solange
+  auf dem Server genug Festplattenplatz vorhanden ist.
+- Es gibt weiterhin **kein Login/Benutzerkonto** – jeder, der die
+  Adresse des Servers erreicht, sieht denselben Datenstand. Das ist für
+  eine Einzelperson/Familie im eigenen Netzwerk unkritisch, sollte aber
+  nicht ohne Zugriffsschutz öffentlich ins Internet gestellt werden.
+- Fällt die Verbindung zum Server aus, erscheint beim Speichern eine
+  deutliche Warnung, damit nie unbemerkt eine Änderung verloren geht.
 
 ## Technik
 
-Bewusst ohne Build-Prozess und ohne Frameworks umgesetzt – reines
-HTML/CSS/JavaScript:
+Frontend bewusst ohne Build-Prozess und ohne Frameworks umgesetzt –
+reines HTML/CSS/JavaScript. Dazu ein kleiner, eigenständiger
+Node.js-Server für Speicherung und Datei-Uploads:
 
 ```
-index.html       Grundgerüst (3-Spalten-Layout)
-css/styles.css    Styling im Apple-Notes-Look (hell/dunkel)
-js/app.js         App-Logik (State, Rendering, freie Zeichenfläche, localStorage)
-js/vendor/        Lokal eingebundene pdf.js-Bibliothek (Apache-2.0, für PDF-Vorschau)
-manifest.json     PWA-Manifest
-sw.js             Service Worker (Offline-Cache der App-Shell)
-icons/            App-Icons für Home-Bildschirm / Manifest
+index.html        Grundgerüst (3-Spalten-Layout)
+css/styles.css     Styling im Apple-Notes-Look (hell/dunkel)
+js/app.js          App-Logik (State, Rendering, freie Zeichenfläche, Server-Anbindung)
+js/vendor/         Lokal eingebundene pdf.js-Bibliothek (Apache-2.0, für PDF-Vorschau)
+manifest.json      PWA-Manifest
+sw.js              Service Worker (Offline-Cache der App-Shell; API-Anfragen ausgenommen)
+icons/             App-Icons für Home-Bildschirm / Manifest
+server/            Node.js/Express-Server (Notizen + Datei-Uploads, siehe unten)
+data/              Vom Server angelegt: state.json (Notizdaten) + files/ (Bilder/PDFs).
+                   Nicht Teil des Repositorys (.gitignore), da es die echten Nutzdaten sind.
 ```
 
-Die einzige externe Abhängigkeit ist [pdf.js](https://mozilla.github.io/pdf.js/)
-(Mozilla, Apache-2.0-Lizenz) zum Rendern von PDF-Seiten – lokal im
-Repository mitgeliefert (kein CDN, funktioniert auch offline) und wird
-nur bei Bedarf nachgeladen, wenn tatsächlich eine PDF eingefügt wird.
+Die externen Abhängigkeiten sind [pdf.js](https://mozilla.github.io/pdf.js/)
+(Mozilla, Apache-2.0-Lizenz) zum Rendern von PDF-Seiten im Frontend –
+lokal mitgeliefert, kein CDN – sowie im Server `express` (Webserver)
+und `multer` (Datei-Uploads), installiert über `npm`.
 
 ## Lokal ausführen
 
-Da die App aus statischen Dateien besteht, reicht ein einfacher
-Webserver (Service Worker benötigen HTTP/HTTPS, `file://` funktioniert
-nicht zuverlässig):
-
 ```bash
-# z. B. mit Python
-python3 -m http.server 8000
-
-# oder mit Node
-npx serve .
+cd server
+npm install
+npm start
 ```
 
-Danach im Browser `http://localhost:8000` öffnen.
+Danach im Browser `http://localhost:3000` öffnen (Port über die
+Umgebungsvariable `PORT` änderbar). Der Server liefert sowohl die
+App selbst als auch die API (`/api/state`, `/api/upload`) aus.
 
-## Auf dem iPad testen (GitHub Pages)
+## Self-Hosting (z. B. auf einem eigenen Server/Proxmox)
 
-Die App wird über GitHub Pages bereitgestellt, sodass sie direkt in
-Safari auf dem iPad geöffnet werden kann:
+Der Server ist bewusst einfach gehalten (keine Datenbank, kein
+Login) und lässt sich auf jedem Rechner mit Node.js betreiben, der
+dauerhaft erreichbar ist:
 
-1. In den Repository-Einstellungen unter **Settings → Pages** als
-   Quelle **„Deploy from a branch“** und den Branch `main`
-   (Ordner `/root`) auswählen.
-2. Nach dem Deployment ist die App unter
-   `https://krisamanton.github.io/apple-note/` erreichbar.
-3. Auf dem iPad in Safari öffnen, dann über das Teilen-Menü
-   **„Zum Home-Bildschirm“** hinzufügen, um die App wie eine native
-   App zu installieren.
+```bash
+git clone <dieses Repository>
+cd apple-note/server
+npm install
+PORT=3000 npm start
+```
+
+Für den Dauerbetrieb empfiehlt sich ein Prozess-Manager wie `pm2` oder
+ein systemd-Service, damit der Server nach einem Neustart automatisch
+wieder hochfährt. Die Adresse (z. B. eine eigene Domain/Subdomain)
+lässt sich per Reverse Proxy (z. B. Cloudflare Tunnel, nginx) auf den
+internen Server-Port weiterleiten. Alle Notizdaten und hochgeladenen
+Dateien liegen unter `server/../data/` (per Umgebungsvariable
+`DATA_DIR` änderbar) – dieses Verzeichnis sollte regelmäßig gesichert
+werden.
 
 ## Nächste Schritte
 
-Individuelle Anpassungen, Sync zwischen Geräten und weitere Features
-werden in den nächsten Schritten besprochen und umgesetzt.
+Individuelle Anpassungen und weitere Features werden in den nächsten
+Schritten besprochen und umgesetzt.

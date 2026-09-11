@@ -1,7 +1,6 @@
 (() => {
   'use strict';
 
-  const STORAGE_KEY = 'appleNotesPwa.v1';
   // Grundgröße der Fläche – wächst bei Bedarf mit, wenn ein Objekt (z. B. eine
   // vielseitige PDF) darüber hinausragt, siehe updateSurfaceSize().
   const BASE_SURFACE_W = 1600;
@@ -183,11 +182,11 @@
     }
   }
 
-  function loadState() {
+  async function loadState() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
+      const res = await fetch('/api/state');
+      if (res.ok) {
+        const parsed = await res.json();
         if (parsed && Array.isArray(parsed.notes) && Array.isArray(parsed.folders)) {
           parsed.notes.forEach(migrateNote);
           sanitizeNoteParents(parsed.notes);
@@ -198,7 +197,7 @@
         }
       }
     } catch (e) {
-      console.warn('Konnte gespeicherte Notizen nicht laden:', e);
+      console.warn('Konnte gespeicherte Notizen nicht vom Server laden:', e);
     }
     return createDefaultState();
   }
@@ -218,7 +217,7 @@
       '- Ziehe einen Text auf ein Bild oder PDF, um ihn dort als Beschriftung anzuheften ' +
       '– er bewegt und skaliert sich dann mit.\n' +
       '- Über das Raster-Symbol kannst du den Hintergrund umstellen: Punkte, Linien oder leer.\n\n' +
-      'Alle Notizen werden aktuell nur lokal auf diesem Gerät gespeichert.';
+      'Alle Notizen werden auf dem Server gespeichert und sind von jedem Gerät aus erreichbar.';
     return {
       folders: [],
       notes: [
@@ -243,7 +242,9 @@
     };
   }
 
-  let state = loadState();
+  // Platzhalter, bis init() den echten Stand vom Server geladen hat (async) –
+  // sonst würden Funktionen, die vor init() auf `state` zugreifen, ins Leere laufen.
+  let state = createDefaultState();
   let selectedFolderId = null; // null = "Alle Notizen"
   let selectedNoteId = state.notes[0] ? state.notes[0].id : null;
   let searchQuery = '';
@@ -258,24 +259,29 @@
 
   let persistFailWarningShown = false;
 
-  function persist() {
+  async function persist() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      const res = await fetch('/api/state', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(state),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       persistFailWarningShown = false;
     } catch (e) {
       console.error('Speichern fehlgeschlagen:', e);
       // Ein fehlgeschlagenes Speichern darf nie unbemerkt bleiben – sonst wirkt eine
       // Änderung in der laufenden Sitzung übernommen, geht beim nächsten Neuladen
-      // (z. B. nach einem App-Update) aber kommentarlos wieder verloren. Nur einmal
-      // pro anhaltender Fehlserie warnen, um bei mehreren Änderungen in Folge nicht
-      // mit wiederholten Meldungen zu nerven.
+      // aber kommentarlos wieder verloren. Nur einmal pro anhaltender Fehlserie
+      // warnen, um bei mehreren Änderungen in Folge nicht mit wiederholten
+      // Meldungen zu nerven.
       if (!persistFailWarningShown) {
         persistFailWarningShown = true;
         alert(
-          'Achtung: Diese Änderung konnte NICHT gespeichert werden (Speicherplatz im Browser ist voll). ' +
-          'Sie geht beim Neuladen der Seite wieder verloren, wenn du jetzt nichts unternimmst.\n\n' +
-          'Bitte entferne ein großes Bild/eine große PDF (vor allem als "Alle Seiten anzeigen" eingefügte ' +
-          'mehrseitige PDFs benötigen viel Platz) oder sichere die Notiz auf andere Weise.'
+          'Achtung: Diese Änderung konnte NICHT auf dem Server gespeichert werden ' +
+          '(keine Verbindung zum Server?). Sie geht beim Neuladen der Seite wieder ' +
+          'verloren, wenn du jetzt nichts unternimmst.\n\nBitte prüfe deine ' +
+          'Internet-/Netzwerkverbindung.'
         );
       }
     }
@@ -2595,11 +2601,24 @@
       ctx.drawImage(p.canvas, offsetX, offsetY);
       offsetY += p.height + pageGap;
     }
-    // JPEG statt PNG spart bei fotografischen/gescannten Seiten (schlecht verlustfrei
-    // komprimierbar) meist ein Vielfaches an Speicherplatz – wichtig, weil das Ganze
-    // zusätzlich zur Originaldatei im begrenzten Browser-Speicher (localStorage)
-    // landet.
-    return { src: renderCanvas.toDataURL('image/jpeg', 0.82), width: maxWidth, height: totalHeight };
+    return { canvas: renderCanvas, width: maxWidth, height: totalHeight };
+  }
+
+  function canvasToJpegBlob(canvas, quality) {
+    return new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('toBlob fehlgeschlagen'))), 'image/jpeg', quality);
+    });
+  }
+
+  // Lädt eine Datei (Bild, PDF oder gerenderte Vorschau) zum Server hoch und
+  // liefert die dauerhafte URL zurück, unter der sie danach abrufbar ist.
+  async function uploadFile(fileOrBlob, filename) {
+    const fd = new FormData();
+    fd.append('file', fileOrBlob, filename || fileOrBlob.name || 'upload');
+    const res = await fetch('/api/upload', { method: 'POST', body: fd });
+    if (!res.ok) throw new Error(`Upload fehlgeschlagen (HTTP ${res.status})`);
+    const data = await res.json();
+    return data.url;
   }
 
   let pdfModeResolve = null;
@@ -2620,35 +2639,11 @@
     }
   }
 
-  function fileToDataURL(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(file);
-    });
-  }
-
   // Öffnet die ursprüngliche PDF-Datei im normalen PDF-Reader des Browsers
-  // (neuer Tab). Der Umweg über einen Blob (statt die gespeicherte data:-URL
-  // direkt zu öffnen) vermeidet die Längenbeschränkung mancher Browser für
-  // per window.open() aufgerufene data:-URLs bei größeren Dateien.
+  // (neuer Tab). fileData ist eine ganz normale Server-URL, daher genügt window.open.
   function openPdfFile(obj) {
     if (!obj.fileData) return;
-    try {
-      const [header, base64] = obj.fileData.split(',');
-      const mimeMatch = header.match(/:(.*?);/);
-      const mime = mimeMatch ? mimeMatch[1] : 'application/pdf';
-      const binary = atob(base64);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
-      window.open(url, '_blank');
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
-    } catch (err) {
-      console.error('PDF konnte nicht geöffnet werden:', err);
-      window.open(obj.fileData, '_blank');
-    }
+    window.open(obj.fileData, '_blank');
   }
 
   async function addPdfObjectFromFile(file, dropPoint) {
@@ -2662,7 +2657,7 @@
       const mode = await askPdfInsertMode();
       if (!mode) return;
 
-      const fileData = await fileToDataURL(file);
+      const fileData = await uploadFile(file);
 
       let src = null;
       let w = 240;
@@ -2673,7 +2668,8 @@
         const scale = Math.min(1, maxW / rendered.width);
         w = Math.round(rendered.width * scale) || 200;
         h = Math.round(rendered.height * scale) || 260;
-        src = rendered.src;
+        const blob = await canvasToJpegBlob(rendered.canvas, 0.82);
+        src = await uploadFile(blob, `${file.name}.jpg`);
       }
 
       const { x, y } = dropPoint
@@ -2733,31 +2729,38 @@
     return obj;
   }
 
-  function addImageObjectFromFile(file) {
+  async function addImageObjectFromFile(file) {
     const note = currentNote();
     if (!note || !file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const src = reader.result;
-      const img = new Image();
-      img.onload = () => {
-        const maxW = 360;
-        const scale = Math.min(1, maxW / img.naturalWidth);
-        const w = Math.round(img.naturalWidth * scale) || 200;
-        const h = Math.round(img.naturalHeight * scale) || 150;
-        const { x, y } = nextPlacement(note, w, h);
-        const obj = { id: uid(), type: 'image', x, y, w, h, z: 0, src };
-        bringToFront(note, obj);
-        note.objects.push(obj);
-        const objEl = buildObjectEl(note, obj);
-        el.canvasSurface.insertBefore(objEl, el.inkLayer);
-        selectObject(note, obj, objEl);
-        schedulePersist();
-        renderNoteList();
-      };
-      img.src = src;
-    };
-    reader.readAsDataURL(file);
+    try {
+      const localUrl = URL.createObjectURL(file);
+      const naturalSize = await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+        img.onerror = reject;
+        img.src = localUrl;
+      });
+      URL.revokeObjectURL(localUrl);
+
+      const src = await uploadFile(file);
+
+      const maxW = 360;
+      const scale = Math.min(1, maxW / naturalSize.w);
+      const w = Math.round(naturalSize.w * scale) || 200;
+      const h = Math.round(naturalSize.h * scale) || 150;
+      const { x, y } = nextPlacement(note, w, h);
+      const obj = { id: uid(), type: 'image', x, y, w, h, z: 0, src };
+      bringToFront(note, obj);
+      note.objects.push(obj);
+      const objEl = buildObjectEl(note, obj);
+      el.canvasSurface.insertBefore(objEl, el.inkLayer);
+      selectObject(note, obj, objEl);
+      schedulePersist();
+      renderNoteList();
+    } catch (err) {
+      console.error('Bild konnte nicht eingefügt werden:', err);
+      alert('Dieses Bild konnte nicht eingefügt werden.');
+    }
   }
 
   function deleteObject(note, id) {
@@ -2963,10 +2966,13 @@
 
   // ---------- Event wiring ----------
 
-  function init() {
+  async function init() {
     setupBackButtons();
     initColumnResizers();
     goToView(isMobileLayout() ? 'folders' : 'notes');
+
+    state = await loadState();
+    selectedNoteId = state.notes[0] ? state.notes[0].id : null;
 
     renderFolders();
     renderNoteList();
@@ -3223,9 +3229,23 @@
       }, 120);
     });
 
-    window.addEventListener('beforeunload', persist);
+    // navigator.sendBeacon() statt fetch(): Der Browser garantiert, dass dieser
+    // Request auch dann noch losgeschickt wird, wenn die Seite direkt danach
+    // geschlossen oder neu geladen wird (bei fetch() ist das nicht zuverlässig:
+    // ein noch laufender Request wird beim Entladen der Seite abgebrochen und
+    // würde in persist() fälschlich als Speicherfehler gemeldet, obwohl beim
+    // ganz normalen Neuladen der Seite gar nichts verloren geht).
+    function persistViaBeacon() {
+      try {
+        const ok = navigator.sendBeacon('/api/state', new Blob([JSON.stringify(state)], { type: 'application/json' }));
+        if (!ok) persist();
+      } catch (e) {
+        persist();
+      }
+    }
+    window.addEventListener('beforeunload', persistViaBeacon);
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') persist();
+      if (document.visibilityState === 'hidden') persistViaBeacon();
     });
   }
 

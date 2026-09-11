@@ -1,0 +1,14 @@
+{
+  "name": "krisnote-server",
+  "version": "1.0.0",
+  "description": "Self-hosted Backend für KrisNote (Notizen + Datei-Uploads)",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "multer": "^2.3.0"
+  }
+}
