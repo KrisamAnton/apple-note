@@ -78,7 +78,10 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
     nur die Datei als kompakte Ablage (Symbol mit Dateiname/Seitenzahl)
     abgelegt werden soll, oder ob alle Seiten der PDF vollständig
     untereinander auf die Fläche gedruckt werden sollen (wie „Ausdruck
-    einfügen" in OneNote) – beide Varianten lassen sich frei verschieben
+    einfügen" in OneNote) – beide Varianten lassen sich frei verschieben.
+    Die Original-Datei wird in beiden Fällen mit abgespeichert und lässt
+    sich über den „PDF öffnen"-Knopf (bzw. Klick auf die Datei-Ablage)
+    jederzeit im normalen PDF-Reader des Browsers öffnen
   - Text lässt sich auf ein Bild oder ein PDF ziehen, um ihn dort als
     Beschriftung anzuheften – er bewegt und skaliert sich dann mit dem
     Objekt mit, bleibt aber jederzeit per Doppelklick editierbar. Auf

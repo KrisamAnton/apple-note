@@ -25,6 +25,7 @@
     chevron: '<svg viewBox="0 0 20 20"><path d="M7 4.5 13 10l-6 5.5v-2.2L10.4 10 7 6.7z"/></svg>',
     plus: '<svg viewBox="0 0 20 20"><path d="M9.2 2.5h1.6v6.7h6.7v1.6h-6.7v6.7H9.2v-6.7H2.5V9.2h6.7z"/></svg>',
     heading: '<svg viewBox="0 0 20 20"><text x="1.5" y="15" font-size="13" font-weight="800" fill="currentColor">H</text></svg>',
+    openFile: '<svg viewBox="0 0 20 20"><path d="M8 3H4.5A1.5 1.5 0 0 0 3 4.5v11A1.5 1.5 0 0 0 4.5 17h11a1.5 1.5 0 0 0 1.5-1.5V12h-1.5v3.5h-11v-11H8V3z" fill="currentColor"/><path d="M11 3h6v6h-1.5V5.6l-6.15 6.15-1.06-1.06L14.44 4.5H11V3z" fill="currentColor"/></svg>',
   };
 
   const MARKER_COLORS = [
@@ -891,6 +892,9 @@
 
     const mainToolbar = document.createElement('div');
     mainToolbar.className = 'object-toolbar object-toolbar-main';
+    if (obj.type === 'pdf' && obj.fileData) {
+      mainToolbar.appendChild(makeToolbarBtn(ICONS.openFile, false, () => openPdfFile(obj), 'PDF öffnen'));
+    }
     mainToolbar.appendChild(makeToolbarBtn(ICONS.trash, true, () => deleteObject(note, obj.id), 'Löschen'));
     objEl.appendChild(mainToolbar);
 
@@ -933,6 +937,52 @@
 
   // ----- Verschieben -----
 
+  // Lässt die Zeichenfläche automatisch scrollen, wenn beim Verschieben/
+  // Skalieren eines Objekts der Zeiger nahe an den sichtbaren Rand der
+  // (scrollbaren) Arbeitsfläche kommt – sonst kommt man bei großen Objekten
+  // (z. B. einer mehrseitigen PDF) mit der Maus nicht mehr weiter, weil der
+  // Bildschirmrand erreicht ist, bevor das Objekt groß/weit genug gezogen ist.
+  let autoScrollRAF = null;
+  let lastDragPointer = null;
+
+  function startAutoScroll(kind) {
+    const moveHandler = kind === 'move' ? onObjectDragMove : onObjectResizeMove;
+    const tick = () => {
+      if (!dragState || dragState.type !== kind || !lastDragPointer) {
+        autoScrollRAF = null;
+        return;
+      }
+      const rect = el.canvasWorkspace.getBoundingClientRect();
+      const edge = 36;
+      const maxSpeed = 22;
+      const { clientX: px, clientY: py } = lastDragPointer;
+      let sx = 0;
+      let sy = 0;
+      if (px < rect.left + edge) sx = -maxSpeed * (1 - Math.max(0, px - rect.left) / edge);
+      else if (px > rect.right - edge) sx = maxSpeed * (1 - Math.max(0, rect.right - px) / edge);
+      if (py < rect.top + edge) sy = -maxSpeed * (1 - Math.max(0, py - rect.top) / edge);
+      else if (py > rect.bottom - edge) sy = maxSpeed * (1 - Math.max(0, rect.bottom - py) / edge);
+      if (sx !== 0 || sy !== 0) {
+        const beforeLeft = el.canvasWorkspace.scrollLeft;
+        const beforeTop = el.canvasWorkspace.scrollTop;
+        el.canvasWorkspace.scrollLeft = clamp(beforeLeft + sx, 0, el.canvasWorkspace.scrollWidth - el.canvasWorkspace.clientWidth);
+        el.canvasWorkspace.scrollTop = clamp(beforeTop + sy, 0, el.canvasWorkspace.scrollHeight - el.canvasWorkspace.clientHeight);
+        const actualDX = el.canvasWorkspace.scrollLeft - beforeLeft;
+        const actualDY = el.canvasWorkspace.scrollTop - beforeTop;
+        if (actualDX || actualDY) {
+          // Der Ziehpunkt ist unverändert (Maus steht am Bildschirmrand still);
+          // durch das Verschieben von "startX/Y" wirkt es im Deltabild so, als
+          // hätte sich der Zeiger um die gescrollte Strecke weiterbewegt.
+          dragState.startX -= actualDX;
+          dragState.startY -= actualDY;
+          moveHandler(lastDragPointer);
+        }
+      }
+      autoScrollRAF = requestAnimationFrame(tick);
+    };
+    if (!autoScrollRAF) autoScrollRAF = requestAnimationFrame(tick);
+  }
+
   function startObjectDrag(e, note, obj, objEl) {
     if (e.button !== undefined && e.button !== 0 && e.pointerType === 'mouse') return;
     e.preventDefault();
@@ -959,6 +1009,8 @@
     objEl.addEventListener('pointermove', onObjectDragMove);
     objEl.addEventListener('pointerup', onObjectDragEnd);
     objEl.addEventListener('pointercancel', onObjectDragEnd);
+    lastDragPointer = { clientX: e.clientX, clientY: e.clientY };
+    startAutoScroll('move');
   }
 
   function onObjectDragMove(e) {
@@ -966,6 +1018,7 @@
     const note = currentNote();
     const obj = note && getObj(note, dragState.objId);
     if (!note || !obj) return;
+    lastDragPointer = { clientX: e.clientX, clientY: e.clientY };
     const dx = e.clientX - dragState.startX;
     const dy = e.clientY - dragState.startY;
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragState.moved = true;
@@ -1009,6 +1062,9 @@
     if (note && obj && obj.type === 'text' && dragState.moved) {
       updateAttachment(note, obj);
     }
+    if (note && obj && obj.type === 'pdf' && obj.variant === 'file' && !dragState.moved) {
+      openPdfFile(obj);
+    }
     if (note && obj && dragState.moved) {
       const movedTextObjs = [obj, ...dragState.children.map((c) => getObj(note, c.id))]
         .filter((o) => o && o.type === 'text' && o.style === 'free');
@@ -1019,6 +1075,7 @@
       }
     }
     dragState = null;
+    lastDragPointer = null;
     if (note) schedulePersist();
   }
 
@@ -1066,6 +1123,8 @@
     handle.addEventListener('pointermove', onObjectResizeMove);
     handle.addEventListener('pointerup', onObjectResizeEnd);
     handle.addEventListener('pointercancel', onObjectResizeEnd);
+    lastDragPointer = { clientX: e.clientX, clientY: e.clientY };
+    startAutoScroll('resize');
   }
 
   function onObjectResizeMove(e) {
@@ -1073,6 +1132,7 @@
     const note = currentNote();
     const obj = note && getObj(note, dragState.objId);
     if (!note || !obj) return;
+    lastDragPointer = { clientX: e.clientX, clientY: e.clientY };
     const [minW, minH] = MIN_SIZES[obj.type] || [60, 60];
     const dx = e.clientX - dragState.startX;
     const dy = e.clientY - dragState.startY;
@@ -1119,6 +1179,7 @@
       }
     }
     dragState = null;
+    lastDragPointer = null;
     if (note) schedulePersist();
   }
 
@@ -2378,6 +2439,37 @@
     }
   }
 
+  function fileToDataURL(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Öffnet die ursprüngliche PDF-Datei im normalen PDF-Reader des Browsers
+  // (neuer Tab). Der Umweg über einen Blob (statt die gespeicherte data:-URL
+  // direkt zu öffnen) vermeidet die Längenbeschränkung mancher Browser für
+  // per window.open() aufgerufene data:-URLs bei größeren Dateien.
+  function openPdfFile(obj) {
+    if (!obj.fileData) return;
+    try {
+      const [header, base64] = obj.fileData.split(',');
+      const mimeMatch = header.match(/:(.*?);/);
+      const mime = mimeMatch ? mimeMatch[1] : 'application/pdf';
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (err) {
+      console.error('PDF konnte nicht geöffnet werden:', err);
+      window.open(obj.fileData, '_blank');
+    }
+  }
+
   async function addPdfObjectFromFile(file, dropPoint) {
     const note = currentNote();
     if (!note || !file) return;
@@ -2388,6 +2480,8 @@
 
       const mode = await askPdfInsertMode();
       if (!mode) return;
+
+      const fileData = await fileToDataURL(file);
 
       let src = null;
       let w = 240;
@@ -2406,7 +2500,7 @@
         : nextPlacement(note, w, h);
       const objData = {
         id: uid(), type: 'pdf', x, y, w, h, z: 0,
-        src, pageCount: pdf.numPages, fileName: file.name, variant: mode,
+        src, pageCount: pdf.numPages, fileName: file.name, variant: mode, fileData,
       };
       bringToFront(note, objData);
       note.objects.push(objData);
