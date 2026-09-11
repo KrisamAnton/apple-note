@@ -255,11 +255,28 @@
   let lastFolderTapId = null;
   let saveTimer = null;
 
+  let persistFailWarningShown = false;
+
   function persist() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      persistFailWarningShown = false;
     } catch (e) {
       console.error('Speichern fehlgeschlagen:', e);
+      // Ein fehlgeschlagenes Speichern darf nie unbemerkt bleiben – sonst wirkt eine
+      // Änderung in der laufenden Sitzung übernommen, geht beim nächsten Neuladen
+      // (z. B. nach einem App-Update) aber kommentarlos wieder verloren. Nur einmal
+      // pro anhaltender Fehlserie warnen, um bei mehreren Änderungen in Folge nicht
+      // mit wiederholten Meldungen zu nerven.
+      if (!persistFailWarningShown) {
+        persistFailWarningShown = true;
+        alert(
+          'Achtung: Diese Änderung konnte NICHT gespeichert werden (Speicherplatz im Browser ist voll). ' +
+          'Sie geht beim Neuladen der Seite wieder verloren, wenn du jetzt nichts unternimmst.\n\n' +
+          'Bitte entferne ein großes Bild/eine große PDF (vor allem als "Alle Seiten anzeigen" eingefügte ' +
+          'mehrseitige PDFs benötigen viel Platz) oder sichere die Notiz auf andere Weise.'
+        );
+      }
     }
   }
 
@@ -949,6 +966,29 @@
   let autoScrollRAF = null;
   let lastDragPointer = null;
 
+  // Geschwindigkeit für eine Achse: 0, solange der Zeiger innerhalb der
+  // Randzone der Arbeitsfläche bleibt; steigt danach an, je weiter der
+  // Zeiger über den sichtbaren Rand hinaus gezogen wird (bis zu einer
+  // Höchstgeschwindigkeit) – so lässt sich ein sehr großes Objekt (z. B.
+  // eine 23-seitige PDF) durch weites Herausziehen zügig statt nur im
+  // Schneckentempo verkleinern/vergrößern.
+  function edgeAutoScrollSpeed(pos, edgeMin, edgeMax) {
+    const zone = 40;
+    const rampRange = 260;
+    const maxSpeed = 160;
+    if (pos < edgeMin + zone) {
+      const dist = edgeMin - pos;
+      const t = clamp((dist + zone) / (zone + rampRange), 0, 1);
+      return -maxSpeed * t;
+    }
+    if (pos > edgeMax - zone) {
+      const dist = pos - edgeMax;
+      const t = clamp((dist + zone) / (zone + rampRange), 0, 1);
+      return maxSpeed * t;
+    }
+    return 0;
+  }
+
   function startAutoScroll(kind) {
     const moveHandler = kind === 'move' ? onObjectDragMove : onObjectResizeMove;
     const tick = () => {
@@ -957,15 +997,9 @@
         return;
       }
       const rect = el.canvasWorkspace.getBoundingClientRect();
-      const edge = 36;
-      const maxSpeed = 22;
       const { clientX: px, clientY: py } = lastDragPointer;
-      let sx = 0;
-      let sy = 0;
-      if (px < rect.left + edge) sx = -maxSpeed * (1 - Math.max(0, px - rect.left) / edge);
-      else if (px > rect.right - edge) sx = maxSpeed * (1 - Math.max(0, rect.right - px) / edge);
-      if (py < rect.top + edge) sy = -maxSpeed * (1 - Math.max(0, py - rect.top) / edge);
-      else if (py > rect.bottom - edge) sy = maxSpeed * (1 - Math.max(0, rect.bottom - py) / edge);
+      const sx = edgeAutoScrollSpeed(px, rect.left, rect.right);
+      const sy = edgeAutoScrollSpeed(py, rect.top, rect.bottom);
       if (sx !== 0 || sy !== 0) {
         const beforeLeft = el.canvasWorkspace.scrollLeft;
         const beforeTop = el.canvasWorkspace.scrollTop;
@@ -2487,7 +2521,11 @@
   // untereinander gestapelt, mit dünner Trennlinie) – wie das "Ausdruck
   // einfügen" in OneNote, wo die ganze Datei sichtbar auf der Seite liegt.
   async function renderPdfAllPages(pdf) {
-    const scale = 2;
+    // Bei vielen Seiten die Auflösung pro Seite reduzieren – sonst wird die
+    // Gesamtgröße (und damit der Speicherbedarf beim Sichern) bei langen
+    // Dokumenten schnell unnötig groß. Die Originaldatei bleibt ohnehin über
+    // "PDF öffnen" in voller Qualität verfügbar.
+    const scale = pdf.numPages > 6 ? 1.3 : 2;
     const pageGap = 14;
     // Jede Seite wird zuerst auf eine EIGENE Leinwand gerendert: pdf.js leert
     // beim Rendern einer Seite die komplette übergebene Leinwand, daher würde
@@ -2521,7 +2559,11 @@
       ctx.drawImage(p.canvas, offsetX, offsetY);
       offsetY += p.height + pageGap;
     }
-    return { src: renderCanvas.toDataURL('image/png'), width: maxWidth, height: totalHeight };
+    // JPEG statt PNG spart bei fotografischen/gescannten Seiten (schlecht verlustfrei
+    // komprimierbar) meist ein Vielfaches an Speicherplatz – wichtig, weil das Ganze
+    // zusätzlich zur Originaldatei im begrenzten Browser-Speicher (localStorage)
+    // landet.
+    return { src: renderCanvas.toDataURL('image/jpeg', 0.82), width: maxWidth, height: totalHeight };
   }
 
   let pdfModeResolve = null;

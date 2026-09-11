@@ -130,6 +130,18 @@ nur ihre eigenen Notizen. Teilen sie sich dasselbe Gerät/denselben
 Browser, sehen sie hingegen dieselben Notizen, da es (noch) keine
 Trennung nach Benutzer auf einem gemeinsamen Gerät gibt.
 
+**Wichtige Einschränkung von `localStorage`:** Browser begrenzen diesen
+Speicher meist auf ca. 5–10 MB pro Seite. Bilder, PDFs und Zeichnungen
+werden eingebettet gespeichert und können dieses Limit bei umfangreichem
+Material (v. a. viele/große Bilder oder mehrseitige, als „Alle Seiten
+anzeigen" eingefügte PDFs) erreichen. Schlägt ein Speichervorgang
+dadurch fehl, erscheint eine deutliche Warnung – die zuletzt gemachte
+Änderung ist dann **nicht** gespeichert und geht beim Neuladen der
+Seite verloren, wenn nicht vorher Platz geschaffen wird (z. B. große
+Anhänge entfernen). Eine robustere Speicherung (z. B. über IndexedDB,
+das deutlich mehr Platz bietet) ist ein sinnvoller nächster Schritt,
+sobald das benötigt wird.
+
 ## Technik
 
 Bewusst ohne Build-Prozess und ohne Frameworks umgesetzt – reines
