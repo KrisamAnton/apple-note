@@ -2,8 +2,13 @@
   'use strict';
 
   const STORAGE_KEY = 'appleNotesPwa.v1';
-  const SURFACE_W = 1600;
-  const SURFACE_H = 2200;
+  // Grundgröße der Fläche – wächst bei Bedarf mit, wenn ein Objekt (z. B. eine
+  // vielseitige PDF) darüber hinausragt, siehe updateSurfaceSize().
+  const BASE_SURFACE_W = 1600;
+  const BASE_SURFACE_H = 2200;
+  const MAX_OBJ_DIM = 20000;
+  let SURFACE_W = BASE_SURFACE_W;
+  let SURFACE_H = BASE_SURFACE_H;
   const MIN_SIZES = { text: [140, 60], image: [60, 60], pdf: [60, 60] };
   // Muss zum Linien-Hintergrund (.canvas-surface[data-bg="lines"]) passen: Zeilenabstand
   // 28px, die sichtbare Linie liegt am unteren Rand jedes 28px-Bandes (bei 27px).
@@ -836,8 +841,7 @@
     for (const obj of sorted) {
       el.canvasSurface.insertBefore(buildObjectEl(note, obj), el.inkLayer);
     }
-    sizeInkLayer();
-    redrawInk(note);
+    updateSurfaceSize(note, true);
   }
 
   function findObjEl(id) {
@@ -1022,8 +1026,8 @@
     const dx = e.clientX - dragState.startX;
     const dy = e.clientY - dragState.startY;
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragState.moved = true;
-    obj.x = clamp(dragState.startObjX + dx, -obj.w + 40, SURFACE_W - 40);
-    obj.y = clamp(dragState.startObjY + dy, 0, SURFACE_H - 40);
+    obj.x = clamp(dragState.startObjX + dx, -obj.w + 40, MAX_OBJ_DIM - 40);
+    obj.y = clamp(dragState.startObjY + dy, 0, MAX_OBJ_DIM - 40);
     const objEl = findObjEl(obj.id);
     if (objEl) {
       objEl.style.left = `${obj.x}px`;
@@ -1040,6 +1044,7 @@
         childEl.style.top = `${childObj.y}px`;
       }
     }
+    updateSurfaceSize(note);
     redrawInk(note);
   }
 
@@ -1136,8 +1141,8 @@
     const [minW, minH] = MIN_SIZES[obj.type] || [60, 60];
     const dx = e.clientX - dragState.startX;
     const dy = e.clientY - dragState.startY;
-    obj.w = clamp(dragState.startW + dx, minW, SURFACE_W - obj.x);
-    obj.h = clamp(dragState.startH + dy, minH, SURFACE_H - obj.y);
+    obj.w = clamp(dragState.startW + dx, minW, MAX_OBJ_DIM - obj.x);
+    obj.h = clamp(dragState.startH + dy, minH, MAX_OBJ_DIM - obj.y);
     const objEl = findObjEl(obj.id);
     if (objEl) {
       objEl.style.width = `${obj.w}px`;
@@ -1157,6 +1162,7 @@
         childEl.style.height = `${child.h}px`;
       }
     }
+    updateSurfaceSize(note);
     redrawInk(note);
   }
 
@@ -1792,6 +1798,30 @@
     el.inkLayer.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
+  // Lässt die Fläche mitwachsen, wenn ein Objekt (z. B. eine vielseitige PDF)
+  // über die normale Seitengröße hinausragt – sonst würde das Vergrößern
+  // eines solchen Objekts an der festen Flächengröße (SURFACE_W/H) hängen
+  // bleiben bzw. wieder auf sie zurückschnappen.
+  function updateSurfaceSize(note, force) {
+    let w = BASE_SURFACE_W;
+    let h = BASE_SURFACE_H;
+    for (const obj of note.objects) {
+      w = Math.max(w, obj.x + obj.w + 40);
+      h = Math.max(h, obj.y + obj.h + 40);
+    }
+    // "force" wird beim Öffnen einer Notiz gebraucht: SURFACE_W/H sind
+    // Modul-weite Variablen, die von der zuvor angezeigten Notiz noch einen
+    // (ggf. größeren) Wert tragen können – ohne den Vergleich zu überspringen,
+    // würde eine kleinere Notiz danach fälschlich die zu große Fläche behalten.
+    if (!force && w === SURFACE_W && h === SURFACE_H) return;
+    SURFACE_W = w;
+    SURFACE_H = h;
+    el.canvasSurface.style.width = `${w}px`;
+    el.canvasSurface.style.height = `${h}px`;
+    sizeInkLayer();
+    redrawInk(note);
+  }
+
   function strokeAbsolutePoints(note, stroke) {
     if (!stroke.parentId) return stroke.points;
     const parent = getObj(note, stroke.parentId);
@@ -2391,7 +2421,7 @@
 
       const hint = document.createElement('div');
       hint.className = 'pdf-zoom-hint';
-      hint.textContent = 'Mausrad: Zoom · Umschalt + Ziehen: Verschieben';
+      hint.textContent = 'Mausrad: Zoom · Umschalt oder mittlere Maustaste + Ziehen: Verschieben';
       objEl.appendChild(hint);
       let hintTimer = null;
       viewport.addEventListener('mouseenter', () => {
@@ -2425,7 +2455,9 @@
       }, { passive: false });
 
       viewport.addEventListener('pointerdown', (e) => {
-        if (!e.shiftKey || (e.button !== undefined && e.button !== 0)) return;
+        const isMiddleButton = e.button === 1;
+        const isShiftLeftButton = e.shiftKey && (e.button === undefined || e.button === 0);
+        if (!isMiddleButton && !isShiftLeftButton) return;
         e.preventDefault();
         e.stopPropagation();
         selectObject(note, obj, objEl);
@@ -2578,6 +2610,7 @@
       const objEl = buildObjectEl(note, objData);
       el.canvasSurface.insertBefore(objEl, el.inkLayer);
       selectObject(note, objData, objEl);
+      updateSurfaceSize(note);
       schedulePersist();
       renderNoteList();
     } catch (err) {
