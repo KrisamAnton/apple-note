@@ -276,7 +276,6 @@
     editorEmpty: document.getElementById('editorEmpty'),
     editor: document.getElementById('editor'),
     titleInput: document.getElementById('titleInput'),
-    editorDate: document.getElementById('editorDate'),
     moveNoteBtn: document.getElementById('moveNoteBtn'),
     popoverBackdrop: document.getElementById('popoverBackdrop'),
     movePopover: document.getElementById('movePopover'),
@@ -302,6 +301,8 @@
     fontFamilyList: document.getElementById('fontFamilyList'),
     textStylePopoverBackdrop: document.getElementById('textStylePopoverBackdrop'),
     textStylePopover: document.getElementById('textStylePopover'),
+    pdfModePopoverBackdrop: document.getElementById('pdfModePopoverBackdrop'),
+    pdfModePopover: document.getElementById('pdfModePopover'),
     folderColorPopoverBackdrop: document.getElementById('folderColorPopoverBackdrop'),
     folderColorPopover: document.getElementById('folderColorPopover'),
     folderColorGrid: document.getElementById('folderColorGrid'),
@@ -727,7 +728,6 @@
     el.editorEmpty.hidden = true;
     el.editor.hidden = false;
     el.titleInput.value = note.title;
-    el.editorDate.textContent = formatDate(note.updatedAt);
     autoGrow(el.titleInput);
     renderCanvas(note);
   }
@@ -769,7 +769,6 @@
     note.updatedAt = Date.now();
     schedulePersist();
     renderNoteList();
-    el.editorDate.textContent = formatDate(note.updatedAt);
   }
 
   function deleteNote(id) {
@@ -2292,44 +2291,122 @@
   }
 
   function buildPdfContent(note, obj, objEl) {
-    const img = document.createElement('img');
-    img.className = 'canvas-image-el';
-    img.src = obj.src;
-    img.draggable = false;
-    objEl.appendChild(img);
-
-    const badge = document.createElement('div');
-    badge.className = 'pdf-badge';
     const pages = obj.pageCount > 1 ? `PDF · ${obj.pageCount} Seiten` : 'PDF';
-    badge.textContent = obj.fileName ? `${pages} · ${obj.fileName}` : pages;
-    objEl.appendChild(badge);
+
+    if (obj.variant === 'file') {
+      objEl.classList.add('pdf-file-chip');
+      const icon = document.createElement('div');
+      icon.className = 'pdf-file-chip-icon';
+      icon.innerHTML = '<svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M5 2h7l3 3v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zm6.5.6V6H15L11.5 2.6zM6.2 9.5h1.6c.9 0 1.5.5 1.5 1.4 0 .9-.6 1.4-1.5 1.4h-.7v1.6H6.2V9.5zm1 .9v1h.5c.3 0 .5-.2.5-.5s-.2-.5-.5-.5h-.5zm2.7-.9h1.4c1.2 0 1.9.7 1.9 2.2 0 1.5-.7 2.2-1.9 2.2H9.9V9.5zm1 .9v2.6h.3c.6 0 1-.4 1-1.3s-.4-1.3-1-1.3h-.3zm3-.9h2.3v.9h-1.3v.7h1.2v.9h-1.2v1.6h-1V9.5z"/></svg>';
+      objEl.appendChild(icon);
+      const text = document.createElement('div');
+      text.className = 'pdf-file-chip-text';
+      text.innerHTML = `<span class="pdf-file-chip-name">${escapeHtml(obj.fileName || 'PDF')}</span><span class="pdf-file-chip-pages">${pages}</span>`;
+      objEl.appendChild(text);
+    } else {
+      const img = document.createElement('img');
+      img.className = 'canvas-image-el';
+      img.src = obj.src;
+      img.draggable = false;
+      objEl.appendChild(img);
+
+      const badge = document.createElement('div');
+      badge.className = 'pdf-badge';
+      badge.textContent = obj.fileName ? `${pages} · ${obj.fileName}` : pages;
+      objEl.appendChild(badge);
+    }
 
     objEl.addEventListener('pointerdown', (e) => startObjectDrag(e, note, obj, objEl));
   }
 
-  async function addPdfObjectFromFile(file) {
+  // Rendert alle Seiten einer PDF-Datei in EIN einziges, hohes Bild (Seiten
+  // untereinander gestapelt, mit dünner Trennlinie) – wie das "Ausdruck
+  // einfügen" in OneNote, wo die ganze Datei sichtbar auf der Seite liegt.
+  async function renderPdfAllPages(pdf) {
+    const scale = 2;
+    const pageGap = 14;
+    // Jede Seite wird zuerst auf eine EIGENE Leinwand gerendert: pdf.js leert
+    // beim Rendern einer Seite die komplette übergebene Leinwand, daher würde
+    // ein direktes Zeichnen mehrerer Seiten nacheinander auf dieselbe große
+    // Leinwand (nur mit Transform-Versatz) die zuvor gezeichneten Seiten
+    // wieder löschen. Die fertigen Seiten-Bilder werden danach per drawImage
+    // zusammengesetzt.
+    const pages = [];
+    let maxWidth = 0;
+    let totalHeight = 0;
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale });
+      const pageCanvas = document.createElement('canvas');
+      pageCanvas.width = viewport.width;
+      pageCanvas.height = viewport.height;
+      await page.render({ canvasContext: pageCanvas.getContext('2d'), viewport }).promise;
+      pages.push({ canvas: pageCanvas, width: viewport.width, height: viewport.height });
+      maxWidth = Math.max(maxWidth, viewport.width);
+      totalHeight += viewport.height + (i > 1 ? pageGap : 0);
+    }
+    const renderCanvas = document.createElement('canvas');
+    renderCanvas.width = maxWidth;
+    renderCanvas.height = totalHeight;
+    const ctx = renderCanvas.getContext('2d');
+    ctx.fillStyle = '#e2e2e2';
+    ctx.fillRect(0, 0, maxWidth, totalHeight);
+    let offsetY = 0;
+    for (const p of pages) {
+      const offsetX = (maxWidth - p.width) / 2;
+      ctx.drawImage(p.canvas, offsetX, offsetY);
+      offsetY += p.height + pageGap;
+    }
+    return { src: renderCanvas.toDataURL('image/png'), width: maxWidth, height: totalHeight };
+  }
+
+  let pdfModeResolve = null;
+
+  function askPdfInsertMode() {
+    return new Promise((resolve) => {
+      pdfModeResolve = resolve;
+      el.pdfModePopoverBackdrop.hidden = false;
+    });
+  }
+
+  function resolvePdfInsertMode(mode) {
+    el.pdfModePopoverBackdrop.hidden = true;
+    if (pdfModeResolve) {
+      const resolve = pdfModeResolve;
+      pdfModeResolve = null;
+      resolve(mode);
+    }
+  }
+
+  async function addPdfObjectFromFile(file, dropPoint) {
     const note = currentNote();
     if (!note || !file) return;
     try {
       const pdfjsLib = await loadPdfJs();
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      const page = await pdf.getPage(1);
-      const viewport = page.getViewport({ scale: 2 });
-      const renderCanvas = document.createElement('canvas');
-      renderCanvas.width = viewport.width;
-      renderCanvas.height = viewport.height;
-      await page.render({ canvasContext: renderCanvas.getContext('2d'), viewport }).promise;
-      const src = renderCanvas.toDataURL('image/png');
 
-      const maxW = 360;
-      const scale = Math.min(1, maxW / viewport.width);
-      const w = Math.round(viewport.width * scale) || 200;
-      const h = Math.round(viewport.height * scale) || 260;
-      const { x, y } = nextPlacement(note, w, h);
+      const mode = await askPdfInsertMode();
+      if (!mode) return;
+
+      let src = null;
+      let w = 240;
+      let h = 60;
+      if (mode === 'pages') {
+        const rendered = await renderPdfAllPages(pdf);
+        const maxW = 360;
+        const scale = Math.min(1, maxW / rendered.width);
+        w = Math.round(rendered.width * scale) || 200;
+        h = Math.round(rendered.height * scale) || 260;
+        src = rendered.src;
+      }
+
+      const { x, y } = dropPoint
+        ? { x: clamp(dropPoint.x - w / 2, 0, Math.max(0, SURFACE_W - w)), y: clamp(dropPoint.y - h / 2, 0, Math.max(0, SURFACE_H - h)) }
+        : nextPlacement(note, w, h);
       const objData = {
         id: uid(), type: 'pdf', x, y, w, h, z: 0,
-        src, pageCount: pdf.numPages, fileName: file.name,
+        src, pageCount: pdf.numPages, fileName: file.name, variant: mode,
       };
       bringToFront(note, objData);
       note.objects.push(objData);
@@ -2668,6 +2745,27 @@
       deselectAll();
     });
 
+    // PDF-Dateien lassen sich direkt aus dem Dateisystem auf die Fläche ziehen.
+    el.canvasSurface.addEventListener('dragover', (e) => {
+      if (!e.dataTransfer || !e.dataTransfer.types.includes('Files')) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+      el.canvasSurface.classList.add('drag-over');
+    });
+    el.canvasSurface.addEventListener('dragleave', (e) => {
+      if (e.target === el.canvasSurface) el.canvasSurface.classList.remove('drag-over');
+    });
+    el.canvasSurface.addEventListener('drop', (e) => {
+      el.canvasSurface.classList.remove('drag-over');
+      const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
+      const pdfFile = files.find((f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+      if (!pdfFile) return;
+      e.preventDefault();
+      const rect = el.canvasSurface.getBoundingClientRect();
+      const point = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      addPdfObjectFromFile(pdfFile, point);
+    });
+
     el.drawModeBtn.addEventListener('click', toggleDrawMode);
     el.inkLayer.addEventListener('pointerdown', (e) => {
       if (drawTool === 'select') startLasso(e);
@@ -2709,6 +2807,14 @@
         closeTextStylePopover();
         addTextObject(item.dataset.style);
       }
+    });
+
+    el.pdfModePopoverBackdrop.addEventListener('click', (e) => {
+      if (e.target === el.pdfModePopoverBackdrop) resolvePdfInsertMode(null);
+    });
+    el.pdfModePopover.addEventListener('click', (e) => {
+      const item = e.target.closest('.popover-item-rich');
+      if (item) resolvePdfInsertMode(item.dataset.mode);
     });
 
     el.folderColorPopoverBackdrop.addEventListener('click', (e) => {

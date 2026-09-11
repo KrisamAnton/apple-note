@@ -73,11 +73,18 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
   ziehen; die eingestellten Breiten bleiben über einen Neuladen hinweg
   erhalten
   - **Bild**: aus der Fotomediathek/Dateien einfügen
-  - **PDF**: einfügen als Vorschaubild der ersten Seite (mit Datei-
-    /Seitenzahl-Badge); wird wie ein Bild-Objekt behandelt
+  - **PDF**: über den Werkzeugleisten-Button oder per Drag & Drop direkt
+    aus dem Dateisystem auf die Fläche ziehen. Danach wird gefragt, ob
+    nur die Datei als kompakte Ablage (Symbol mit Dateiname/Seitenzahl)
+    abgelegt werden soll, oder ob alle Seiten der PDF vollständig
+    untereinander auf die Fläche gedruckt werden sollen (wie „Ausdruck
+    einfügen" in OneNote) – beide Varianten lassen sich frei verschieben
   - Text lässt sich auf ein Bild oder ein PDF ziehen, um ihn dort als
     Beschriftung anzuheften – er bewegt und skaliert sich dann mit dem
-    Objekt mit, bleibt aber jederzeit per Doppelklick editierbar
+    Objekt mit, bleibt aber jederzeit per Doppelklick editierbar. Auf
+    einer als Seiten eingefügten PDF lässt sich außerdem direkt zeichnen
+    (Zeichnen-Modus) – Text und Zeichnung funktionieren gleichzeitig und
+    beides kann genau wie bei einem Bild an der PDF verankert werden
 - **Zeichnen-Modus** (Stift-Symbol) für die ganze Fläche: mit Finger
   (Touch) oder Stift (z. B. Apple Pencil, inkl. Druckstärke) direkt auf
   der Fläche zeichnen – auch über Bildern/PDFs. Farbwahl, Radiergummi,
@@ -102,9 +109,6 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
   kleinen Bildschirmen
 - Als PWA installierbar ("Zum Home-Bildschirm hinzufügen" in Safari)
 - Funktioniert offline (App-Shell wird per Service Worker gecacht)
-
-**Bekannte Einschränkung:** Von einem PDF wird aktuell nur die erste
-Seite als Bild dargestellt (kein Blättern durch mehrseitige PDFs).
 
 ## Daten
 

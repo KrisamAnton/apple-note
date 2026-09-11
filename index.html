@@ -74,12 +74,6 @@
 
       <article class="editor" id="editor" hidden>
         <div class="editor-toolbar ribbon">
-          <div class="ribbon-group">
-            <span class="editor-date" id="editorDate"></span>
-          </div>
-
-          <div class="ribbon-divider"></div>
-
           <div class="ribbon-group" id="formatGroup">
             <button class="toolbar-btn" id="headingBtn" type="button" disabled aria-label="Formatvorlage (Überschrift)" title="Formatvorlage (Überschrift)">
               <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><text x="1.5" y="15" font-size="13" font-weight="800" fill="currentColor">H</text></svg>
@@ -235,6 +229,23 @@
         <button type="button" class="popover-item popover-item-rich" data-style="free">
           <span class="popover-item-title">Freier Text</span>
           <span class="popover-item-desc">Text ohne sichtbaren Rahmen, liegt direkt auf der Fläche – ideal zum Beschriften auf linierten Seiten.</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PDF-Einfügeart -->
+  <div class="popover-backdrop" id="pdfModePopoverBackdrop" hidden>
+    <div class="popover popover-wide" id="pdfModePopover">
+      <p class="popover-title">PDF einfügen</p>
+      <div class="popover-list">
+        <button type="button" class="popover-item popover-item-rich" data-mode="pages">
+          <span class="popover-item-title">Alle Seiten anzeigen</span>
+          <span class="popover-item-desc">Die ganze PDF wird optisch auf die Fläche gedruckt (alle Seiten untereinander) – du kannst direkt darauf zeichnen oder Text platzieren.</span>
+        </button>
+        <button type="button" class="popover-item popover-item-rich" data-mode="file">
+          <span class="popover-item-title">Nur Datei ablegen</span>
+          <span class="popover-item-desc">Kompakte Ablage als Datei-Symbol, ohne die Seiten anzuzeigen.</span>
         </button>
       </div>
     </div>
