@@ -744,6 +744,10 @@ textarea {
   width: 1600px;
   height: 2200px;
   background-color: var(--bg-editor);
+  /* Erlaubt Wischen (Scrollen) und Kneif-Zoom weiterhin nativ, unterdrückt
+     aber den Doppel-Tipp-Zoom auf der leeren Fläche – der würde sonst mit
+     dem eigenen "Tipp erzeugt Text"-Verhalten kollidieren. */
+  touch-action: manipulation;
 }
 
 .canvas-surface[data-bg="dots"] {

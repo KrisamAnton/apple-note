@@ -124,6 +124,10 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
 - Helles und dunkles Erscheinungsbild (folgt den Systemeinstellungen)
 - Responsive: Split-View auf iPad/Desktop, Einzelspalten-Navigation auf
   kleinen Bildschirmen
+- **Kneif-Zoom** auf der Fläche (50–400 %): für eine bessere Übersicht
+  herauszoomen und gezielt in den benötigten Bereich hineinzoomen –
+  auf der leeren Fläche selbst ist dabei nur der Doppel-Tipp-Zoom
+  deaktiviert (der würde sonst mit "Tipp erzeugt Text" kollidieren)
 - Als PWA installierbar ("Zum Home-Bildschirm hinzufügen" in Safari)
 - Funktioniert offline (App-Shell wird per Service Worker gecacht)
 
