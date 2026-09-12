@@ -102,6 +102,11 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
     einer als Seiten eingefügten PDF lässt sich außerdem direkt zeichnen
     (Zeichnen-Modus) – Text und Zeichnung funktionieren gleichzeitig und
     beides kann genau wie bei einem Bild an der PDF verankert werden
+- **Sprachnotizen aufnehmen**: über das Mikrofon-Symbol im Ribbon direkt im
+  Browser aufnehmen (nochmal klicken zum Beenden, der Button pulsiert rot
+  währenddessen). Die Aufnahme wird als eigenes Objekt mit Abspiel-Player an
+  der aktuellen Position auf der Fläche abgelegt – so lässt sie sich genau
+  neben dem passenden Textabschnitt platzieren
 - **Zeichnen-Modus** (Stift-Symbol) für die ganze Fläche: mit Finger
   (Touch) oder Stift (z. B. Apple Pencil, inkl. Druckstärke) direkt auf
   der Fläche zeichnen – auch über Bildern/PDFs. Farbwahl, Radiergummi,

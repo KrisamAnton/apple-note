@@ -1219,6 +1219,74 @@ textarea {
   color: var(--text-tertiary);
 }
 
+/* Audio-Objekt */
+
+.canvas-object[data-type="audio"] {
+  border-color: var(--border);
+  background: var(--bg-elevated);
+  touch-action: none;
+}
+
+.audio-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.audio-chip-icon {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.audio-chip-icon .icon,
+.audio-chip-icon svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.audio-chip-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.audio-chip-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.audio-chip-player {
+  width: 100%;
+  height: 32px;
+}
+
+/* Aufnahme-Button in der Werkzeugleiste: pulsiert rot, solange aufgenommen wird */
+.toolbar-btn.recording-active {
+  color: #fff;
+  background: var(--danger);
+  animation: recording-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes recording-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
 /* Ablagefläche beim Drag&Drop von Dateien hervorheben */
 .canvas-surface.drag-over {
   outline: 3px dashed var(--accent);

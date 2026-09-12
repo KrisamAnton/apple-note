@@ -31,6 +31,7 @@
     heading: '<svg viewBox="0 0 20 20"><text x="1.5" y="15" font-size="13" font-weight="800" fill="currentColor">H</text></svg>',
     openFile: '<svg viewBox="0 0 20 20"><path d="M8 3H4.5A1.5 1.5 0 0 0 3 4.5v11A1.5 1.5 0 0 0 4.5 17h11a1.5 1.5 0 0 0 1.5-1.5V12h-1.5v3.5h-11v-11H8V3z" fill="currentColor"/><path d="M11 3h6v6h-1.5V5.6l-6.15 6.15-1.06-1.06L14.44 4.5H11V3z" fill="currentColor"/></svg>',
     grip: '<svg viewBox="0 0 20 20"><circle cx="6" cy="6" r="1.5"/><circle cx="10" cy="6" r="1.5"/><circle cx="14" cy="6" r="1.5"/><circle cx="6" cy="14" r="1.5"/><circle cx="10" cy="14" r="1.5"/><circle cx="14" cy="14" r="1.5"/></svg>',
+    mic: '<svg viewBox="0 0 20 20"><path d="M10 2.5a2.5 2.5 0 0 0-2.5 2.5v4a2.5 2.5 0 0 0 5 0V5A2.5 2.5 0 0 0 10 2.5z" fill="currentColor"/><path d="M5.5 9v.5a4.5 4.5 0 0 0 9 0V9H16v.5a6 6 0 0 1-5.25 5.95V17.5h-1.5v-2.05A6 6 0 0 1 4 9.5V9h1.5z" fill="currentColor"/></svg>',
   };
 
   const MARKER_COLORS = [
@@ -355,6 +356,7 @@
     imageFileInput: document.getElementById('imageFileInput'),
     addPdfBtn: document.getElementById('addPdfBtn'),
     pdfFileInput: document.getElementById('pdfFileInput'),
+    addAudioBtn: document.getElementById('addAudioBtn'),
     backgroundBtn: document.getElementById('backgroundBtn'),
     backgroundPopoverBackdrop: document.getElementById('backgroundPopoverBackdrop'),
     backgroundPopover: document.getElementById('backgroundPopover'),
@@ -391,6 +393,7 @@
     if (note.ink && note.ink.strokes && note.ink.strokes.length > 0) return 'Skizze';
     if (note.objects.some((o) => o.type === 'image')) return 'Bild';
     if (note.objects.some((o) => o.type === 'pdf')) return 'PDF';
+    if (note.objects.some((o) => o.type === 'audio')) return 'Sprachnotiz';
     return '';
   }
 
@@ -949,6 +952,7 @@
     if (obj.type === 'text') buildTextContent(note, obj, objEl, autoFocusText);
     else if (obj.type === 'image') buildImageContent(note, obj, objEl);
     else if (obj.type === 'pdf') buildPdfContent(note, obj, objEl);
+    else if (obj.type === 'audio') buildAudioContent(note, obj, objEl);
 
     const handle = document.createElement('div');
     handle.className = 'resize-handle';
@@ -2433,6 +2437,39 @@
     objEl.addEventListener('pointerdown', (e) => startObjectDrag(e, note, obj, objEl));
   }
 
+  // ----- Audio-Objekt -----
+
+  function buildAudioContent(note, obj, objEl) {
+    objEl.classList.add('audio-chip');
+
+    const icon = document.createElement('div');
+    icon.className = 'audio-chip-icon';
+    icon.innerHTML = ICONS.mic;
+    objEl.appendChild(icon);
+
+    const info = document.createElement('div');
+    info.className = 'audio-chip-info';
+
+    const title = document.createElement('div');
+    title.className = 'audio-chip-title';
+    title.textContent = obj.fileName || 'Sprachnotiz';
+    info.appendChild(title);
+
+    const audio = document.createElement('audio');
+    audio.className = 'audio-chip-player';
+    audio.controls = true;
+    audio.preload = 'metadata';
+    audio.src = obj.src;
+    // Sonst würde jede Bedienung des Players (Play, Ziehen am Zeitstrahl) das
+    // ganze Objekt statt nur den Player mitziehen.
+    audio.addEventListener('pointerdown', (e) => e.stopPropagation());
+    info.appendChild(audio);
+
+    objEl.appendChild(info);
+
+    objEl.addEventListener('pointerdown', (e) => startObjectDrag(e, note, obj, objEl));
+  }
+
   // ----- PDF-Objekt -----
 
   let pdfJsLoadPromise = null;
@@ -2763,6 +2800,102 @@
     }
   }
 
+  // ----- Audio-Aufnahme -----
+
+  let activeRecording = null; // { mediaRecorder, stream }
+
+  function pickAudioMimeType() {
+    const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'];
+    for (const type of candidates) {
+      if (window.MediaRecorder && MediaRecorder.isTypeSupported(type)) return type;
+    }
+    return '';
+  }
+
+  function audioFileExtension(mimeType) {
+    if (mimeType.includes('mp4')) return 'm4a';
+    if (mimeType.includes('ogg')) return 'ogg';
+    return 'webm';
+  }
+
+  function updateRecordButtonUI(recording) {
+    if (!el.addAudioBtn) return;
+    el.addAudioBtn.classList.toggle('recording-active', recording);
+    el.addAudioBtn.title = recording ? 'Aufnahme beenden' : 'Sprachnotiz aufnehmen';
+  }
+
+  async function toggleAudioRecording() {
+    if (activeRecording) {
+      activeRecording.mediaRecorder.stop();
+      activeRecording = null;
+      updateRecordButtonUI(false);
+      return;
+    }
+    const note = currentNote();
+    if (!note) return;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert('Audioaufnahme wird von diesem Browser nicht unterstützt.');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = pickAudioMimeType();
+      const mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      const chunks = [];
+      mediaRecorder.addEventListener('dataavailable', (e) => {
+        if (e.data && e.data.size > 0) chunks.push(e.data);
+      });
+      mediaRecorder.addEventListener('stop', () => {
+        stream.getTracks().forEach((track) => track.stop());
+        finishAudioRecording(note, chunks, mediaRecorder.mimeType || mimeType);
+      });
+      mediaRecorder.start();
+      activeRecording = { mediaRecorder, stream };
+      updateRecordButtonUI(true);
+    } catch (err) {
+      console.error('Mikrofon konnte nicht gestartet werden:', err);
+      alert('Zugriff auf das Mikrofon war nicht möglich. Bitte erlaube den Mikrofonzugriff für diese Seite.');
+    }
+  }
+
+  async function finishAudioRecording(note, chunks, mimeType) {
+    if (!chunks.length) return;
+    const blob = new Blob(chunks, { type: mimeType || 'audio/webm' });
+    if (blob.size === 0) return;
+    try {
+      const ext = audioFileExtension(mimeType || '');
+      const src = await uploadFile(blob, `aufnahme-${Date.now()}.${ext}`);
+      // Falls die Notiz inzwischen gelöscht wurde (während der Aufnahme lief),
+      // die Aufnahme nicht stillschweigend verwerfen, sondern melden.
+      if (!state.notes.includes(note)) {
+        alert('Die Notiz, in der aufgenommen wurde, existiert nicht mehr. Die Aufnahme konnte nicht zugeordnet werden.');
+        return;
+      }
+      const w = 300;
+      const h = 72;
+      const { x, y } = nextPlacement(note, w, h);
+      const obj = {
+        id: uid(), type: 'audio', x, y, w, h, z: 0, src,
+        fileName: `Sprachnotiz ${new Date().toLocaleString('de-AT')}`,
+      };
+      bringToFront(note, obj);
+      note.objects.push(obj);
+      // Nur ins DOM einfügen, wenn diese Notiz gerade tatsächlich angezeigt wird –
+      // sonst würde das Objekt in der Fläche einer anderen, gerade offenen Notiz
+      // auftauchen, falls währenddessen die Notiz gewechselt wurde.
+      if (currentNote() === note) {
+        const objEl = buildObjectEl(note, obj);
+        el.canvasSurface.insertBefore(objEl, el.inkLayer);
+        selectObject(note, obj, objEl);
+      }
+      schedulePersist();
+      renderNoteList();
+    } catch (err) {
+      console.error('Aufnahme konnte nicht gespeichert werden:', err);
+      alert('Die Aufnahme konnte nicht gespeichert werden.');
+    }
+  }
+
   function deleteObject(note, id) {
     if (!confirm('Objekt löschen?')) return;
     for (const o of note.objects) {
@@ -3011,6 +3144,7 @@
       if (file) addPdfObjectFromFile(file);
       el.pdfFileInput.value = '';
     });
+    el.addAudioBtn.addEventListener('click', toggleAudioRecording);
     // Klick/Tipp auf die leere Fläche legt sofort freien Text an (wie in OneNote) –
     // ABER erst, wenn feststeht, dass es wirklich ein Tipp war (kurz, ohne Bewegung,
     // nur ein Finger). Sonst wäre auf Touch-Geräten jedes Wischen zum Scrollen oder
