@@ -1229,9 +1229,11 @@ textarea {
 
 .audio-chip {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   padding: 10px 12px;
+  height: 100%;
+  overflow: hidden;
 }
 
 .audio-chip-icon {
@@ -1259,6 +1261,8 @@ textarea {
   gap: 4px;
   min-width: 0;
   flex: 1;
+  height: 100%;
+  min-height: 0;
 }
 
 .audio-chip-title {
@@ -1268,11 +1272,47 @@ textarea {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: none;
 }
 
 .audio-chip-player {
   width: 100%;
   height: 32px;
+  flex: none;
+}
+
+.audio-transcript {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  touch-action: pan-y;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.audio-transcript-status {
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+.audio-transcript-line {
+  margin-bottom: 4px;
+}
+
+.audio-transcript-speaker {
+  border: none;
+  background: none;
+  padding: 0;
+  font-weight: 700;
+  color: var(--accent-strong);
+  cursor: pointer;
+}
+
+.audio-transcript-speaker:hover {
+  text-decoration: underline;
 }
 
 /* Aufnahme-Button in der Werkzeugleiste: pulsiert rot, solange aufgenommen wird */

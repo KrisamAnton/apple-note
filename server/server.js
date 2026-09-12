@@ -1,6 +1,8 @@
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const os = require('os');
+const { spawn } = require('child_process');
 const express = require('express');
 const multer = require('multer');
 
@@ -90,6 +92,81 @@ app.use((err, req, res, next) => {
   }
   next();
 });
+
+// ---------- Transkription (Sprachnotizen -> Text + Sprechererkennung) ----------
+//
+// Läuft als eigener Python-Prozess (transcribe.py, faster-whisper + optional
+// pyannote.audio), da das die einzigen ausgereiften Werkzeuge dafür sind.
+// Jobs laufen strikt nacheinander (nie parallel) und mit niedrigster
+// Prozess-Priorität, damit eine lange Transkription den Rest des Servers
+// (und andere Dienste auf demselben Host) nicht ausbremst.
+
+const transcriptionJobs = new Map(); // jobId -> { status, result?, error? }
+let transcriptionQueue = Promise.resolve();
+
+app.post('/api/transcribe', (req, res) => {
+  const { url } = req.body || {};
+  if (typeof url !== 'string' || !url.startsWith('/files/')) {
+    return res.status(400).json({ error: 'Ungültige Audio-URL' });
+  }
+  const filePath = path.join(FILES_DIR, path.basename(url));
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'Audiodatei nicht gefunden' });
+  }
+  const jobId = crypto.randomUUID();
+  transcriptionJobs.set(jobId, { status: 'queued' });
+  transcriptionQueue = transcriptionQueue.then(() => runTranscriptionJob(jobId, filePath));
+  res.json({ jobId });
+});
+
+app.get('/api/transcribe/:jobId', (req, res) => {
+  const job = transcriptionJobs.get(req.params.jobId);
+  if (!job) return res.status(404).json({ error: 'Unbekannter Job' });
+  res.json(job);
+});
+
+function runTranscriptionJob(jobId, filePath) {
+  return new Promise((resolve) => {
+    transcriptionJobs.set(jobId, { status: 'processing' });
+    const scriptPath = path.join(__dirname, 'transcribe.py');
+    const child = spawn('python3', [scriptPath, filePath], { env: process.env });
+    try {
+      os.setPriority(child.pid, 19); // niedrigste Priorität (siehe Kommentar oben)
+    } catch (e) {
+      // Manche Plattformen unterstützen das nicht - dann läuft der Job einfach
+      // mit normaler Priorität weiter, kein Grund abzubrechen.
+    }
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (d) => { stdout += d; });
+    child.stderr.on('data', (d) => { stderr += d; });
+    child.on('error', (err) => {
+      console.error('Transkription konnte nicht gestartet werden:', err.message);
+      transcriptionJobs.set(jobId, { status: 'error', error: 'python3 konnte nicht gestartet werden' });
+      resolve();
+    });
+    child.on('close', (code) => {
+      if (code !== 0) {
+        console.error('Transkription fehlgeschlagen:', stderr || `Exit-Code ${code}`);
+        transcriptionJobs.set(jobId, { status: 'error', error: 'Transkription fehlgeschlagen (siehe Server-Log)' });
+        return resolve();
+      }
+      try {
+        const lastLine = stdout.trim().split('\n').pop();
+        const result = JSON.parse(lastLine);
+        if (result.error) {
+          transcriptionJobs.set(jobId, { status: 'error', error: result.error });
+        } else {
+          transcriptionJobs.set(jobId, { status: 'done', result });
+        }
+      } catch (e) {
+        console.error('Ungültige Antwort der Transkription:', stdout);
+        transcriptionJobs.set(jobId, { status: 'error', error: 'Ungültige Antwort der Transkription' });
+      }
+      resolve();
+    });
+  });
+}
 
 app.use(express.static(PROJECT_ROOT));
 

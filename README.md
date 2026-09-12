@@ -107,6 +107,14 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
   währenddessen). Die Aufnahme wird als eigenes Objekt mit Abspiel-Player an
   der aktuellen Position auf der Fläche abgelegt – so lässt sie sich genau
   neben dem passenden Textabschnitt platzieren
+  - **In Text umwandeln**: über den Knopf am Aufnahme-Objekt eine
+    Transkription im Hintergrund anstoßen (läuft lokal auf dem Server, auch
+    bei langen Aufnahmen von 30–90 Minuten – dauert dann einfach
+    entsprechend länger, ohne den Rest der App zu blockieren). Ist ein
+    Hugging-Face-Zugriffstoken hinterlegt (siehe „Self-Hosting" unten), wird
+    zusätzlich versucht, verschiedene Sprecher zu erkennen (Sprecher 1, 2, …);
+    jeder Sprecher-Name im Transkript lässt sich anklicken, um ihn
+    umzubenennen
 - **Zeichnen-Modus** (Stift-Symbol) für die ganze Fläche: mit Finger
   (Touch) oder Stift (z. B. Apple Pencil, inkl. Druckstärke) direkt auf
   der Fläche zeichnen – auch über Bildern/PDFs. Farbwahl, Radiergummi,
@@ -216,6 +224,31 @@ internen Server-Port weiterleiten. Alle Notizdaten und hochgeladenen
 Dateien liegen unter `server/../data/` (per Umgebungsvariable
 `DATA_DIR` änderbar) – dieses Verzeichnis sollte regelmäßig gesichert
 werden.
+
+### Transkription einrichten (optional)
+
+Damit „In Text umwandeln" funktioniert, muss zusätzlich Python 3 mit
+den Paketen aus `server/requirements.txt` installiert sein (siehe die
+Kommentare dort für den genauen `pip3`-Befehl – CPU-only, spart
+Speicherplatz). Ohne weitere Einrichtung wird nur der reine Text
+erkannt (ein Sprecher). Für die Sprechererkennung zusätzlich:
+
+1. Kostenlosen Account auf [huggingface.co](https://huggingface.co) anlegen.
+2. Den Nutzungsbedingungen von
+   [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1)
+   zustimmen (Button auf der Modell-Seite).
+3. Unter [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
+   ein Zugriffstoken (Read) erstellen.
+4. Als Umgebungsvariable `HF_TOKEN` für den Server hinterlegen (z. B. im
+   systemd-Service).
+
+Die Modellgröße für die Texterkennung lässt sich über `WHISPER_MODEL`
+einstellen (Standard: `medium` – gute Qualität, läuft auf einer
+modernen CPU ohne Grafikkarte in etwa 1-3-facher Aufnahmedauer;
+`small` ist schneller, aber etwas ungenauer). Transkriptionen laufen
+serverseitig strikt nacheinander und mit niedrigster Prozess-Priorität,
+damit eine lange Aufnahme weder die App selbst noch andere Dienste auf
+demselben Server ausbremst.
 
 ## Nächste Schritte
 

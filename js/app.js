@@ -32,6 +32,7 @@
     openFile: '<svg viewBox="0 0 20 20"><path d="M8 3H4.5A1.5 1.5 0 0 0 3 4.5v11A1.5 1.5 0 0 0 4.5 17h11a1.5 1.5 0 0 0 1.5-1.5V12h-1.5v3.5h-11v-11H8V3z" fill="currentColor"/><path d="M11 3h6v6h-1.5V5.6l-6.15 6.15-1.06-1.06L14.44 4.5H11V3z" fill="currentColor"/></svg>',
     grip: '<svg viewBox="0 0 20 20"><circle cx="6" cy="6" r="1.5"/><circle cx="10" cy="6" r="1.5"/><circle cx="14" cy="6" r="1.5"/><circle cx="6" cy="14" r="1.5"/><circle cx="10" cy="14" r="1.5"/><circle cx="14" cy="14" r="1.5"/></svg>',
     mic: '<svg viewBox="0 0 20 20"><path d="M10 2.5a2.5 2.5 0 0 0-2.5 2.5v4a2.5 2.5 0 0 0 5 0V5A2.5 2.5 0 0 0 10 2.5z" fill="currentColor"/><path d="M5.5 9v.5a4.5 4.5 0 0 0 9 0V9H16v.5a6 6 0 0 1-5.25 5.95V17.5h-1.5v-2.05A6 6 0 0 1 4 9.5V9h1.5z" fill="currentColor"/></svg>',
+    transcript: '<svg viewBox="0 0 20 20"><path d="M3 4h14v1.6H3V4zm0 4.2h14v1.6H3V8.2zm0 4.2h9v1.6H3v-1.6z" fill="currentColor"/></svg>',
   };
 
   const MARKER_COLORS = [
@@ -945,6 +946,9 @@
     mainToolbar.appendChild(makeMoveHandle(note, obj, objEl));
     if (obj.type === 'pdf' && obj.fileData) {
       mainToolbar.appendChild(makeToolbarBtn(ICONS.openFile, false, () => openPdfFile(obj), 'PDF öffnen'));
+    }
+    if (obj.type === 'audio') {
+      mainToolbar.appendChild(makeToolbarBtn(ICONS.transcript, false, () => startTranscription(note, obj, objEl), 'In Text umwandeln'));
     }
     mainToolbar.appendChild(makeToolbarBtn(ICONS.trash, true, () => deleteObject(note, obj.id), 'Löschen'));
     objEl.appendChild(mainToolbar);
@@ -2468,6 +2472,130 @@
     objEl.appendChild(info);
 
     objEl.addEventListener('pointerdown', (e) => startObjectDrag(e, note, obj, objEl));
+
+    if (obj.transcriptStatus) {
+      renderAudioTranscriptUI(note, obj, objEl);
+      // Falls die Seite während einer laufenden Transkription neu geladen wurde,
+      // hier weiter auf das Ergebnis warten statt es zu verlieren.
+      if (obj.transcriptStatus === 'processing' && obj.transcriptJobId) {
+        pollTranscription(note, obj, objEl);
+      }
+    }
+  }
+
+  function renameSpeaker(note, obj, objEl, speakerKey) {
+    const current = (obj.speakerNames && obj.speakerNames[speakerKey]) || speakerKey;
+    const name = prompt('Name für diesen Sprecher:', current);
+    if (name === null) return;
+    if (!obj.speakerNames) obj.speakerNames = {};
+    obj.speakerNames[speakerKey] = name.trim() || speakerKey;
+    schedulePersist();
+    renderAudioTranscriptUI(note, obj, objEl);
+  }
+
+  function renderAudioTranscriptUI(note, obj, objEl) {
+    const info = objEl.querySelector('.audio-chip-info');
+    if (!info) return;
+    let area = info.querySelector('.audio-transcript');
+    if (!area) {
+      area = document.createElement('div');
+      area.className = 'audio-transcript';
+      // Sonst würde ein Scrollen im (evtl. langen) Transkript als Ziehen des
+      // ganzen Objekts interpretiert, siehe audio-chip-player weiter oben.
+      area.addEventListener('pointerdown', (e) => e.stopPropagation());
+      info.appendChild(area);
+    }
+    if (obj.transcriptStatus === 'processing') {
+      area.className = 'audio-transcript audio-transcript-status';
+      area.textContent = 'Transkription läuft im Hintergrund … (kann bei langen Aufnahmen mehrere Stunden dauern)';
+    } else if (obj.transcriptStatus === 'error') {
+      area.className = 'audio-transcript audio-transcript-status';
+      area.textContent = `Transkription fehlgeschlagen: ${obj.transcriptError || 'unbekannter Fehler'}`;
+    } else if (obj.transcriptStatus === 'done' && obj.transcript) {
+      area.className = 'audio-transcript';
+      area.innerHTML = '';
+      obj.transcript.forEach((seg) => {
+        const line = document.createElement('div');
+        line.className = 'audio-transcript-line';
+        const speakerBtn = document.createElement('button');
+        speakerBtn.type = 'button';
+        speakerBtn.className = 'audio-transcript-speaker';
+        const label = (obj.speakerNames && obj.speakerNames[seg.speaker]) || seg.speaker || 'Sprecher';
+        speakerBtn.textContent = `${label}:`;
+        speakerBtn.title = 'Sprecher umbenennen';
+        speakerBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+        speakerBtn.addEventListener('click', () => renameSpeaker(note, obj, objEl, seg.speaker));
+        line.appendChild(speakerBtn);
+        line.appendChild(document.createTextNode(` ${seg.text}`));
+        area.appendChild(line);
+      });
+    }
+    // Fläche automatisch groß genug machen, damit das Transkript lesbar ist.
+    if (obj.transcriptStatus === 'done' && obj.h < 260) {
+      obj.h = 260;
+      applyObjRect(objEl, obj);
+      updateSurfaceSize(note);
+    }
+  }
+
+  function startTranscription(note, obj, objEl) {
+    if (obj.transcriptStatus === 'processing') return;
+    obj.transcriptStatus = 'processing';
+    obj.transcriptError = null;
+    schedulePersist();
+    renderAudioTranscriptUI(note, obj, objEl);
+    fetch('/api/transcribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: obj.src }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.jobId) throw new Error(data.error || 'Transkription konnte nicht gestartet werden');
+        obj.transcriptJobId = data.jobId;
+        schedulePersist();
+        pollTranscription(note, obj, objEl);
+      })
+      .catch((err) => {
+        console.error('Transkription konnte nicht gestartet werden:', err);
+        obj.transcriptStatus = 'error';
+        obj.transcriptError = 'Transkription konnte nicht gestartet werden.';
+        schedulePersist();
+        renderAudioTranscriptUI(note, obj, objEl);
+      });
+  }
+
+  function pollTranscription(note, obj, objEl) {
+    if (!obj.transcriptJobId) return;
+    const poll = () => {
+      // Objekt könnte inzwischen gelöscht worden sein - dann nicht weiter pollen.
+      if (!document.body.contains(objEl)) return;
+      fetch(`/api/transcribe/${obj.transcriptJobId}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.status === 'done') {
+            obj.transcriptStatus = 'done';
+            obj.transcript = data.result.segments;
+            obj.transcriptLanguage = data.result.language;
+            if (!obj.speakerNames) obj.speakerNames = {};
+            schedulePersist();
+            renderAudioTranscriptUI(note, obj, objEl);
+          } else if (data.status === 'error') {
+            obj.transcriptStatus = 'error';
+            obj.transcriptError = data.error || 'Unbekannter Fehler';
+            schedulePersist();
+            renderAudioTranscriptUI(note, obj, objEl);
+          } else {
+            setTimeout(poll, 4000);
+          }
+        })
+        .catch(() => setTimeout(poll, 8000));
+    };
+    // Verzögert statt sofort aufrufen: beim Wiederaufnehmen einer laufenden
+    // Transkription (aus buildAudioContent) ist objEl in diesem Moment noch
+    // nicht ins DOM eingehängt (das passiert erst im Aufrufer direkt danach) -
+    // der document.body.contains()-Check würde sonst fälschlich abbrechen.
+    setTimeout(poll, 0);
   }
 
   // ----- PDF-Objekt -----
@@ -2849,7 +2977,11 @@
         stream.getTracks().forEach((track) => track.stop());
         finishAudioRecording(note, chunks, mediaRecorder.mimeType || mimeType);
       });
-      mediaRecorder.start();
+      // Mit Zeitscheiben statt einem einzigen Blob am Ende aufnehmen: bei sehr
+      // langen Aufnahmen (30-90 Minuten) sinkt so das Risiko, bei einem Absturz
+      // alles auf einmal zu verlieren, und der Speicherbedarf im Tab bleibt
+      // gleichmäßiger statt am Ende in einem Rutsch anzufallen.
+      mediaRecorder.start(1000);
       activeRecording = { mediaRecorder, stream };
       updateRecordButtonUI(true);
     } catch (err) {

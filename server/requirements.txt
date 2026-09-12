@@ -1,0 +1,14 @@
+# Python-Abhängigkeiten für die Transkription (transcribe.py).
+# Installation auf dem Server (CPU-only, spart Speicherplatz/Downloadzeit
+# gegenüber der Standard-Installation mit CUDA-Unterstützung):
+#
+#   pip3 install torch --index-url https://download.pytorch.org/whl/cpu
+#   pip3 install -r requirements.txt
+#
+# Für die Sprechererkennung (optional, siehe HF_TOKEN in README) zusätzlich:
+# ein kostenloser Hugging-Face-Account, der Nutzungsbedingungen von
+# https://huggingface.co/pyannote/speaker-diarization-3.1 zugestimmt hat,
+# und ein Zugriffstoken von https://huggingface.co/settings/tokens.
+
+faster-whisper
+pyannote.audio
