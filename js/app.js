@@ -2444,12 +2444,18 @@
   // ----- Audio-Objekt -----
 
   function buildAudioContent(note, obj, objEl) {
-    objEl.classList.add('audio-chip');
+    // Eigener Wrapper statt objEl direkt: objEl trägt auch die schwebende
+    // Werkzeugleiste (position:absolute, oberhalb des Objekts) - würde das
+    // Zuschneiden (overflow:hidden) für das scrollbare Transkript direkt auf
+    // objEl liegen, würde es diese Werkzeugleiste mit abschneiden.
+    const body = document.createElement('div');
+    body.className = 'audio-chip-body';
+    objEl.appendChild(body);
 
     const icon = document.createElement('div');
     icon.className = 'audio-chip-icon';
     icon.innerHTML = ICONS.mic;
-    objEl.appendChild(icon);
+    body.appendChild(icon);
 
     const info = document.createElement('div');
     info.className = 'audio-chip-info';
@@ -2473,7 +2479,7 @@
     audio.addEventListener('pointerdown', (e) => e.stopPropagation());
     info.appendChild(audio);
 
-    objEl.appendChild(info);
+    body.appendChild(info);
 
     objEl.addEventListener('pointerdown', (e) => startObjectDrag(e, note, obj, objEl));
 

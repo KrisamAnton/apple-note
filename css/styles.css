@@ -1227,7 +1227,10 @@ textarea {
   touch-action: none;
 }
 
-.audio-chip {
+/* Eigener Innen-Wrapper statt objEl (=.audio-chip) selbst: objEl trägt auch
+   die schwebende Werkzeugleiste (position:absolute, oberhalb des Objekts) -
+   overflow:hidden direkt auf objEl würde die dadurch mit abschneiden. */
+.audio-chip-body {
   display: flex;
   align-items: flex-start;
   gap: 10px;
