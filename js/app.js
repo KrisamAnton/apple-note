@@ -2462,6 +2462,10 @@
     const audio = document.createElement('audio');
     audio.className = 'audio-chip-player';
     audio.controls = true;
+    // Verhindert den "Herunterladen"-Eintrag im nativen Kontextmenü des
+    // Players, der sonst wie ein eigener Bedienknopf aussieht und leicht mit
+    // einer Lösch-/Verwaltungsfunktion verwechselt wird.
+    audio.controlsList = 'nodownload';
     audio.preload = 'metadata';
     audio.src = obj.src;
     // Sonst würde jede Bedienung des Players (Play, Ziehen am Zeitstrahl) das
