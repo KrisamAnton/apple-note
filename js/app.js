@@ -2581,7 +2581,15 @@
       // Objekt könnte inzwischen gelöscht worden sein - dann nicht weiter pollen.
       if (!document.body.contains(objEl)) return;
       fetch(`/api/transcribe/${obj.transcriptJobId}`)
-        .then((res) => res.json())
+        .then((res) => {
+          // 404 = Job unbekannt, z. B. weil der Server währenddessen neu
+          // gestartet ist (Jobs werden nur im Arbeitsspeicher gehalten).
+          // Ohne diese Prüfung würde data.status undefined bleiben und der
+          // "sonst weiter warten"-Zweig unten den Job für immer weiterpollen,
+          // statt den Abbruch als Fehler zu melden.
+          if (res.status === 404) return { status: 'error', error: 'Auftrag nach Server-Neustart verloren gegangen. Bitte erneut versuchen.' };
+          return res.json();
+        })
         .then((data) => {
           if (data.status === 'done') {
             obj.transcriptStatus = 'done';
