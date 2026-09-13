@@ -129,7 +129,10 @@ function runTranscriptionJob(jobId, filePath) {
   return new Promise((resolve) => {
     transcriptionJobs.set(jobId, { status: 'processing' });
     const scriptPath = path.join(__dirname, 'transcribe.py');
-    const child = spawn('python3', [scriptPath, filePath], { env: process.env });
+    // PYTHON_BIN erlaubt, auf ein eigenes venv zu zeigen (empfohlen, da Debian
+    // ab Version 12 System-Python vor direkten pip-Installationen schützt).
+    const pythonBin = process.env.PYTHON_BIN || 'python3';
+    const child = spawn(pythonBin, [scriptPath, filePath], { env: process.env });
     try {
       os.setPriority(child.pid, 19); // niedrigste Priorität (siehe Kommentar oben)
     } catch (e) {
