@@ -141,8 +141,24 @@ function runTranscriptionJob(jobId, filePath) {
     }
     let stdout = '';
     let stderr = '';
+    let stderrBuffer = '';
     child.stdout.on('data', (d) => { stdout += d; });
-    child.stderr.on('data', (d) => { stderr += d; });
+    child.stderr.on('data', (d) => {
+      // "PROGRESS:0.42"-Zeilen sind Fortschrittsmeldungen fürs Frontend,
+      // alles andere ist echtes Log/Fehlerausgabe (siehe stderr-Sammlung).
+      stderrBuffer += d;
+      const lines = stderrBuffer.split('\n');
+      stderrBuffer = lines.pop(); // letzte, evtl. unvollständige Zeile aufheben
+      for (const line of lines) {
+        const match = line.match(/^PROGRESS:([\d.]+)$/);
+        if (match) {
+          const current = transcriptionJobs.get(jobId) || {};
+          transcriptionJobs.set(jobId, { ...current, status: 'processing', progress: parseFloat(match[1]) });
+        } else {
+          stderr += `${line}\n`;
+        }
+      }
+    });
     child.on('error', (err) => {
       console.error('Transkription konnte nicht gestartet werden:', err.message);
       transcriptionJobs.set(jobId, { status: 'error', error: 'python3 konnte nicht gestartet werden' });

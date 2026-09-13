@@ -2517,7 +2517,18 @@
     }
     if (obj.transcriptStatus === 'processing') {
       area.className = 'audio-transcript audio-transcript-status';
-      area.textContent = 'Transkription läuft im Hintergrund … (kann bei langen Aufnahmen mehrere Stunden dauern)';
+      area.innerHTML = '';
+      const percent = Math.round((obj.transcriptProgress || 0) * 100);
+      const label = document.createElement('div');
+      label.textContent = `Transkription läuft im Hintergrund … ${percent}% (kann bei langen Aufnahmen mehrere Stunden dauern)`;
+      area.appendChild(label);
+      const barTrack = document.createElement('div');
+      barTrack.className = 'audio-transcript-progress-track';
+      const barFill = document.createElement('div');
+      barFill.className = 'audio-transcript-progress-fill';
+      barFill.style.width = `${percent}%`;
+      barTrack.appendChild(barFill);
+      area.appendChild(barTrack);
     } else if (obj.transcriptStatus === 'error') {
       area.className = 'audio-transcript audio-transcript-status';
       area.textContent = `Transkription fehlgeschlagen: ${obj.transcriptError || 'unbekannter Fehler'}`;
@@ -2604,6 +2615,10 @@
             schedulePersist();
             renderAudioTranscriptUI(note, obj, objEl);
           } else {
+            if (typeof data.progress === 'number') {
+              obj.transcriptProgress = data.progress;
+              renderAudioTranscriptUI(note, obj, objEl);
+            }
             setTimeout(poll, 4000);
           }
         })
