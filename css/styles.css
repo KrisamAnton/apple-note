@@ -1133,9 +1133,14 @@ textarea {
   display: none !important;
 }
 
-/* Auch der Platzhaltertext ("Text ...") soll hier verschwinden - beim
-   Antippen der leeren Fläche soll wie in OneNote wirklich nur der blinkende
-   Cursor zu sehen sein, ohne jeden Hinweistext. */
+/* Der Platzhaltertext ("Text ...") aus der Basisregel soll hier nicht
+   erscheinen - beim Antippen der leeren Fläche soll wie in OneNote
+   wirklich nur der blinkende Cursor (und das KN-Badge danach) zu sehen
+   sein, ohne jeden Hinweistext. */
+.canvas-object[data-type="text"][data-style="free"] .canvas-text-body.is-empty::before {
+  content: "";
+}
+
 .canvas-object[data-type="text"][data-style="free"] .canvas-text-body.is-empty::after {
   content: "KN";
   display: inline-flex;
