@@ -1136,22 +1136,36 @@ textarea {
 /* Auch der Platzhaltertext ("Text ...") aus der Basisregel soll hier
    verschwinden - beim Antippen der leeren Fläche soll wie in OneNote nur
    das KN-Badge und danach (mit Abstand) der blinkende Cursor zu sehen
-   sein, ohne jeden Hinweistext. */
+   sein, ohne jeden Hinweistext.
+   Der Abstand zwischen Badge und Cursor wird bewusst NICHT über einen
+   margin auf dem Badge selbst erzeugt (das hat sich als unzuverlässig
+   erwiesen - der Cursor eines leeren contenteditable-Felds positioniert
+   sich nicht immer zuverlässig hinter dem margin eines ::before-Inhalts).
+   Stattdessen bekommt das Textfeld einen festen padding-left und das
+   Badge wird absolut darin platziert - so ist der Abstand zum Cursor
+   garantiert, weil er direkt aus dem padding-left des Textfelds folgt. */
+.canvas-object[data-type="text"][data-style="free"] .canvas-text-body.is-empty {
+  position: relative;
+  padding-left: 36px;
+}
+
 .canvas-object[data-type="text"][data-style="free"] .canvas-text-body.is-empty::before {
   content: "KN";
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 16px;
   height: 16px;
-  margin-right: 20px;
   border-radius: 50%;
   background: var(--accent);
   color: #fff;
   font-size: 8px;
   font-weight: 700;
   letter-spacing: -0.3px;
-  vertical-align: middle;
   pointer-events: none;
 }
 
