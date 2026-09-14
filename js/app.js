@@ -192,6 +192,7 @@
         if (parsed && Array.isArray(parsed.notes) && Array.isArray(parsed.folders)) {
           parsed.notes.forEach(migrateNote);
           sanitizeNoteParents(parsed.notes);
+          parsed.notes.forEach(pruneEmptyTextObjects);
           parsed.folders.forEach((f, i) => {
             if (!f.color) f.color = FOLDER_COLORS[i % FOLDER_COLORS.length].hex;
           });
@@ -262,6 +263,7 @@
   let persistFailWarningShown = false;
 
   async function persist() {
+    state.notes.forEach(pruneEmptyTextObjects);
     try {
       const res = await fetch('/api/state', {
         method: 'PUT',
@@ -1603,7 +1605,7 @@
     closeAllFormatPopovers();
     // Ein leer gebliebenes Textobjekt (z. B. durch Klick auf die Fläche ohne
     // anschließende Eingabe) hinterlässt keine unsichtbare Karteileiche.
-    if (note && !obj.text.trim() && !hasAttachedContent(note, obj.id)) {
+    if (note && isTextObjectEmpty(obj) && !hasAttachedContent(note, obj.id)) {
       note.objects = note.objects.filter((o) => o.id !== obj.id);
       if (selectedObjectId === obj.id) selectedObjectId = null;
       const objEl = findObjEl(obj.id);
@@ -1617,6 +1619,50 @@
     if (note.objects.some((o) => o.parentId === objId)) return true;
     if (note.ink.strokes.some((s) => s.parentId === objId)) return true;
     return false;
+  }
+
+  // "Leer" heißt: kein Text UND kein eingebettetes Inline-Bild - reiner
+  // Text-Check allein würde ein Textobjekt, das nur ein eingefügtes Bild ohne
+  // Begleittext enthält, fälschlich als leer einstufen (obj.text erfasst nur
+  // Textinhalt, keine <img>-Elemente).
+  function isTextObjectEmpty(obj) {
+    if (obj.text && obj.text.trim()) return false;
+    if (obj.html && /<img[\s>]/i.test(obj.html)) return false;
+    return true;
+  }
+
+  // Entfernt leer gebliebene Textobjekte, die durch einen Notizwechsel, ein
+  // Neuladen der Seite oder einen Server-Neustart mitten in der Bearbeitung
+  // nie ein reguläres blur() (und damit die Aufräum-Logik in exitTextEdit)
+  // durchlaufen haben und sonst für immer als unsichtbare/leere Karteileichen
+  // in den Daten hängen bleiben würden. Das gerade aktiv bearbeitete Objekt
+  // wird bewusst ausgenommen, damit ein kurz leerer, aber noch offener
+  // Cursor nicht mitten in der Eingabe verschwindet.
+  function pruneEmptyTextObjects(note) {
+    const keep = [];
+    const removedIds = [];
+    for (const o of note.objects) {
+      // Nicht nur die id vergleichen: activeTextEdit wird nur bei einem
+      // echten blur() zurückgesetzt (siehe exitTextEdit) - wechselt man die
+      // Notiz/Ansicht per Neu-Rendern statt per blur, würde sonst ein
+      // veraltetes activeTextEdit ein längst verlassenes leeres Objekt
+      // dauerhaft vor dem Aufräumen schützen. isConnected/contentEditable
+      // stellen sicher, dass es wirklich noch das gerade bearbeitete ist.
+      const isActive = activeTextEdit && activeTextEdit.obj.id === o.id &&
+        activeTextEdit.body.isConnected && activeTextEdit.body.contentEditable === 'true';
+      if (o.type === 'text' && isTextObjectEmpty(o) && !hasAttachedContent(note, o.id) && !isActive) {
+        removedIds.push(o.id);
+      } else {
+        keep.push(o);
+      }
+    }
+    if (removedIds.length === 0) return;
+    note.objects = keep;
+    for (const id of removedIds) {
+      if (selectedObjectId === id) selectedObjectId = null;
+      const objEl = findObjEl(id);
+      if (objEl) objEl.remove();
+    }
   }
 
   // Merkt sich die zuletzt markierte (nicht eingeklappte) Textauswahl im gerade
@@ -3681,6 +3727,7 @@
     // würde in persist() fälschlich als Speicherfehler gemeldet, obwohl beim
     // ganz normalen Neuladen der Seite gar nichts verloren geht).
     function persistViaBeacon() {
+      state.notes.forEach(pruneEmptyTextObjects);
       try {
         const ok = navigator.sendBeacon('/api/state', new Blob([JSON.stringify(state)], { type: 'application/json' }));
         if (!ok) persist();
