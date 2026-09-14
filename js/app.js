@@ -1504,6 +1504,23 @@
   }
 
   function wireInlineImageResize(img, handle) {
+    // Ein contentEditable="false"-Knoten (der Bild-Wrapper) bekommt beim
+    // Anklicken sonst keinen sauberen Selection-Zustand - der Cursor springt
+    // stattdessen an den Textanfang, und Entf/Rücktaste löschen dann dort statt
+    // das Bild. Per Klick den ganzen Wrapper explizit als Browser-Selection
+    // markieren, damit Entf/Rücktaste ihn wie in Word/OneNote nativ entfernen.
+    img.addEventListener('pointerdown', (e) => {
+      const body = img.closest('.canvas-text-body');
+      if (!body || body.contentEditable !== 'true') return;
+      e.preventDefault();
+      const wrap = img.closest('.inline-image-wrap') || img;
+      const sel = window.getSelection();
+      const range = document.createRange();
+      range.selectNode(wrap);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    });
+
     handle.addEventListener('pointerdown', (e) => {
       const body = img.closest('.canvas-text-body');
       if (!body || body.contentEditable !== 'true') return;
@@ -1613,6 +1630,22 @@
       activeTextEdit.body.contains(sel.getRangeAt(0).commonAncestorContainer);
     lastSelectionRange = valid ? sel.getRangeAt(0).cloneRange() : null;
     for (const btn of selectionFormatBtns()) btn.disabled = !valid;
+  });
+
+  // Entf/Rücktaste löscht das gerade ausgewählte Objekt (Bild/PDF/Audio/Text) -
+  // wie der Papierkorb-Knopf in seiner Werkzeugleiste. Greift bewusst nicht,
+  // solange ein Textfeld bearbeitet wird oder der Fokus in einem Eingabefeld
+  // liegt, damit Entf/Rücktaste dort ganz normal Zeichen löschen.
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+    if (activeTextEdit) return;
+    const ae = document.activeElement;
+    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+    if (!selectedObjectId) return;
+    const note = currentNote();
+    if (!note || !getObj(note, selectedObjectId)) return;
+    e.preventDefault();
+    deleteObject(note, selectedObjectId);
   });
 
   // Erweitert die Range-Grenzen nach außen auf die nächste Element-Ebene, solange sie
