@@ -1137,6 +1137,12 @@ textarea {
   content: none;
 }
 
+/* Auch die gelbliche Bearbeiten-Hervorhebung soll hier nicht erscheinen -
+   nur der Cursor, kein sichtbarer Hintergrund, solange noch nichts getippt wurde. */
+.canvas-object[data-type="text"][data-style="free"] .canvas-text-body.is-empty.editing {
+  background: transparent;
+}
+
 /* Bild-Objekt */
 
 .canvas-object[data-type="image"] {
