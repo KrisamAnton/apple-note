@@ -1294,6 +1294,60 @@ textarea {
   color: var(--text-tertiary);
 }
 
+/* Generischer Datei-Anhang (Word, Excel, ...) - gleiches Chip-Layout wie der
+   PDF-Datei-Anhang, nur mit je nach Dateityp eingefärbtem Symbol. */
+
+.canvas-object[data-type="file"] {
+  border-color: var(--border);
+  background: var(--bg-elevated);
+}
+
+.file-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.file-chip-icon {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-chip-icon .icon {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+.file-chip-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.file-chip-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-chip-kind {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
 /* Audio-Objekt */
 
 .canvas-object[data-type="audio"] {

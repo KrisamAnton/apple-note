@@ -360,6 +360,8 @@
     addPdfBtn: document.getElementById('addPdfBtn'),
     pdfFileInput: document.getElementById('pdfFileInput'),
     addAudioBtn: document.getElementById('addAudioBtn'),
+    addFileBtn: document.getElementById('addFileBtn'),
+    fileFileInput: document.getElementById('fileFileInput'),
     backgroundBtn: document.getElementById('backgroundBtn'),
     backgroundPopoverBackdrop: document.getElementById('backgroundPopoverBackdrop'),
     backgroundPopover: document.getElementById('backgroundPopover'),
@@ -914,8 +916,9 @@
     const mainToolbar = document.createElement('div');
     mainToolbar.className = 'object-toolbar object-toolbar-main';
     mainToolbar.appendChild(makeMoveHandle(note, obj, objEl));
-    if (obj.type === 'pdf' && obj.fileData) {
-      mainToolbar.appendChild(makeToolbarBtn(ICONS.openFile, false, () => openPdfFile(obj), 'PDF öffnen'));
+    if ((obj.type === 'pdf' || obj.type === 'file') && obj.fileData) {
+      const label = obj.type === 'pdf' ? 'PDF öffnen' : 'Datei öffnen';
+      mainToolbar.appendChild(makeToolbarBtn(ICONS.openFile, false, () => openAttachedFile(obj), label));
     }
     if (obj.type === 'audio') {
       mainToolbar.appendChild(makeToolbarBtn(ICONS.transcript, false, () => startTranscription(note, obj, objEl), 'In Text umwandeln'));
@@ -927,6 +930,7 @@
     else if (obj.type === 'image') buildImageContent(note, obj, objEl);
     else if (obj.type === 'pdf') buildPdfContent(note, obj, objEl);
     else if (obj.type === 'audio') buildAudioContent(note, obj, objEl);
+    else if (obj.type === 'file') buildFileContent(note, obj, objEl);
 
     const handle = document.createElement('div');
     handle.className = 'resize-handle';
@@ -1106,8 +1110,9 @@
     if (note && obj && obj.type === 'text' && dragState.moved) {
       updateAttachment(note, obj);
     }
-    if (note && obj && obj.type === 'pdf' && obj.variant === 'file' && !dragState.moved) {
-      openPdfFile(obj);
+    const isOpenableChip = obj && ((obj.type === 'pdf' && obj.variant === 'file') || obj.type === 'file');
+    if (note && obj && isOpenableChip && !dragState.moved) {
+      openAttachedFile(obj);
     }
     if (note && obj && dragState.moved) {
       const movedTextObjs = [obj, ...dragState.children.map((c) => getObj(note, c.id))]
@@ -2995,9 +3000,12 @@
     }
   }
 
-  // Öffnet die ursprüngliche PDF-Datei im normalen PDF-Reader des Browsers
-  // (neuer Tab). fileData ist eine ganz normale Server-URL, daher genügt window.open.
-  function openPdfFile(obj) {
+  // Öffnet die ursprüngliche Datei (PDF oder ein sonstiger Anhang wie Word/Excel)
+  // im Browser bzw. lädt sie herunter. fileData ist eine ganz normale
+  // Server-URL, daher genügt window.open - für Formate, die der Browser nicht
+  // selbst anzeigen kann (z. B. .docx), stößt das einen normalen Download an,
+  // den man danach lokal in Word öffnet.
+  function openAttachedFile(obj) {
     if (!obj.fileData) return;
     window.open(obj.fileData, '_blank');
   }
@@ -3047,6 +3055,71 @@
       console.error('PDF konnte nicht eingefügt werden:', err);
       alert('Diese PDF-Datei konnte nicht eingefügt werden.');
     }
+  }
+
+  // Farbe/Kürzel für den generischen Datei-Chip, angelehnt an die Farben der
+  // jeweiligen Office-App - rein optisch, damit man Word/Excel/PowerPoint auf
+  // einen Blick unterscheidet. Unbekannte Dateiendungen fallen auf ein
+  // neutrales Grau mit der Endung als Kürzel zurück.
+  const FILE_KIND_STYLES = {
+    doc: { label: 'WORD', color: '#2b579a' },
+    docx: { label: 'WORD', color: '#2b579a' },
+    xls: { label: 'EXCEL', color: '#217346' },
+    xlsx: { label: 'EXCEL', color: '#217346' },
+    ppt: { label: 'POWERPOINT', color: '#d24726' },
+    pptx: { label: 'POWERPOINT', color: '#d24726' },
+    zip: { label: 'ZIP', color: '#6b7280' },
+    txt: { label: 'TXT', color: '#6b7280' },
+    csv: { label: 'CSV', color: '#217346' },
+  };
+
+  function fileKindStyle(fileName) {
+    const ext = (fileName || '').split('.').pop().toLowerCase();
+    return FILE_KIND_STYLES[ext] || { label: ext ? ext.toUpperCase() : 'DATEI', color: '#6b7280' };
+  }
+
+  // Beliebige andere Dateien (Word, Excel, ZIP, ...), die der Browser nicht
+  // selbst rendern kann, werden - wie ein Dateianhang in OneNote - nur als
+  // Symbol mit Dateiname abgelegt. Ein Klick lädt die Originaldatei herunter
+  // bzw. öffnet sie, je nachdem was der Browser für diesen Dateityp kann.
+  async function addFileObjectFromFile(file, dropPoint) {
+    const note = currentNote();
+    if (!note || !file) return;
+    try {
+      const fileData = await uploadFile(file);
+      const w = 240;
+      const h = 60;
+      const { x, y } = dropPoint
+        ? { x: clamp(dropPoint.x - w / 2, 0, Math.max(0, SURFACE_W - w)), y: clamp(dropPoint.y - h / 2, 0, Math.max(0, SURFACE_H - h)) }
+        : nextPlacement(note, w, h);
+      const objData = { id: uid(), type: 'file', x, y, w, h, z: 0, fileName: file.name, fileData };
+      bringToFront(note, objData);
+      note.objects.push(objData);
+      const objEl = buildObjectEl(note, objData);
+      el.canvasSurface.insertBefore(objEl, el.inkLayer);
+      selectObject(note, objData, objEl);
+      updateSurfaceSize(note);
+      schedulePersist();
+      renderNoteList();
+    } catch (err) {
+      console.error('Datei konnte nicht angehängt werden:', err);
+      alert('Diese Datei konnte nicht angehängt werden.');
+    }
+  }
+
+  function buildFileContent(note, obj, objEl) {
+    const kind = fileKindStyle(obj.fileName);
+    objEl.classList.add('file-chip');
+    const icon = document.createElement('div');
+    icon.className = 'file-chip-icon';
+    icon.style.background = kind.color;
+    icon.innerHTML = '<svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M5 2h7l3 3v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zm6.5.6V6H15L11.5 2.6z"/></svg>';
+    objEl.appendChild(icon);
+    const text = document.createElement('div');
+    text.className = 'file-chip-text';
+    text.innerHTML = `<span class="file-chip-name">${escapeHtml(obj.fileName || 'Datei')}</span><span class="file-chip-kind">${kind.label}</span>`;
+    objEl.appendChild(text);
+    objEl.addEventListener('pointerdown', (e) => startObjectDrag(e, note, obj, objEl));
   }
 
   // ----- Objekte hinzufügen / löschen -----
@@ -3470,6 +3543,12 @@
       el.pdfFileInput.value = '';
     });
     el.addAudioBtn.addEventListener('click', toggleAudioRecording);
+    el.addFileBtn.addEventListener('click', () => el.fileFileInput.click());
+    el.fileFileInput.addEventListener('change', () => {
+      const file = el.fileFileInput.files[0];
+      if (file) addFileObjectFromFile(file);
+      el.fileFileInput.value = '';
+    });
     // Klick/Tipp auf die leere Fläche legt sofort freien Text an (wie in OneNote) –
     // ABER erst, wenn feststeht, dass es wirklich ein Tipp war (kurz, ohne Bewegung,
     // nur ein Finger). Sonst wäre auf Touch-Geräten jedes Wischen zum Scrollen oder
@@ -3531,7 +3610,9 @@
       document.addEventListener('pointerdown', onOtherPointerDown, true);
     });
 
-    // PDF-Dateien lassen sich direkt aus dem Dateisystem auf die Fläche ziehen.
+    // Dateien lassen sich direkt aus dem Dateisystem auf die Fläche ziehen -
+    // PDFs und Bilder bekommen ihre spezielle Darstellung, alles andere
+    // (Word, Excel, ...) landet als einfacher Datei-Anhang.
     el.canvasSurface.addEventListener('dragover', (e) => {
       if (!e.dataTransfer || !e.dataTransfer.types.includes('Files')) return;
       e.preventDefault();
@@ -3544,12 +3625,21 @@
     el.canvasSurface.addEventListener('drop', (e) => {
       el.canvasSurface.classList.remove('drag-over');
       const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
-      const pdfFile = files.find((f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
-      if (!pdfFile) return;
+      if (files.length === 0) return;
       e.preventDefault();
       const rect = el.canvasSurface.getBoundingClientRect();
       const point = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-      addPdfObjectFromFile(pdfFile, point);
+      const pdfFile = files.find((f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+      if (pdfFile) {
+        addPdfObjectFromFile(pdfFile, point);
+        return;
+      }
+      const imageFile = files.find((f) => f.type.startsWith('image/'));
+      if (imageFile) {
+        addImageObjectFromFile(imageFile, point);
+        return;
+      }
+      addFileObjectFromFile(files[0], point);
     });
 
     el.drawModeBtn.addEventListener('click', toggleDrawMode);

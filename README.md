@@ -113,6 +113,13 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
     einer als Seiten eingefügten PDF lässt sich außerdem direkt zeichnen
     (Zeichnen-Modus) – Text und Zeichnung funktionieren gleichzeitig und
     beides kann genau wie bei einem Bild an der PDF verankert werden
+  - **Sonstige Dateien** (Word, Excel, PowerPoint, ZIP, ...): über den
+    Werkzeugleisten-Button "Datei anhängen" oder per Drag & Drop direkt
+    aus dem Dateisystem auf die Fläche ziehen. Da der Browser diese
+    Formate nicht selbst darstellen kann, wird nur ein Symbol mit
+    Dateiname und Typ (z. B. „WORD") abgelegt; ein Klick auf den Anhang
+    bzw. den „Datei öffnen"-Knopf lädt die Original-Datei herunter, die
+    sich danach lokal in der zugehörigen App (z. B. Word) öffnen lässt
 - **Sprachnotizen aufnehmen**: über das Mikrofon-Symbol im Ribbon direkt im
   Browser aufnehmen (nochmal klicken zum Beenden, der Button pulsiert rot
   währenddessen). Die Aufnahme wird als eigenes Objekt mit Abspiel-Player an
