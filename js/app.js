@@ -33,6 +33,7 @@
     grip: '<svg viewBox="0 0 20 20"><circle cx="6" cy="6" r="1.5"/><circle cx="10" cy="6" r="1.5"/><circle cx="14" cy="6" r="1.5"/><circle cx="6" cy="14" r="1.5"/><circle cx="10" cy="14" r="1.5"/><circle cx="14" cy="14" r="1.5"/></svg>',
     mic: '<svg viewBox="0 0 20 20"><path d="M10 2.5a2.5 2.5 0 0 0-2.5 2.5v4a2.5 2.5 0 0 0 5 0V5A2.5 2.5 0 0 0 10 2.5z" fill="currentColor"/><path d="M5.5 9v.5a4.5 4.5 0 0 0 9 0V9H16v.5a6 6 0 0 1-5.25 5.95V17.5h-1.5v-2.05A6 6 0 0 1 4 9.5V9h1.5z" fill="currentColor"/></svg>',
     transcript: '<svg viewBox="0 0 20 20"><path d="M3 4h14v1.6H3V4zm0 4.2h14v1.6H3V8.2zm0 4.2h9v1.6H3v-1.6z" fill="currentColor"/></svg>',
+    rename: '<svg viewBox="0 0 20 20"><path d="M13.6 2.4a1.9 1.9 0 0 1 2.7 2.7L7.4 14 4 15l1-3.4 8.6-9.2z" fill="currentColor"/></svg>',
   };
 
   const MARKER_COLORS = [
@@ -657,7 +658,7 @@
 
     for (const { note, depth, hasChildren } of rows) {
       const item = document.createElement('div');
-      item.className = 'note-item' + (note.id === selectedNoteId ? ' active' : '');
+      item.className = 'note-item' + (depth > 0 ? ' note-item-sub' : '') + (note.id === selectedNoteId ? ' active' : '');
       item.style.paddingLeft = `${10 + depth * 16}px`;
 
       if (hasChildren) {
@@ -920,6 +921,9 @@
       const label = obj.type === 'pdf' ? 'PDF öffnen' : 'Datei öffnen';
       mainToolbar.appendChild(makeToolbarBtn(ICONS.openFile, false, () => openAttachedFile(obj), label));
     }
+    if ((obj.type === 'pdf' && obj.variant === 'file') || obj.type === 'file') {
+      mainToolbar.appendChild(makeToolbarBtn(ICONS.rename, false, () => startRenameFileAttachment(obj, objEl), 'Umbenennen'));
+    }
     if (obj.type === 'audio') {
       mainToolbar.appendChild(makeToolbarBtn(ICONS.transcript, false, () => startTranscription(note, obj, objEl), 'In Text umwandeln'));
     }
@@ -1109,10 +1113,6 @@
     }
     if (note && obj && obj.type === 'text' && dragState.moved) {
       updateAttachment(note, obj);
-    }
-    const isOpenableChip = obj && ((obj.type === 'pdf' && obj.variant === 'file') || obj.type === 'file');
-    if (note && obj && isOpenableChip && !dragState.moved) {
-      openAttachedFile(obj);
     }
     if (note && obj && dragState.moved) {
       const movedTextObjs = [obj, ...dragState.children.map((c) => getObj(note, c.id))]
@@ -2917,7 +2917,32 @@
       });
     }
 
-    objEl.addEventListener('pointerdown', (e) => startObjectDrag(e, note, obj, objEl));
+    if (obj.variant === 'file') wireFileChipInteraction(note, obj, objEl);
+    else objEl.addEventListener('pointerdown', (e) => startObjectDrag(e, note, obj, objEl));
+  }
+
+  // Gemeinsame Klick-Logik für PDF-/Datei-Anhänge: ein einzelner Klick wählt
+  // nur aus (und erlaubt Verschieben per Ziehen wie jedes andere Objekt), erst
+  // ein Doppelklick öffnet die Datei - damit ein normaler Klick zum Anwählen
+  // oder Umbenennen nicht schon versehentlich einen Download auslöst.
+  function wireFileChipInteraction(note, obj, objEl) {
+    const nameEl = objEl.querySelector('.file-chip-name, .pdf-file-chip-name');
+    if (nameEl) {
+      nameEl.addEventListener('pointerdown', (e) => {
+        if (nameEl.isContentEditable) e.stopPropagation();
+      });
+    }
+    let lastTapAt = 0;
+    objEl.addEventListener('pointerdown', (e) => {
+      const now = Date.now();
+      if (now - lastTapAt < 400) {
+        lastTapAt = 0;
+        openAttachedFile(obj);
+        return;
+      }
+      lastTapAt = now;
+      startObjectDrag(e, note, obj, objEl);
+    });
   }
 
   // Rendert alle Seiten einer PDF-Datei in EIN einziges, hohes Bild (Seiten
@@ -3008,6 +3033,51 @@
   function openAttachedFile(obj) {
     if (!obj.fileData) return;
     window.open(obj.fileData, '_blank');
+  }
+
+  // Macht den angezeigten Dateinamen eines PDF-/Datei-Anhangs direkt editierbar
+  // (Enter/Wegklicken übernimmt, Escape verwirft). Ändert nur den angezeigten
+  // Namen (obj.fileName), nicht die Original-Datei auf dem Server - bei einem
+  // generischen Datei-Anhang wird danach auch Symbol/Kürzel (WORD/EXCEL/...)
+  // an die ggf. neue Dateiendung angepasst.
+  function startRenameFileAttachment(obj, objEl) {
+    const nameEl = objEl.querySelector('.file-chip-name, .pdf-file-chip-name');
+    if (!nameEl) return;
+    nameEl.contentEditable = 'true';
+    nameEl.spellcheck = false;
+    nameEl.focus();
+    document.execCommand('selectAll', false, null);
+
+    const finish = (commit) => {
+      nameEl.contentEditable = 'false';
+      nameEl.removeEventListener('blur', onBlur);
+      nameEl.removeEventListener('keydown', onKeydown);
+      const newName = nameEl.textContent.trim();
+      if (commit && newName && newName !== obj.fileName) {
+        obj.fileName = newName;
+        if (obj.type === 'file') {
+          const kind = fileKindStyle(obj.fileName);
+          const kindEl = objEl.querySelector('.file-chip-kind');
+          if (kindEl) kindEl.textContent = kind.label;
+          const iconEl = objEl.querySelector('.file-chip-icon');
+          if (iconEl) iconEl.style.background = kind.color;
+        }
+        schedulePersist();
+      } else {
+        nameEl.textContent = obj.fileName;
+      }
+    };
+    const onBlur = () => finish(true);
+    const onKeydown = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        nameEl.blur();
+      } else if (e.key === 'Escape') {
+        finish(false);
+      }
+    };
+    nameEl.addEventListener('blur', onBlur);
+    nameEl.addEventListener('keydown', onKeydown);
   }
 
   async function addPdfObjectFromFile(file, dropPoint) {
@@ -3119,7 +3189,7 @@
     text.className = 'file-chip-text';
     text.innerHTML = `<span class="file-chip-name">${escapeHtml(obj.fileName || 'Datei')}</span><span class="file-chip-kind">${kind.label}</span>`;
     objEl.appendChild(text);
-    objEl.addEventListener('pointerdown', (e) => startObjectDrag(e, note, obj, objEl));
+    wireFileChipInteraction(note, obj, objEl);
   }
 
   // ----- Objekte hinzufügen / löschen -----

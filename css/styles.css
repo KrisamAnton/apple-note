@@ -532,6 +532,25 @@ textarea {
   text-overflow: ellipsis;
 }
 
+/* Unterseiten sollen sich auf den ersten Blick von der übergeordneten
+   Hauptzeile unterscheiden - deutlich schwächere Schrift statt der fetten
+   Überschrift, und bei Auswahl nur eine dezente Einfärbung statt der
+   kräftigen vollen Akzentfarbe (die bleibt der Hauptzeile vorbehalten). */
+.note-item-sub .note-title {
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.note-item-sub.active {
+  background: var(--selection-bg);
+}
+
+.note-item-sub.active .note-title,
+.note-item-sub.active .note-toggle,
+.note-item-sub.active .note-add-sub {
+  color: var(--text-primary);
+}
+
 .note-title:empty::before {
   content: "Neue Notiz";
   color: var(--text-tertiary);
