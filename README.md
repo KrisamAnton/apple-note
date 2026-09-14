@@ -47,7 +47,13 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
       die Zwischenablage kopieren (z. B. Screenshot) und mit Strg+V/Cmd+V
       an der Cursor-Position einfügen – es wird Teil des Textflusses und
       bewegt sich mit dem Text mit, statt ein eigenes Objekt auf der
-      Fläche zu sein
+      Fläche zu sein. Über einen Ziehpunkt unten rechts am Bild lässt sich
+      seine Größe direkt im Text ändern (Höhe passt sich proportional an).
+      Wird ein Bild dagegen in ein gerade erst durch Antippen der leeren
+      Fläche entstandenes, noch unbeschriebenes Textfeld eingefügt, wird
+      stattdessen ein eigenständiges Bild-Objekt daraus (wie beim
+      "Bild hinzufügen"-Knopf) – das Textfeld verschwindet dann wieder,
+      da es sonst als leere Hülle übrig bliebe
     - **Textmarker**: einen Textabschnitt markieren und über das
       Marker-Symbol in der Werkzeugleiste hervorheben – 5 Farben in
       je 3 Stärken (Leicht/Mittel/Stark). Hervorhebungen, Farbe und

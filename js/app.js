@@ -1312,6 +1312,7 @@
     body.dataset.placeholder = 'Text …';
     body.contentEditable = 'false';
     body.innerHTML = obj.html || '';
+    enhanceInlineImages(body);
     updateTextEmptyState(body);
     applyFreeLinesAlignment(note, obj, body);
     objEl.appendChild(body);
@@ -1355,7 +1356,20 @@
       if (imageItem) {
         e.preventDefault();
         const file = imageItem.getAsFile();
-        if (file) insertInlineImage(note, obj, objEl, body, file);
+        if (!file) return;
+        // Ein frisch durch Antippen der leeren Fläche entstandenes, noch
+        // komplettes leeres Textfeld ist reiner Zufall des Klickpunkts, kein
+        // bewusst begonnener Text - ein hier eingefügtes Bild soll daher (wie
+        // in OneNote) ein eigenständiges Bild-Objekt werden statt in dieses
+        // Textfeld eingebettet zu werden. Wurde dagegen bereits etwas
+        // getippt oder ein Bild eingefügt, geht es wie gewohnt inline hinein.
+        if (!body.textContent.trim() && !body.querySelector('img')) {
+          const dropPoint = { x: obj.x + obj.w / 2, y: obj.y + obj.h / 2 };
+          body.blur(); // löst exitTextEdit aus und entfernt das leere Textobjekt
+          addImageObjectFromFile(file, dropPoint);
+          return;
+        }
+        insertInlineImage(note, obj, objEl, body, file);
         return;
       }
       e.preventDefault();
@@ -1462,12 +1476,56 @@
       img.className = 'inline-text-image';
       img.src = src;
       placeholder.replaceWith(img);
+      enhanceInlineImages(body);
     } catch (err) {
       console.error('Bild konnte nicht eingefügt werden:', err);
       placeholder.textContent = 'Bild konnte nicht eingefügt werden.';
     }
     saveTextObjContent(note, obj, body);
     growFreeTextToFit(obj, objEl, body);
+  }
+
+  // Versieht jedes noch "nackte" eingebettete Bild mit einem Wrapper samt
+  // Ziehpunkt unten rechts, über den sich seine Breite ändern lässt (Höhe
+  // passt sich proportional automatisch an, da nur die Breite gesetzt wird).
+  function enhanceInlineImages(body) {
+    body.querySelectorAll('img.inline-text-image').forEach((img) => {
+      if (img.parentElement && img.parentElement.classList.contains('inline-image-wrap')) return;
+      const wrap = document.createElement('span');
+      wrap.className = 'inline-image-wrap';
+      wrap.contentEditable = 'false';
+      img.replaceWith(wrap);
+      wrap.appendChild(img);
+      const handle = document.createElement('span');
+      handle.className = 'inline-image-resize-handle';
+      wrap.appendChild(handle);
+      wireInlineImageResize(img, handle);
+    });
+  }
+
+  function wireInlineImageResize(img, handle) {
+    handle.addEventListener('pointerdown', (e) => {
+      const body = img.closest('.canvas-text-body');
+      if (!body || body.contentEditable !== 'true') return;
+      e.preventDefault();
+      e.stopPropagation();
+      const startX = e.clientX;
+      const startWidth = img.getBoundingClientRect().width;
+      const onMove = (ev) => {
+        const maxWidth = Math.max(40, body.clientWidth - 8);
+        img.style.width = `${clamp(startWidth + (ev.clientX - startX), 40, maxWidth)}px`;
+      };
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        const note = currentNote();
+        const objEl = body.closest('.canvas-object');
+        const obj = note && objEl && getObj(note, objEl.dataset.id);
+        if (note && obj) saveTextObjContent(note, obj, body);
+      };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    });
   }
 
   function insertPlainTextAtCaret(text) {
@@ -2980,7 +3038,7 @@
     return obj;
   }
 
-  async function addImageObjectFromFile(file) {
+  async function addImageObjectFromFile(file, dropPoint) {
     const note = currentNote();
     if (!note || !file) return;
     try {
@@ -2999,7 +3057,9 @@
       const scale = Math.min(1, maxW / naturalSize.w);
       const w = Math.round(naturalSize.w * scale) || 200;
       const h = Math.round(naturalSize.h * scale) || 150;
-      const { x, y } = nextPlacement(note, w, h);
+      const { x, y } = dropPoint
+        ? { x: clamp(dropPoint.x - w / 2, 0, Math.max(0, SURFACE_W - w)), y: clamp(dropPoint.y - h / 2, 0, Math.max(0, SURFACE_H - h)) }
+        : nextPlacement(note, w, h);
       const obj = { id: uid(), type: 'image', x, y, w, h, z: 0, src };
       bringToFront(note, obj);
       note.objects.push(obj);

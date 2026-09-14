@@ -1045,8 +1045,33 @@ textarea {
 .inline-text-image {
   max-width: 100%;
   display: block;
-  margin: 4px 0;
   border-radius: 4px;
+}
+
+.inline-image-wrap {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  margin: 4px 0;
+  vertical-align: bottom;
+}
+
+.inline-image-resize-handle {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: var(--accent);
+  border: 2px solid var(--bg-elevated);
+  cursor: nwse-resize;
+  touch-action: none;
+  display: none;
+}
+
+.canvas-text-body.editing .inline-image-resize-handle {
+  display: block;
 }
 
 .inline-image-placeholder {
