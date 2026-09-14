@@ -10,11 +10,11 @@
   --text-primary: #1c1c1e;
   --text-secondary: rgba(60, 60, 67, 0.6);
   --text-tertiary: rgba(60, 60, 67, 0.4);
-  --accent: #f5a623;
-  --accent-strong: #d98c00;
-  --yellow-icon: #f7b500;
-  --selection-bg: rgba(245, 166, 35, 0.16);
-  --selection-bg-strong: #f5a623;
+  --accent: #a78bfa;
+  --accent-strong: #8b5cf6;
+  --yellow-icon: #a78bfa;
+  --selection-bg: rgba(167, 139, 250, 0.16);
+  --selection-bg-strong: #a78bfa;
   --hover-bg: rgba(0, 0, 0, 0.045);
   --danger: #ff3b30;
   --shadow-popover: 0 12px 32px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.08);
@@ -32,11 +32,11 @@
     --text-primary: #f2f2f7;
     --text-secondary: rgba(235, 235, 245, 0.6);
     --text-tertiary: rgba(235, 235, 245, 0.4);
-    --accent: #ffb340;
-    --accent-strong: #ffc25c;
-    --yellow-icon: #ffc42e;
-    --selection-bg: rgba(255, 179, 64, 0.18);
-    --selection-bg-strong: #ffb340;
+    --accent: #c4b5fd;
+    --accent-strong: #a78bfa;
+    --yellow-icon: #c4b5fd;
+    --selection-bg: rgba(196, 181, 253, 0.18);
+    --selection-bg-strong: #c4b5fd;
     --hover-bg: rgba(255, 255, 255, 0.06);
     --shadow-popover: 0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
   }
@@ -1003,7 +1003,7 @@ textarea {
 .canvas-text-body.editing {
   pointer-events: auto;
   cursor: text;
-  background: var(--selection-bg);
+  background: transparent;
 }
 
 .canvas-text-body.is-empty::before {
@@ -1115,9 +1115,8 @@ textarea {
 
 .canvas-object[data-type="text"].selected {
   /* Deutlich dezenter als bei anderen Objekttypen (die dickere/volle
-     Akzentfarbe wirkt bei Text schnell aufdringlich) - Breite bewusst bei
-     2px belassen, um beim Auswählen keinen kleinen Sprung im Layout zu
-     verursachen (box-sizing: border-box). */
+     Akzentfarbe wirkt bei Text schnell aufdringlich). */
+  border-width: 1px;
   border-color: color-mix(in srgb, var(--accent) 50%, transparent);
 }
 
@@ -1144,9 +1143,9 @@ textarea {
   justify-content: center;
   width: 16px;
   height: 16px;
-  margin-right: 14px;
+  margin-right: 20px;
   border-radius: 50%;
-  background: #A78BFA;
+  background: var(--accent);
   color: #fff;
   font-size: 8px;
   font-weight: 700;
