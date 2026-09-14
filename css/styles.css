@@ -1114,7 +1114,11 @@ textarea {
 }
 
 .canvas-object[data-type="text"].selected {
-  border-color: var(--accent);
+  /* Deutlich dezenter als bei anderen Objekttypen (die dickere/volle
+     Akzentfarbe wirkt bei Text schnell aufdringlich) - Breite bewusst bei
+     2px belassen, um beim Auswählen keinen kleinen Sprung im Layout zu
+     verursachen (box-sizing: border-box). */
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
 }
 
 /* Solange freier Text leer ist (frisch angelegt, noch nichts getippt), zeigt
@@ -1134,7 +1138,31 @@ textarea {
    Antippen der leeren Fläche soll wie in OneNote wirklich nur der blinkende
    Cursor zu sehen sein, ohne jeden Hinweistext. */
 .canvas-object[data-type="text"][data-style="free"] .canvas-text-body.is-empty::before {
-  content: none;
+  content: "KN";
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  vertical-align: middle;
+  pointer-events: none;
+}
+
+/* Freier Text wächst über growFreeTextToFit() automatisch mit dem Inhalt
+   mit - eine interne Bildlaufleiste wird dadurch praktisch nie gebraucht,
+   kann aber durch Rundungsdifferenzen bei Innenabstand/Zeilenhöhe knapp
+   an der Kante flackernd auftauchen. Bei freiem Text daher grundsätzlich
+   ausgeblendet (bei "Textfeld" mit fester Größe bleibt sie bestehen, da
+   dort Inhalt bewusst über die Boxgröße hinausgehen kann). */
+.canvas-object[data-type="text"][data-style="free"] .canvas-text-body {
+  overflow: hidden;
 }
 
 /* Auch die gelbliche Bearbeiten-Hervorhebung soll hier nicht erscheinen -
