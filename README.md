@@ -19,6 +19,15 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
   Die Notizliste zeigt das Ganze als ein- und ausklappbaren Baum;
   Löschen fragt nach und entfernt dann die gesamte Unterseiten-Kette,
   Verschieben in einen anderen Ordner nimmt den Unterbaum automatisch mit
+- **Notizen manuell per Ziehen umsortieren** (wie in OneNote): eine Zeile
+  in der Notizliste lang drücken (kurzer Puls zeigt das "Aufheben" an),
+  dann an die gewünschte Stelle ziehen und loslassen. Beim Ziehen über
+  eine andere Zeile zeigt eine Linie oberhalb/unterhalb "davor/danach
+  einsortieren" an, eine helle Einfärbung der ganzen Zeile "hier als
+  Unterseite verschachteln". Eine Hauptüberschrift nimmt beim Verschieben
+  automatisch alle ihre Unterseiten mit; eine Unterseite lässt sich
+  ebenso zu einer anderen Überschrift ziehen oder ganz herausziehen und
+  wird dann wieder zur eigenständigen Hauptüberschrift
 - Ordner anlegen, umbenennen (Doppelklick), farblich kennzeichnen
   (Klick auf den Farbpunkt) und löschen
 - Notizen (samt Unterseiten) zwischen Ordnern verschieben

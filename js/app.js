@@ -96,7 +96,7 @@
    * @typedef {{id:string, type:'text', x:number, y:number, w:number, h:number, z:number, text:string, html:string, parentId:?string, relX?:number, relY?:number, relW?:number, relH?:number}} TextObject
    * @typedef {{id:string, type:'image', x:number, y:number, w:number, h:number, z:number, src:string}} ImageObject
    * @typedef {{id:string, color:string, eraser:boolean, points:Array<{x:number,y:number,width:number}>, parentId:?string}} Stroke
-   * @typedef {{id:string, title:string, objects:Array, ink:{strokes:Stroke[]}, background:'dots'|'lines'|'blank', folderId:?string, parentNoteId:?string, createdAt:number, updatedAt:number}} Note
+   * @typedef {{id:string, title:string, objects:Array, ink:{strokes:Stroke[]}, background:'dots'|'lines'|'blank', folderId:?string, parentNoteId:?string, order:number, createdAt:number, updatedAt:number}} Note
    * @typedef {{id:string, name:string, color:?string}} Folder
    */
 
@@ -161,6 +161,36 @@
     return note;
   }
 
+  // Vergibt einmalig eine feste, manuelle Reihenfolge (note.order) an alle Notizen,
+  // die noch keine haben (ältere gespeicherte Notizen). Geschwister (gleiche
+  // parentNoteId) werden dabei genau in der bisher angezeigten Reihenfolge
+  // (zuletzt geändert zuerst) nummeriert, damit sich beim ersten Laden nach diesem
+  // Update optisch nichts verschiebt - erst ein manuelles Ziehen ändert sie danach.
+  function assignMissingNoteOrder(notes) {
+    const byParent = new Map();
+    for (const note of notes) {
+      const key = note.parentNoteId || null;
+      if (!byParent.has(key)) byParent.set(key, []);
+      byParent.get(key).push(note);
+    }
+    for (const siblings of byParent.values()) {
+      siblings.sort((a, b) => b.updatedAt - a.updatedAt);
+      siblings.forEach((note, i) => {
+        if (typeof note.order !== 'number') note.order = i;
+      });
+    }
+  }
+
+  // Kleinster vorhandener order-Wert unter den Geschwistern (gleiche parentNoteId)
+  // minus 1, damit eine neue Notiz immer ganz oben in ihrer Ebene erscheint -
+  // entspricht dem bisherigen Verhalten ("neueste zuerst").
+  function nextOrderForParent(parentNoteId) {
+    const key = parentNoteId || null;
+    const siblings = state.notes.filter((n) => (n.parentNoteId || null) === key);
+    if (siblings.length === 0) return 0;
+    return Math.min(...siblings.map((n) => n.order ?? 0)) - 1;
+  }
+
   // Hängende (Eltern-Notiz existiert nicht mehr) oder zyklische parentNoteId-Referenzen
   // kappen, damit der Notizbaum nicht in eine Endlosschleife läuft.
   function sanitizeNoteParents(notes) {
@@ -193,6 +223,7 @@
         if (parsed && Array.isArray(parsed.notes) && Array.isArray(parsed.folders)) {
           parsed.notes.forEach(migrateNote);
           sanitizeNoteParents(parsed.notes);
+          assignMissingNoteOrder(parsed.notes);
           parsed.notes.forEach(pruneEmptyTextObjects);
           parsed.folders.forEach((f, i) => {
             if (!f.color) f.color = FOLDER_COLORS[i % FOLDER_COLORS.length].hex;
@@ -239,6 +270,7 @@
           background: 'dots',
           folderId: null,
           parentNoteId: null,
+          order: 0,
           createdAt: now,
           updatedAt: now,
         },
@@ -411,9 +443,9 @@
         roots.push(note);
       }
     }
-    const byUpdatedDesc = (a, b) => b.updatedAt - a.updatedAt;
-    roots.sort(byUpdatedDesc);
-    for (const list of childrenOf.values()) list.sort(byUpdatedDesc);
+    const byOrderAsc = (a, b) => (a.order ?? 0) - (b.order ?? 0);
+    roots.sort(byOrderAsc);
+    for (const list of childrenOf.values()) list.sort(byOrderAsc);
 
     const result = [];
     function visit(note, depth) {
@@ -436,6 +468,135 @@
       for (const child of state.notes.filter((n) => n.parentNoteId === nid)) stack.push(child.id);
     }
     return ids;
+  }
+
+  // ----- Notizen per Ziehen (lang drücken) manuell umsortieren/verschachteln -----
+  // Wie in OneNote: lang drücken hebt eine Zeile "an" (kurzer Puls), danach folgt
+  // sie dem Finger/der Maus nicht sichtbar mit, aber die Zeile unter dem Zeiger
+  // zeigt an, ob beim Loslassen davor/danach eingeordnet (obere/untere Zonen)
+  // oder als Unterseite verschachtelt wird (mittlere Zone). Eine übergeordnete
+  // Notiz nimmt beim Verschieben automatisch alle Unterseiten mit, weil die nur
+  // über parentNoteId verknüpft sind und beim Rendern direkt unter ihr folgen -
+  // hier muss also nichts Zusätzliches für die Kinder gemacht werden.
+  const NOTE_LONG_PRESS_MS = 450;
+  const NOTE_DRAG_MOVE_CANCEL_PX = 8;
+  let noteDragSuppressClick = false;
+
+  function wireNoteItemDrag(item, note) {
+    item.addEventListener('pointerdown', (e) => {
+      if (e.button !== undefined && e.button !== 0 && e.pointerType === 'mouse') return;
+      if (e.target.closest('button')) return; // Auf-/Zuklappen, Unterseite hinzufügen, Löschen bleiben normale Klicks
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const pointerId = e.pointerId;
+      let fired = false;
+      const timer = setTimeout(() => {
+        fired = true;
+        cleanup();
+        startNoteDrag(note, item, pointerId);
+      }, NOTE_LONG_PRESS_MS);
+      const onMove = (ev) => {
+        if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > NOTE_DRAG_MOVE_CANCEL_PX) cleanup();
+      };
+      const cleanup = () => {
+        clearTimeout(timer);
+        item.removeEventListener('pointermove', onMove);
+        item.removeEventListener('pointerup', cleanup);
+        item.removeEventListener('pointercancel', cleanup);
+      };
+      item.addEventListener('pointermove', onMove);
+      item.addEventListener('pointerup', cleanup);
+      item.addEventListener('pointercancel', cleanup);
+    });
+  }
+
+  function clearNoteDropIndicators() {
+    el.noteList.querySelectorAll('.note-drop-before, .note-drop-after, .note-drop-into').forEach((n) => {
+      n.classList.remove('note-drop-before', 'note-drop-after', 'note-drop-into');
+    });
+  }
+
+  function startNoteDrag(note, item, pointerId) {
+    item.classList.add('note-item-picked');
+    setTimeout(() => item.classList.remove('note-item-picked'), 220);
+    item.classList.add('note-item-dragging');
+    el.noteList.classList.add('note-list-dragging');
+    noteDragSuppressClick = true;
+
+    const forbiddenIds = new Set([note.id, ...descendantNoteIds(note.id)]);
+    let currentDrop = null;
+
+    const onMove = (ev) => {
+      const targetItem = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.note-item');
+      clearNoteDropIndicators();
+      const targetId = targetItem && targetItem.dataset.noteId;
+      if (!targetItem || !targetId || forbiddenIds.has(targetId)) {
+        currentDrop = null;
+        return;
+      }
+      const rect = targetItem.getBoundingClientRect();
+      const relY = (ev.clientY - rect.top) / rect.height;
+      const mode = relY < 0.25 ? 'before' : relY > 0.75 ? 'after' : 'into';
+      currentDrop = { targetId, mode };
+      targetItem.classList.add(`note-drop-${mode}`);
+    };
+    const onUp = () => {
+      item.removeEventListener('pointermove', onMove);
+      item.removeEventListener('pointerup', onUp);
+      item.removeEventListener('pointercancel', onUp);
+      try {
+        item.releasePointerCapture(pointerId);
+      } catch (err) {
+        // ignorieren
+      }
+      item.classList.remove('note-item-dragging');
+      el.noteList.classList.remove('note-list-dragging');
+      clearNoteDropIndicators();
+      if (currentDrop) applyNoteDrop(note, currentDrop);
+      setTimeout(() => { noteDragSuppressClick = false; }, 50);
+    };
+    try {
+      item.setPointerCapture(pointerId);
+    } catch (err) {
+      // ignorieren
+    }
+    item.addEventListener('pointermove', onMove);
+    item.addEventListener('pointerup', onUp);
+    item.addEventListener('pointercancel', onUp);
+  }
+
+  function applyNoteDrop(draggedNote, drop) {
+    const target = findNote(drop.targetId);
+    if (!target) return;
+
+    if (drop.mode === 'into') {
+      draggedNote.parentNoteId = target.id;
+      draggedNote.folderId = target.folderId;
+      draggedNote.order = nextOrderForParent(target.id);
+      collapsedNoteIds.delete(target.id);
+    } else {
+      const newParentId = target.parentNoteId || null;
+      draggedNote.parentNoteId = newParentId;
+      draggedNote.folderId = target.folderId;
+      const siblings = state.notes
+        .filter((n) => (n.parentNoteId || null) === newParentId && n.id !== draggedNote.id)
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      const targetIndex = siblings.findIndex((n) => n.id === target.id);
+      let prevOrder;
+      let nextOrder;
+      if (drop.mode === 'before') {
+        const before = siblings[targetIndex - 1];
+        prevOrder = before ? before.order ?? 0 : (target.order ?? 0) - 1;
+        nextOrder = target.order ?? 0;
+      } else {
+        const after = siblings[targetIndex + 1];
+        prevOrder = target.order ?? 0;
+        nextOrder = after ? after.order ?? 0 : (target.order ?? 0) + 1;
+      }
+      draggedNote.order = (prevOrder + nextOrder) / 2;
+    }
+    schedulePersist();
+    renderNoteList();
   }
 
   function getVisibleNotes() {
@@ -656,10 +817,13 @@
       ? notes.map((note) => ({ note, depth: 0, hasChildren: false }))
       : buildNoteTree(notes);
 
+    const isSearchMode = searchQuery.trim().length > 0;
+
     for (const { note, depth, hasChildren } of rows) {
       const item = document.createElement('div');
       item.className = 'note-item' + (depth > 0 ? ' note-item-sub' : '') + (note.id === selectedNoteId ? ' active' : '');
       item.style.paddingLeft = `${10 + depth * 16}px`;
+      item.dataset.noteId = note.id;
 
       if (hasChildren) {
         const toggle = document.createElement('button');
@@ -711,7 +875,11 @@
       });
       item.appendChild(deleteBtn);
 
-      item.addEventListener('click', () => selectNote(note.id));
+      if (!isSearchMode) wireNoteItemDrag(item, note);
+      item.addEventListener('click', () => {
+        if (noteDragSuppressClick) return;
+        selectNote(note.id);
+      });
       el.noteList.appendChild(item);
     }
   }
@@ -755,6 +923,7 @@
       background: 'dots',
       folderId: parent ? parent.folderId : selectedFolderId,
       parentNoteId: parent ? parent.id : null,
+      order: nextOrderForParent(parent ? parent.id : null),
       createdAt: now,
       updatedAt: now,
     };

@@ -404,6 +404,61 @@ textarea {
   cursor: pointer;
   border-bottom: 1px solid var(--border);
   position: relative;
+  touch-action: pan-y;
+}
+
+/* Lang drücken zum manuellen Verschieben (wie in OneNote): kurzer Puls beim
+   "Anheben", danach reduzierte Deckkraft solange gezogen wird. Während des
+   Ziehens wird zusätzlich per touch-action: none jedes Scrollen der Liste
+   unterbunden, damit der Finger nicht versehentlich die Liste statt der Zeile
+   bewegt. */
+@keyframes notePickPulse {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.035); }
+  100% { transform: scale(1); }
+}
+
+.note-item-picked {
+  animation: notePickPulse 220ms ease;
+  z-index: 5;
+}
+
+.note-item-dragging {
+  opacity: 0.5;
+  touch-action: none;
+}
+
+.note-list-dragging {
+  user-select: none;
+}
+
+/* Zeigt beim Ziehen an, wo die Notiz landen würde: eine Linie ober-/unterhalb
+   der Zeile für "davor/danach einsortieren", eine helle Einfärbung der ganzen
+   Zeile für "als Unterseite hier verschachteln". */
+.note-item.note-drop-before::before,
+.note-item.note-drop-after::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+  pointer-events: none;
+}
+
+.note-item.note-drop-before::before {
+  top: -2px;
+}
+
+.note-item.note-drop-after::after {
+  bottom: -2px;
+}
+
+.note-item.note-drop-into {
+  background: var(--selection-bg);
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
 }
 
 .note-item-main {
