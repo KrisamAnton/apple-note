@@ -518,8 +518,6 @@ textarea {
 }
 
 .note-item.active .note-title,
-.note-item.active .note-preview,
-.note-item.active .note-meta,
 .note-item.active .note-toggle,
 .note-item.active .note-add-sub {
   color: #1c1c1e;
@@ -528,7 +526,7 @@ textarea {
 .note-title {
   font-size: 15px;
   font-weight: 600;
-  margin: 0 0 2px;
+  margin: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -537,23 +535,6 @@ textarea {
 .note-title:empty::before {
   content: "Neue Notiz";
   color: var(--text-tertiary);
-}
-
-.note-meta {
-  font-size: 13px;
-  color: var(--text-secondary);
-  display: flex;
-  gap: 6px;
-  margin: 0;
-}
-
-.note-preview {
-  color: var(--text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-  min-width: 0;
 }
 
 .note-list-empty {

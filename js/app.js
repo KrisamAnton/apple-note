@@ -390,16 +390,6 @@
     return `${note.title || ''} ${objectText}`;
   }
 
-  function notePreviewText(note) {
-    const firstText = note.objects.find((o) => o.type === 'text' && o.text && o.text.trim());
-    if (firstText) return firstText.text.trim().replace(/\s+/g, ' ').slice(0, 80);
-    if (note.ink && note.ink.strokes && note.ink.strokes.length > 0) return 'Skizze';
-    if (note.objects.some((o) => o.type === 'image')) return 'Bild';
-    if (note.objects.some((o) => o.type === 'pdf')) return 'PDF';
-    if (note.objects.some((o) => o.type === 'audio')) return 'Sprachnotiz';
-    return '';
-  }
-
   // Baut aus einer flachen Notizliste (z. B. eines Ordners) eine Tiefensuche-Reihenfolge
   // mit Einrückungstiefe je Notiz auf, sodass Unterseiten (und deren Unterseiten) direkt
   // unter ihrer übergeordneten Seite erscheinen. Eine Notiz, deren Eltern-Notiz nicht in
@@ -464,21 +454,6 @@
 
   function getObj(note, id) {
     return note.objects.find((o) => o.id === id);
-  }
-
-  function formatDate(ts) {
-    const d = new Date(ts);
-    const now = new Date();
-    const sameDay = d.toDateString() === now.toDateString();
-    if (sameDay) {
-      return d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-    }
-    const sameYear = d.getFullYear() === now.getFullYear();
-    return d.toLocaleDateString('de-DE', {
-      day: '2-digit',
-      month: '2-digit',
-      year: sameYear ? undefined : '2-digit',
-    });
   }
 
   function escapeHtml(str) {
@@ -682,7 +657,6 @@
       const item = document.createElement('div');
       item.className = 'note-item' + (note.id === selectedNoteId ? ' active' : '');
       item.style.paddingLeft = `${10 + depth * 16}px`;
-      const preview = notePreviewText(note);
 
       if (hasChildren) {
         const toggle = document.createElement('button');
@@ -707,13 +681,7 @@
 
       const main = document.createElement('div');
       main.className = 'note-item-main';
-      main.innerHTML = `
-        <div class="note-title">${escapeHtml(note.title)}</div>
-        <div class="note-meta">
-          <span>${formatDate(note.updatedAt)}</span>
-          <span class="note-preview">${escapeHtml(preview)}</span>
-        </div>
-      `;
+      main.innerHTML = `<div class="note-title">${escapeHtml(note.title)}</div>`;
       item.appendChild(main);
 
       const addSubBtn = document.createElement('button');
