@@ -43,6 +43,11 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
       Sehr groß) – wie in einer Textverarbeitung
     - **Aufzählungszeichen** und **Nummerierung**: wirken auf die aktuelle
       Zeile bzw. Auswahl, wie in Word/OneNote
+    - **Bilder direkt in den Text einfügen** (wie in OneNote): ein Bild in
+      die Zwischenablage kopieren (z. B. Screenshot) und mit Strg+V/Cmd+V
+      an der Cursor-Position einfügen – es wird Teil des Textflusses und
+      bewegt sich mit dem Text mit, statt ein eigenes Objekt auf der
+      Fläche zu sein
     - **Textmarker**: einen Textabschnitt markieren und über das
       Marker-Symbol in der Werkzeugleiste hervorheben – 5 Farben in
       je 3 Stärken (Leicht/Mittel/Stark). Hervorhebungen, Farbe und

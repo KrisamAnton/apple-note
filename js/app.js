@@ -1348,8 +1348,18 @@
       if (e.key === 'Escape') body.blur();
     });
     body.addEventListener('paste', (e) => {
+      const clipboardData = e.clipboardData || window.clipboardData;
+      const imageItem = Array.from(clipboardData.items || []).find(
+        (item) => item.kind === 'file' && item.type && item.type.startsWith('image/')
+      );
+      if (imageItem) {
+        e.preventDefault();
+        const file = imageItem.getAsFile();
+        if (file) insertInlineImage(note, obj, objEl, body, file);
+        return;
+      }
       e.preventDefault();
-      const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+      const text = clipboardData.getData('text/plain');
       insertPlainTextAtCaret(text);
     });
 
@@ -1415,6 +1425,49 @@
       obj.h = needed;
       objEl.style.height = `${obj.h}px`;
     }
+  }
+
+  // Bild direkt in den Textfluss einfügen (wie in OneNote per Einfügen/Drag&Drop
+  // in eine Textnotiz) - im Unterschied zum separaten Bild-Objekt auf der
+  // Fläche wird dieses Bild Teil des Text-Inhalts (obj.html) und bewegt sich
+  // mit dem umgebenden Text mit.
+  async function insertInlineImage(note, obj, objEl, body, file) {
+    // Sofort ein Platzhalter-Element an der Cursor-Position einfügen (nicht
+    // erst nach dem Hochladen): der eigentliche Selection-Range wird beim
+    // asynchronen Warten ungültig/verliert den Bezug, ein bereits im DOM
+    // hängender Platzhalter-Knoten bleibt dagegen unabhängig davon gültig.
+    const placeholder = document.createElement('span');
+    placeholder.className = 'inline-image-placeholder';
+    placeholder.textContent = 'Bild wird hochgeladen …';
+    placeholder.contentEditable = 'false';
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && body.contains(sel.getRangeAt(0).startContainer)) {
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      range.insertNode(placeholder);
+      range.setStartAfter(placeholder);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } else {
+      body.appendChild(placeholder);
+    }
+    saveTextObjContent(note, obj, body);
+    updateTextEmptyState(body);
+    growFreeTextToFit(obj, objEl, body);
+
+    try {
+      const src = await uploadFile(file);
+      const img = document.createElement('img');
+      img.className = 'inline-text-image';
+      img.src = src;
+      placeholder.replaceWith(img);
+    } catch (err) {
+      console.error('Bild konnte nicht eingefügt werden:', err);
+      placeholder.textContent = 'Bild konnte nicht eingefügt werden.';
+    }
+    saveTextObjContent(note, obj, body);
+    growFreeTextToFit(obj, objEl, body);
   }
 
   function insertPlainTextAtCaret(text) {

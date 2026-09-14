@@ -1042,6 +1042,20 @@ textarea {
   margin: 0;
 }
 
+.inline-text-image {
+  max-width: 100%;
+  display: block;
+  margin: 4px 0;
+  border-radius: 4px;
+}
+
+.inline-image-placeholder {
+  display: inline-block;
+  color: var(--text-tertiary);
+  font-style: italic;
+  font-size: 12px;
+}
+
 .heading-option.heading-1 {
   font-size: 17px;
   font-weight: 700;
