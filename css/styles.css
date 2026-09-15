@@ -1005,12 +1005,12 @@ textarea {
    Ereignis-Weitergabe selbst, lösen also kein Verschieben aus. */
 .object-toolbar-main {
   box-sizing: border-box;
-  top: -24px;
+  top: -32px;
   left: 0;
   right: 0;
-  height: 24px;
-  padding: 0 3px;
-  gap: 2px;
+  height: 32px;
+  padding: 0 4px;
+  gap: 3px;
   justify-content: flex-end;
   background: var(--titlebar-bg);
   border: none;
@@ -1025,18 +1025,18 @@ textarea {
 }
 
 .object-toolbar-main .object-toolbar-btn {
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
+  width: 28px;
+  height: 28px;
+  border-radius: 5px;
 }
 
 .object-toolbar-main .object-toolbar-btn .icon {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
 }
 
 .canvas-object.toolbar-below .object-toolbar-main {
-  bottom: -24px;
+  bottom: -32px;
   border-radius: 0 0 4px 4px;
 }
 
