@@ -1474,21 +1474,37 @@
     overlay.className = 'text-drag-overlay';
     objEl.appendChild(overlay);
 
-    // Eigene Doppelklick-Erkennung (zeitbasiert): Das native "dblclick"-Ereignis kann durch
-    // die Pointer-Capture des Zieh-Handlers verschluckt werden, sobald der erste Klick bereits
-    // ein Drag gestartet hat. Diese Variante ist davon unabhängig.
-    let lastTapAt = 0;
+    // Ein einfacher Klick (ohne nennenswerte Bewegung) fängt direkt an zu
+    // schreiben - kein Doppelklick mehr nötig. Bewegt sich der Zeiger vor dem
+    // Loslassen mehr als ein paar Pixel, wird daraus stattdessen wie gewohnt
+    // ein Verschieben des Objekts (startObjectDrag).
     overlay.addEventListener('pointerdown', (e) => {
-      const now = Date.now();
-      if (now - lastTapAt < 400) {
-        lastTapAt = 0;
-        e.preventDefault();
-        e.stopPropagation();
-        enterTextEdit(note, obj, objEl, body, overlay);
-        return;
-      }
-      lastTapAt = now;
-      startObjectDrag(e, note, obj, objEl);
+      const startX = e.clientX;
+      const startY = e.clientY;
+      let moved = false;
+      const onMove = (ev) => {
+        if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > 4) {
+          moved = true;
+          cleanup();
+          startObjectDrag(e, note, obj, objEl);
+        }
+      };
+      const onUp = () => {
+        cleanup();
+        if (!moved) {
+          e.preventDefault();
+          e.stopPropagation();
+          enterTextEdit(note, obj, objEl, body, overlay, startX, startY);
+        }
+      };
+      const cleanup = () => {
+        overlay.removeEventListener('pointermove', onMove);
+        overlay.removeEventListener('pointerup', onUp);
+        overlay.removeEventListener('pointercancel', cleanup);
+      };
+      overlay.addEventListener('pointermove', onMove);
+      overlay.addEventListener('pointerup', onUp);
+      overlay.addEventListener('pointercancel', cleanup);
     });
 
     body.addEventListener('blur', () => exitTextEdit(obj, body, overlay));
@@ -1732,12 +1748,35 @@
     return [el.headingBtn, el.bulletListBtn, el.numberedListBtn];
   }
 
-  function enterTextEdit(note, obj, objEl, body, overlay) {
+  // Setzt den Cursor möglichst genau an die angeklickte Bildschirmposition,
+  // statt (wie bei einem reinen .focus()) immer an den Textanfang zu springen.
+  function placeCaretAtPoint(body, x, y) {
+    let range = null;
+    if (document.caretRangeFromPoint) {
+      range = document.caretRangeFromPoint(x, y);
+    } else if (document.caretPositionFromPoint) {
+      const pos = document.caretPositionFromPoint(x, y);
+      if (pos) {
+        range = document.createRange();
+        range.setStart(pos.offsetNode, pos.offset);
+        range.collapse(true);
+      }
+    }
+    if (!range || !body.contains(range.startContainer)) return;
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  function enterTextEdit(note, obj, objEl, body, overlay, clientX, clientY) {
     selectObject(note, obj, objEl);
     body.contentEditable = 'true';
     body.classList.add('editing');
     overlay.style.display = 'none';
     body.focus();
+    if (typeof clientX === 'number' && typeof clientY === 'number') {
+      placeCaretAtPoint(body, clientX, clientY);
+    }
     activeTextEdit = { note, obj, objEl, body, overlay };
     lastSelectionRange = null;
     el.ribbonFontFamilyLabel.textContent = 'Standard';
