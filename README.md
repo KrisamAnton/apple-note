@@ -75,6 +75,13 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
       stattdessen ein eigenständiges Bild-Objekt daraus (wie beim
       "Bild hinzufügen"-Knopf) – das Textfeld verschwindet dann wieder,
       da es sonst als leere Hülle übrig bliebe
+    - **Formatiert einfügen** (Strg+V/Cmd+V aus Word, Browser, Google Docs
+      & Co.): Fett, Kursiv, Unterstrichen, Textfarbe, Überschriften,
+      Aufzählungen und Links bleiben beim Einfügen erhalten, statt zu
+      reinem Text zu werden. Aus Sicherheits- und Kompatibilitätsgründen
+      wird nur eine begrenzte, ungefährliche Auswahl an Formatierungen
+      übernommen (kein eingebetteter Code, keine Bilder/Tabellen aus der
+      Quelle - Bilder lassen sich wie gewohnt separat per Strg+V einfügen)
     - **Textmarker**: einen Textabschnitt markieren und über das
       Marker-Symbol in der Werkzeugleiste hervorheben – 5 Farben in
       je 3 Stärken (Leicht/Mittel/Stark). Hervorhebungen, Farbe und

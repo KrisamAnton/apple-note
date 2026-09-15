@@ -1594,13 +1594,19 @@
         return;
       }
       e.preventDefault();
-      const text = clipboardData.getData('text/plain');
-      insertPlainTextAtCaret(text);
-      // insertPlainTextAtCaret fügt den Text direkt per Range-API ein und löst damit
-      // KEIN "input"-Ereignis aus - ohne die folgenden drei Aufrufe (die sonst der
-      // input-Handler übernimmt) würde der eingefügte Text weder gespeichert noch
-      // die Box darauf in der Höhe angepasst, sodass eingefügter mehrzeiliger Text
-      // abgeschnitten aussah und beim nächsten Neuladen sogar ganz verloren ging.
+      const html = clipboardData.getData('text/html');
+      if (html && html.trim()) {
+        insertSanitizedHtmlAtCaret(sanitizePastedHtml(html));
+      } else {
+        const text = clipboardData.getData('text/plain');
+        insertPlainTextAtCaret(text);
+      }
+      // insertPlainTextAtCaret/insertSanitizedHtmlAtCaret fügen direkt per Range-API
+      // ein und lösen damit KEIN "input"-Ereignis aus - ohne die folgenden drei
+      // Aufrufe (die sonst der input-Handler übernimmt) würde der eingefügte Text
+      // weder gespeichert noch die Box darauf in der Höhe angepasst, sodass
+      // eingefügter mehrzeiliger Text abgeschnitten aussah und beim nächsten
+      // Neuladen sogar ganz verloren ging.
       saveTextObjContent(note, obj, body);
       updateTextEmptyState(body);
       growFreeTextToFit(obj, objEl, body);
@@ -1804,6 +1810,145 @@
     range.collapse(false);
     sel.removeAllRanges();
     sel.addRange(range);
+  }
+
+  // Fügt bereinigtes HTML (siehe sanitizePastedHtml) an der Cursor-Position ein -
+  // wie insertPlainTextAtCaret, nur für mehrere/verschachtelte Knoten statt eines
+  // einzelnen Textknotens.
+  function insertSanitizedHtmlAtCaret(html) {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    range.deleteContents();
+    const container = document.createElement('div');
+    container.innerHTML = html;
+    const frag = document.createDocumentFragment();
+    let lastNode = null;
+    while (container.firstChild) lastNode = frag.appendChild(container.firstChild);
+    range.insertNode(frag);
+    if (lastNode) {
+      range.setStartAfter(lastNode);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+  }
+
+  // Beim Einfügen aus Word/Browser/Google Docs & Co. kommt neben reinem Text auch
+  // HTML mit in die Zwischenablage ("text/html") - das enthält die Formatierung
+  // (fett, Farben, Links, Überschriften, Listen ...), die vorher komplett verloren
+  // ging, weil nur "text/plain" ausgelesen wurde. Nur eine eng begrenzte Auswahl an
+  // Elementen/Stil-Eigenschaften wird übernommen (siehe PASTE_*-Konstanten unten) -
+  // alles andere (Skripte, eingebettete Bilder/Objekte, unbekannte Attribute wie
+  // onclick, javascript:-Links usw.) wird entfernt bzw. "entpackt" (Element weg,
+  // Inhalt bleibt), sowohl aus Sicherheitsgründen (kein Code aus der Zwischenablage
+  // darf ausgeführt werden können) als auch, damit nur Formatierungen ankommen, die
+  // diese App selbst auch anzeigen/weiterbearbeiten kann.
+  const PASTE_INLINE_TAGS = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'S', 'STRIKE', 'DEL', 'SUP', 'SUB', 'A', 'SPAN', 'MARK', 'FONT', 'BR']);
+  const PASTE_LINE_TAGS = new Set(['P', 'DIV']); // von isLineBlockEl bereits als eigene "Zeile" erkannt
+  const PASTE_CONVERT_TO_DIV_TAGS = new Set(['H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'BLOCKQUOTE', 'TD', 'TH', 'TR']);
+  const PASTE_DROP_TAGS = new Set(['SCRIPT', 'STYLE', 'IMG', 'IFRAME', 'OBJECT', 'EMBED', 'FORM', 'INPUT', 'BUTTON', 'LINK', 'META', 'BASE', 'SVG', 'VIDEO', 'AUDIO']);
+  const PASTE_HEADING_STYLE = {
+    H1: 'font-weight: 700; font-size: 28px',
+    H2: 'font-weight: 700; font-size: 22px',
+    H3: 'font-weight: 700; font-size: 19px',
+    H4: 'font-weight: 700; font-size: 17px',
+    H5: 'font-weight: 700; font-size: 15px',
+    H6: 'font-weight: 700; font-size: 15px',
+  };
+  const PASTE_ALLOWED_STYLE_PROPS = new Set(['color', 'background-color', 'font-weight', 'font-style', 'text-decoration', 'font-size', 'font-family']);
+
+  function sanitizePastedHtml(html) {
+    // Wichtig: NICHT per innerHTML in ein normales, im Dokument lebendes Element
+    // parsen - ein <img onerror="..."> (oder ähnliches) würde seinen Ladeversuch
+    // (und damit den onerror-Handler) sofort auslösen, noch bevor die folgende
+    // Bereinigung das Element entfernen kann. Ein per DOMParser erzeugtes
+    // Dokument ist dagegen inert: Es lädt keine Ressourcen nach und führt keine
+    // Skripte/Event-Handler aus.
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    cleanPastedNode(doc.body);
+    return doc.body.innerHTML;
+  }
+
+  function cleanPastedNode(root) {
+    for (const node of Array.from(root.childNodes)) {
+      if (node.nodeType === Node.COMMENT_NODE) {
+        node.remove();
+        continue;
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE) continue;
+      cleanPastedNode(node); // erst die Kinder bereinigen
+      const tag = node.tagName;
+      if (PASTE_DROP_TAGS.has(tag)) {
+        node.remove();
+        continue;
+      }
+      if (PASTE_CONVERT_TO_DIV_TAGS.has(tag)) {
+        // Elemente, die diese App nicht als eigene "Zeile" erkennt (siehe
+        // isLineBlockEl), werden in ein normales <div> umgewandelt - die
+        // optische Formatierung (z. B. Überschriftengröße) bleibt über einen
+        // umschließenden <span style="..."> erhalten.
+        const div = document.createElement('div');
+        if (PASTE_HEADING_STYLE[tag]) {
+          const span = document.createElement('span');
+          span.setAttribute('style', PASTE_HEADING_STYLE[tag]);
+          while (node.firstChild) span.appendChild(node.firstChild);
+          div.appendChild(span);
+        } else {
+          if (tag === 'LI') div.appendChild(document.createTextNode('• '));
+          while (node.firstChild) div.appendChild(node.firstChild);
+        }
+        node.replaceWith(div);
+        continue;
+      }
+      if (tag === 'TABLE') {
+        while (node.firstChild) node.parentNode.insertBefore(node.firstChild, node);
+        node.remove();
+        continue;
+      }
+      if (!PASTE_INLINE_TAGS.has(tag) && !PASTE_LINE_TAGS.has(tag)) {
+        // Unbekanntes/nicht erlaubtes Element (z. B. Word/Google-Docs-eigene
+        // Wrapper) - Inhalt behalten, Element selbst entfernen.
+        while (node.firstChild) node.parentNode.insertBefore(node.firstChild, node);
+        node.remove();
+        continue;
+      }
+      for (const attr of Array.from(node.attributes)) {
+        const name = attr.name.toLowerCase();
+        if (name === 'style') {
+          const cleaned = sanitizeStyleAttr(attr.value);
+          if (cleaned) node.setAttribute('style', cleaned);
+          else node.removeAttribute('style');
+          continue;
+        }
+        if (name === 'href' && tag === 'A') continue; // unten separat geprüft
+        node.removeAttribute(attr.name);
+      }
+      if (tag === 'A') {
+        const href = (node.getAttribute('href') || '').trim();
+        if (/^(https?:|mailto:)/i.test(href)) {
+          node.setAttribute('target', '_blank');
+          node.setAttribute('rel', 'noopener noreferrer');
+          node.classList.add('note-link');
+        } else {
+          node.removeAttribute('href');
+        }
+      }
+    }
+  }
+
+  function sanitizeStyleAttr(styleText) {
+    const parts = [];
+    for (const decl of styleText.split(';')) {
+      const idx = decl.indexOf(':');
+      if (idx === -1) continue;
+      const prop = decl.slice(0, idx).trim().toLowerCase();
+      const value = decl.slice(idx + 1).trim();
+      if (!PASTE_ALLOWED_STYLE_PROPS.has(prop)) continue;
+      if (!value || /expression|javascript:|url\(/i.test(value)) continue;
+      parts.push(`${prop}: ${value}`);
+    }
+    return parts.join('; ');
   }
 
   // Formatierungs-Buttons, die eine echte (nicht eingeklappte) Textauswahl brauchen –
