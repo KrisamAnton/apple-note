@@ -1528,6 +1528,14 @@
       e.preventDefault();
       const text = clipboardData.getData('text/plain');
       insertPlainTextAtCaret(text);
+      // insertPlainTextAtCaret fügt den Text direkt per Range-API ein und löst damit
+      // KEIN "input"-Ereignis aus - ohne die folgenden drei Aufrufe (die sonst der
+      // input-Handler übernimmt) würde der eingefügte Text weder gespeichert noch
+      // die Box darauf in der Höhe angepasst, sodass eingefügter mehrzeiliger Text
+      // abgeschnitten aussah und beim nächsten Neuladen sogar ganz verloren ging.
+      saveTextObjContent(note, obj, body);
+      updateTextEmptyState(body);
+      growFreeTextToFit(obj, objEl, body);
     });
 
     // Fokussieren funktioniert nur auf Elementen, die bereits im DOM hängen – zu
