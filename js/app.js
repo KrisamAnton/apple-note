@@ -1399,6 +1399,8 @@
     if (objEl) {
       objEl.style.width = `${obj.w}px`;
       objEl.style.height = `${obj.h}px`;
+      const body = objEl.querySelector('.canvas-text-body');
+      if (body) updateOverflowIndicators(objEl, body);
     }
     for (const child of note.objects) {
       if (child.parentId !== obj.id) continue;
@@ -1504,6 +1506,16 @@
     overlay.className = 'text-drag-overlay';
     objEl.appendChild(overlay);
 
+    if (obj.style !== 'free') {
+      for (const edge of ['top', 'bottom', 'left', 'right']) {
+        const indicator = document.createElement('div');
+        indicator.className = `overflow-indicator overflow-indicator-${edge}`;
+        objEl.appendChild(indicator);
+      }
+      body.addEventListener('scroll', () => updateOverflowIndicators(objEl, body));
+      queueMicrotask(() => updateOverflowIndicators(objEl, body));
+    }
+
     // Ein einfacher Klick (ohne nennenswerte Bewegung) fängt direkt an zu
     // schreiben - kein Doppelklick mehr nötig. Bewegt sich der Zeiger vor dem
     // Loslassen mehr als ein paar Pixel, wird daraus stattdessen wie gewohnt
@@ -1543,6 +1555,7 @@
       saveTextObjContent(note, obj, body);
       updateTextEmptyState(body);
       growFreeTextToFit(obj, objEl, body);
+      updateOverflowIndicators(objEl, body);
     });
     body.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') body.blur();
@@ -1582,6 +1595,7 @@
       saveTextObjContent(note, obj, body);
       updateTextEmptyState(body);
       growFreeTextToFit(obj, objEl, body);
+      updateOverflowIndicators(objEl, body);
     });
 
     // Fokussieren funktioniert nur auf Elementen, die bereits im DOM hängen – zu
@@ -1646,6 +1660,26 @@
       obj.h = needed;
       objEl.style.height = `${obj.h}px`;
     }
+  }
+
+  // Blendet an jeder Kante eines "Textfelds" (fester Größe) eine schlanke
+  // Leiste ein, wenn dort Inhalt über den sichtbaren Bereich hinausgeht -
+  // berücksichtigt dabei auch die aktuelle Scroll-Position (z. B. keine
+  // "unten"-Leiste mehr, sobald bis ganz nach unten gescrollt wurde). Ersetzt
+  // die native Bildlaufleiste des Browsers, die von aktuellen Chrome-
+  // Versionen mit aktivierten Overlay-Scrollbalken selbst nach eigener
+  // ::-webkit-scrollbar-Gestaltung nicht mehr zuverlässig angezeigt wird.
+  function updateOverflowIndicators(objEl, body) {
+    const top = objEl.querySelector('.overflow-indicator-top');
+    if (!top) return; // "Freier Text" hat keine Leisten (wächst stattdessen automatisch mit)
+    const bottom = objEl.querySelector('.overflow-indicator-bottom');
+    const left = objEl.querySelector('.overflow-indicator-left');
+    const right = objEl.querySelector('.overflow-indicator-right');
+    const EPS = 1;
+    top.classList.toggle('visible', body.scrollTop > EPS);
+    bottom.classList.toggle('visible', body.scrollHeight - body.scrollTop - body.clientHeight > EPS);
+    left.classList.toggle('visible', body.scrollLeft > EPS);
+    right.classList.toggle('visible', body.scrollWidth - body.scrollLeft - body.clientWidth > EPS);
   }
 
   // Bild direkt in den Textfluss einfügen (wie in OneNote per Einfügen/Drag&Drop
@@ -2042,6 +2076,7 @@
     saveTextObjContent(note, obj, body);
     updateTextEmptyState(body);
     growFreeTextToFit(obj, objEl, body);
+    updateOverflowIndicators(objEl, body);
     lastSelectionRange = null;
     closeAllFormatPopovers();
     body.focus();

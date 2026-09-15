@@ -1031,8 +1031,8 @@ textarea {
 }
 
 .object-toolbar-main .object-toolbar-btn .icon {
-  width: 11px;
-  height: 11px;
+  width: 14px;
+  height: 14px;
 }
 
 .canvas-object.toolbar-below .object-toolbar-main {
@@ -1150,23 +1150,56 @@ textarea {
 /* Ist ein Textfeld ("Textfeld"-Stil, feste Größe) kleiner als sein Inhalt,
    soll das immer sichtbar sein - nicht erst beim Draufhalten, wie es
    moderne Browser mit ihren "Overlay"-Bildlaufleisten sonst machen (dort
-   bleiben sie unsichtbar, solange man nicht aktiv scrollt/hovert, wodurch
-   gar nicht auffällt, dass noch etwas außerhalb liegt). Eine schlanke,
-   dezente Leiste erscheint dadurch zuverlässig an jeder Kante, an der
-   Inhalt über den Rand hinausgeht - aber wirklich nur dann (kein Balken,
-   wenn der Inhalt ohnehin komplett hineinpasst). */
-.canvas-text-body::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.canvas-text-body::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.canvas-text-body::-webkit-scrollbar-thumb {
+   bleiben sie unsichtbar, solange man nicht aktiv scrollt/hovert, und
+   aktuelle Chrome-Versionen ignorieren inzwischen sogar eigene
+   ::-webkit-scrollbar-Gestaltung, wenn Overlay-Bildlaufleisten aktiv sind -
+   ein eigener, echter Balken (kein Browser-Scrollbalken) ist daher
+   zuverlässiger). Je eine schlanke Leiste pro Kante wird per JS
+   (updateOverflowIndicators in app.js) ein-/ausgeblendet, sobald an dieser
+   Kante Inhalt über den sichtbaren Bereich hinausgeht - sonst bleibt sie
+   unsichtbar. */
+.overflow-indicator {
+  position: absolute;
+  pointer-events: none;
   background: var(--border-strong);
-  border-radius: 4px;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  z-index: 2;
+}
+
+.overflow-indicator.visible {
+  opacity: 1;
+}
+
+.overflow-indicator-top,
+.overflow-indicator-bottom {
+  left: 6px;
+  right: 6px;
+  height: 5px;
+}
+
+.overflow-indicator-top {
+  top: 2px;
+}
+
+.overflow-indicator-bottom {
+  bottom: 2px;
+}
+
+.overflow-indicator-left,
+.overflow-indicator-right {
+  top: 6px;
+  bottom: 6px;
+  width: 5px;
+}
+
+.overflow-indicator-left {
+  left: 2px;
+}
+
+.overflow-indicator-right {
+  right: 2px;
 }
 
 .canvas-text-body.editing {

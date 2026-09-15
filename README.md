@@ -82,10 +82,13 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
       „Standard"-Option wieder aufheben
     - **Überlauf-Anzeige beim „Textfeld"**: ist ein Textfeld mit fester
       Größe kleiner als sein Inhalt (z. B. nach dem Verkleinern), zeigt
-      sich am rechten und/oder unteren Rand eine schlanke Bildlaufleiste
-      – nur dann, wenn tatsächlich etwas außerhalb liegt. So bleibt
-      erkennbar, dass noch mehr Inhalt da ist, und man kann dorthin
-      scrollen
+      sich an der jeweiligen Kante (oben/unten/links/rechts) eine schlanke
+      Leiste – nur dann, wenn an dieser Kante tatsächlich etwas außerhalb
+      liegt, und verschwindet z. B. am unteren Rand wieder, sobald ganz
+      nach unten gescrollt wurde. Eine eigene, selbst gezeichnete Leiste
+      statt der Browser-Bildlaufleiste, da aktuelle Chrome-Versionen mit
+      aktivierten Overlay-Scrollbalken eigene Scrollbar-Gestaltung nicht
+      mehr zuverlässig anzeigen
 - **Werkzeugleiste im Ribbon-Stil** (an OneNote angelehnt): gruppierte
   Buttons mit Trennlinien (Formatvorlagen/Listen/Einfügen/Seite). Die
   Formatierungswerkzeuge (Überschrift, Schriftart, Fett, Kursiv,
