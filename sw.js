@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v4';
+const CACHE_VERSION = 'v5';
 const CACHE_NAME = `apple-notes-pwa-${CACHE_VERSION}`;
 
 const APP_SHELL = [
