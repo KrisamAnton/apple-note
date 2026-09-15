@@ -1031,8 +1031,12 @@ textarea {
 }
 
 .object-toolbar-main .object-toolbar-btn .icon {
-  width: 17px;
-  height: 17px;
+  /* Absichtlich größer als der 18px hohe Balken selbst - übersteht dessen
+     Rand sichtbar nach oben/unten, statt durch die Zeilenhöhe begrenzt zu
+     werden (die soll ja gleich bleiben). Kein overflow:hidden am Button,
+     das Icon wird also nicht abgeschnitten. */
+  width: 24px;
+  height: 24px;
 }
 
 .canvas-object.toolbar-below .object-toolbar-main {
