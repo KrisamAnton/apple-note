@@ -1018,12 +1018,19 @@
     return el.canvasSurface.querySelector(`[data-id="${id}"]`);
   }
 
+  // Die Werkzeugleiste eines Objekts schwebt normalerweise 38px darüber - liegt
+  // das Objekt zu nah am oberen Rand der Fläche, ragt sie dann oben über die
+  // Fläche hinaus und verschwindet unter der Ribbon-Leiste. In dem Fall klappt
+  // sie stattdessen nach unten unter das Objekt (siehe CSS ".toolbar-below").
+  const TOOLBAR_FLIP_THRESHOLD = 44;
+
   function applyObjRect(objEl, obj) {
     objEl.style.left = `${obj.x}px`;
     objEl.style.top = `${obj.y}px`;
     objEl.style.width = `${obj.w}px`;
     objEl.style.height = `${obj.h}px`;
     objEl.style.zIndex = obj.z || 1;
+    objEl.classList.toggle('toolbar-below', obj.y < TOOLBAR_FLIP_THRESHOLD);
   }
 
   // Für bereits im HTML vorhandene Buttons (die globale Formatierungs-Ribbon-Leiste):
@@ -1248,6 +1255,7 @@
     if (objEl) {
       objEl.style.left = `${obj.x}px`;
       objEl.style.top = `${obj.y}px`;
+      objEl.classList.toggle('toolbar-below', obj.y < TOOLBAR_FLIP_THRESHOLD);
     }
     for (const child of dragState.children) {
       const childObj = getObj(note, child.id);
@@ -1258,6 +1266,7 @@
       if (childEl) {
         childEl.style.left = `${childObj.x}px`;
         childEl.style.top = `${childObj.y}px`;
+        childEl.classList.toggle('toolbar-below', childObj.y < TOOLBAR_FLIP_THRESHOLD);
       }
     }
     updateSurfaceSize(note);

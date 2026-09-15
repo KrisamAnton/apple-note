@@ -969,6 +969,15 @@ textarea {
   white-space: nowrap;
 }
 
+/* Liegt ein Objekt zu nah am oberen Rand der Fläche, würde die Werkzeugleiste
+   (die normalerweise 38px darüber schwebt) über die Fläche hinausragen und
+   unter der Ribbon-Leiste verschwinden - in dem Fall klappt sie stattdessen
+   unter das Objekt (siehe TOOLBAR_FLIP_THRESHOLD in app.js). */
+.canvas-object.toolbar-below .object-toolbar {
+  top: auto;
+  bottom: -38px;
+}
+
 .canvas-object.selected .object-toolbar-main {
   display: flex;
 }
