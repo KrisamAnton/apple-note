@@ -1116,6 +1116,17 @@
     });
     objEl.appendChild(edgeBottom);
 
+    // Unsichtbare Zone genau in der Ecke (liegt über den beiden Kanten) für das
+    // gleichzeitige Ändern von Breite UND Höhe - wie beim früheren runden
+    // Ziehpunkt, nur ohne sichtbares Element.
+    const edgeCorner = document.createElement('div');
+    edgeCorner.className = 'resize-edge resize-edge-corner';
+    edgeCorner.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      startObjectResize(e, note, obj, objEl, edgeCorner, 'both');
+    });
+    objEl.appendChild(edgeCorner);
+
     return objEl;
   }
 

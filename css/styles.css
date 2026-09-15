@@ -1052,11 +1052,12 @@ textarea {
   touch-action: none;
 }
 
-/* Größe ändern nur noch über die rechte Kante (Breite) und die untere Kante
-   (Höhe) - wie bei einem normalen Fenster, kein runder Ziehpunkt in der Ecke
-   mehr (der galt als optisch störend). Beide Kanten überlappen sich bewusst
-   in der Ecke ein kleines Stück, damit dort keine tote Zone ohne Ziehpunkt
-   entsteht. */
+/* Größe ändern über die rechte Kante (Breite) und die untere Kante (Höhe) -
+   wie bei einem normalen Fenster, kein runder Ziehpunkt in der Ecke mehr (der
+   galt als optisch störend). In der Ecke selbst liegt zusätzlich eine
+   unsichtbare, etwas größere Zone (resize-edge-corner) über den beiden
+   Kanten, die - genau wie früher der runde Punkt - Breite UND Höhe
+   gleichzeitig ändert. */
 .resize-edge {
   position: absolute;
   display: none;
@@ -1078,6 +1079,15 @@ textarea {
   bottom: -4px;
   height: 8px;
   cursor: ns-resize;
+}
+
+.resize-edge-corner {
+  right: -6px;
+  bottom: -6px;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+  z-index: 3;
 }
 
 .canvas-object.selected .resize-edge {
