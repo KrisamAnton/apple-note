@@ -187,7 +187,17 @@ function runTranscriptionJob(jobId, filePath) {
   });
 }
 
-app.use(express.static(PROJECT_ROOT));
+// Ohne explizite Cache-Control-Angabe entscheidet jeder Browser selbst (und oft
+// länger als gewünscht), wie lange er index.html/app.js/styles.css behält - nach
+// einem Deploy sah man dadurch teils tagelang noch die alte Version, obwohl der
+// Code auf dem Server längst aktuell war. "no-cache" erzwingt bei jedem Laden
+// eine Rückfrage beim Server (per ETag/Last-Modified genügt meist ein schneller
+// 304-Abgleich statt einer erneuten vollen Übertragung).
+app.use(
+  express.static(PROJECT_ROOT, {
+    setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
+  })
+);
 
 app.listen(PORT, () => {
   console.log(`KrisNote-Server läuft auf Port ${PORT}`);
