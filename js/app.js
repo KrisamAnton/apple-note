@@ -1116,9 +1116,28 @@
     handle.className = 'resize-handle';
     handle.addEventListener('pointerdown', (e) => {
       e.stopPropagation();
-      startObjectResize(e, note, obj, objEl, handle);
+      startObjectResize(e, note, obj, objEl, handle, 'both');
     });
     objEl.appendChild(handle);
+
+    // Zusätzlich zum Ziehpunkt in der Ecke lassen sich - wie bei einem normalen
+    // Fenster - auch die rechte Kante (nur Breite) und die untere Kante (nur
+    // Höhe) einzeln zum Größenändern greifen.
+    const edgeRight = document.createElement('div');
+    edgeRight.className = 'resize-edge resize-edge-right';
+    edgeRight.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      startObjectResize(e, note, obj, objEl, edgeRight, 'x');
+    });
+    objEl.appendChild(edgeRight);
+
+    const edgeBottom = document.createElement('div');
+    edgeBottom.className = 'resize-edge resize-edge-bottom';
+    edgeBottom.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      startObjectResize(e, note, obj, objEl, edgeBottom, 'y');
+    });
+    objEl.appendChild(edgeBottom);
 
     return objEl;
   }
@@ -1330,12 +1349,13 @@
 
   // ----- Größe ändern -----
 
-  function startObjectResize(e, note, obj, objEl, handle) {
+  function startObjectResize(e, note, obj, objEl, handle, axis) {
     e.preventDefault();
     selectObject(note, obj, objEl);
     dragState = {
       type: 'resize',
       objId: obj.id,
+      axis: axis || 'both',
       startX: e.clientX,
       startY: e.clientY,
       startW: obj.w,
@@ -1363,8 +1383,8 @@
     const [minW, minH] = MIN_SIZES[obj.type] || [60, 60];
     const dx = e.clientX - dragState.startX;
     const dy = e.clientY - dragState.startY;
-    obj.w = clamp(dragState.startW + dx, minW, MAX_OBJ_DIM - obj.x);
-    obj.h = clamp(dragState.startH + dy, minH, MAX_OBJ_DIM - obj.y);
+    if (dragState.axis !== 'y') obj.w = clamp(dragState.startW + dx, minW, MAX_OBJ_DIM - obj.x);
+    if (dragState.axis !== 'x') obj.h = clamp(dragState.startH + dy, minH, MAX_OBJ_DIM - obj.y);
     const objEl = findObjEl(obj.id);
     if (objEl) {
       objEl.style.width = `${obj.w}px`;
