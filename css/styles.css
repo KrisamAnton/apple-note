@@ -1147,6 +1147,28 @@ textarea {
   pointer-events: none;
 }
 
+/* Ist ein Textfeld ("Textfeld"-Stil, feste Größe) kleiner als sein Inhalt,
+   soll das immer sichtbar sein - nicht erst beim Draufhalten, wie es
+   moderne Browser mit ihren "Overlay"-Bildlaufleisten sonst machen (dort
+   bleiben sie unsichtbar, solange man nicht aktiv scrollt/hovert, wodurch
+   gar nicht auffällt, dass noch etwas außerhalb liegt). Eine schlanke,
+   dezente Leiste erscheint dadurch zuverlässig an jeder Kante, an der
+   Inhalt über den Rand hinausgeht - aber wirklich nur dann (kein Balken,
+   wenn der Inhalt ohnehin komplett hineinpasst). */
+.canvas-text-body::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.canvas-text-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.canvas-text-body::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 4px;
+}
+
 .canvas-text-body.editing {
   pointer-events: auto;
   cursor: text;

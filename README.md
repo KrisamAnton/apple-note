@@ -80,6 +80,12 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
       je 3 Stärken (Leicht/Mittel/Stark). Hervorhebungen, Farbe und
       Schriftgröße lassen sich über die jeweilige „Entfernen"/
       „Standard"-Option wieder aufheben
+    - **Überlauf-Anzeige beim „Textfeld"**: ist ein Textfeld mit fester
+      Größe kleiner als sein Inhalt (z. B. nach dem Verkleinern), zeigt
+      sich am rechten und/oder unteren Rand eine schlanke Bildlaufleiste
+      – nur dann, wenn tatsächlich etwas außerhalb liegt. So bleibt
+      erkennbar, dass noch mehr Inhalt da ist, und man kann dorthin
+      scrollen
 - **Werkzeugleiste im Ribbon-Stil** (an OneNote angelehnt): gruppierte
   Buttons mit Trennlinien (Formatvorlagen/Listen/Einfügen/Seite). Die
   Formatierungswerkzeuge (Überschrift, Schriftart, Fett, Kursiv,

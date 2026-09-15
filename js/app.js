@@ -2045,6 +2045,38 @@
     lastSelectionRange = null;
     closeAllFormatPopovers();
     body.focus();
+    // Die ursprüngliche Selektion wurde durch das Umbauen des DOM oben
+    // (extractContents/insertNode) ungültig - ohne eine neu gesetzte
+    // Selektion hätte ein erneuter Formatierungsklick (ohne dass der Nutzer
+    // vorher wieder in den Text klickt) keine gültige aktuelle Zeile mehr
+    // zum Anwenden (siehe currentFormatRange) und würde stillschweigend
+    // nichts tun. Cursor daher ans Ende des Textfelds setzen.
+    collapseSelectionToEnd(body);
+  }
+
+  // Setzt den Cursor kollabiert an die letzte Stelle im übergebenen Element -
+  // WICHTIG: absichtlich in den tiefsten letzten Nachfahren hinein (nie auf
+  // das Element selbst als Container), sonst liefert lineBlockOf() beim
+  // nächsten Aufruf von currentFormatRange() das Element selbst statt der
+  // tatsächlichen letzten Zeile zurück (das Element ist ja selbst ein <div>
+  // und würde von isLineBlockEl() fälschlich als eigene "Zeile" erkannt).
+  function collapseSelectionToEnd(container) {
+    try {
+      let node = container;
+      while (node.lastChild) node = node.lastChild;
+      const range = document.createRange();
+      if (node.nodeType === Node.TEXT_NODE) {
+        range.setStart(node, node.textContent.length);
+      } else {
+        range.selectNodeContents(node);
+      }
+      range.collapse(false);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch (err) {
+      // ignorieren
+    }
   }
 
   function applyInlineCommand(command) {
@@ -2093,6 +2125,21 @@
     const span = document.createElement('span');
     span.style[styleProp] = styleValue;
     const frag = range.extractContents();
+    // Bereits vorhandene Werte derselben Eigenschaft in verschachtelten Spans
+    // (z. B. eine frühere Schriftgröße) zuerst entfernen - sonst wird nur
+    // eine weitere Schicht außen herumgelegt, und der innerste (älteste)
+    // Wert "gewinnt" optisch immer weiter, weil ein Inline-Style auf einem
+    // Nachfahren einen vom Vorfahren geerbten Wert stets überschreibt. Ohne
+    // das ließe sich eine einmal gesetzte Schriftgröße/-art nie mehr ändern.
+    frag.querySelectorAll('[style]').forEach((el) => {
+      if (!el.style[styleProp]) return;
+      el.style[styleProp] = '';
+      if (!el.getAttribute('style')) {
+        const parent = el.parentNode;
+        while (el.firstChild) parent.insertBefore(el.firstChild, el);
+        parent.removeChild(el);
+      }
+    });
     span.appendChild(frag);
     range.insertNode(span);
   }
