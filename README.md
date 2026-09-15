@@ -47,9 +47,11 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
       keine Textauswahl nötig
     - **Textformatierung** (Auswahl markieren, dann in der Werkzeugleiste
       wählen): **Fett**, *Kursiv*, **Unterstrichen**, **Durchgestrichen**,
-      **Hoch-/Tiefgestellt**, **Schriftart** (5 Schriftfamilien), 
-      **Textfarbe** (8 Farben) und **Schriftgröße** (Klein/Standard/Groß/
-      Sehr groß) – wie in einer Textverarbeitung
+      **Hoch-/Tiefgestellt**, **Schriftart** (Calibri, Arial, Times New
+      Roman, Georgia, Courier New, Verdana, Comic Sans MS) und
+      **Schriftgröße** (echte Punktgrößen 8–72, wie in Word) – beide als
+      eigene Auswahlfelder mit Rahmen, genau wie in einer Textverarbeitung,
+      plus **Textfarbe** (8 Farben)
     - **Aufzählungszeichen** und **Nummerierung**: wirken auf die aktuelle
       Zeile bzw. Auswahl, wie in Word/OneNote
     - **Bilder direkt in den Text einfügen** (wie in OneNote): ein Bild in

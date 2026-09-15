@@ -69,19 +69,39 @@
     { hex: '#6e6e73', name: 'Grau' },
   ];
 
+  // Echte Punktgrößen wie in Word/OneNote (Umrechnung 1pt = 1.333px), nicht
+  // mehr beschreibende Namen wie früher ("Klein"/"Groß"). "11" entspricht der
+  // normalen Standardgröße der App (15px) und bleibt daher bewusst ohne
+  // eigenen px-Wert (px: null = "keine Überschreibung, normale Größe").
   const FONT_SIZES = [
-    { px: 12, label: 'Klein' },
-    { px: null, label: 'Standard' },
-    { px: 19, label: 'Groß' },
-    { px: 26, label: 'Sehr groß' },
+    { px: 11, label: '8' },
+    { px: 12, label: '9' },
+    { px: 13, label: '10' },
+    { px: null, label: '11' },
+    { px: 16, label: '12' },
+    { px: 19, label: '14' },
+    { px: 21, label: '16' },
+    { px: 24, label: '18' },
+    { px: 27, label: '20' },
+    { px: 32, label: '24' },
+    { px: 37, label: '28' },
+    { px: 48, label: '36' },
+    { px: 64, label: '48' },
+    { px: 96, label: '72' },
   ];
 
+  // Echte, bekannte Schriftartnamen wie in Word statt beschreibender
+  // Kategorien ("Serifenlos"/"Handschrift" etc.). "Calibri" ist die normale
+  // Standardschrift der App (siehe --font in styles.css) und bleibt daher
+  // ohne eigenen css-Wert.
   const FONT_FAMILIES = [
-    { css: null, label: 'Standard' },
-    { css: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Arial, sans-serif', label: 'Serifenlos' },
-    { css: 'Georgia, "Times New Roman", Times, serif', label: 'Serif' },
-    { css: '"Courier New", Courier, monospace', label: 'Monospace' },
-    { css: '"Marker Felt", "Segoe Script", cursive', label: 'Handschrift' },
+    { css: null, label: 'Calibri' },
+    { css: 'Arial, Helvetica, sans-serif', label: 'Arial' },
+    { css: '"Times New Roman", Times, serif', label: 'Times New Roman' },
+    { css: 'Georgia, serif', label: 'Georgia' },
+    { css: '"Courier New", Courier, monospace', label: 'Courier New' },
+    { css: 'Verdana, Geneva, sans-serif', label: 'Verdana' },
+    { css: '"Comic Sans MS", "Comic Sans", cursive', label: 'Comic Sans MS' },
   ];
 
   function hexToRgba(hex, alpha) {
@@ -1787,8 +1807,8 @@
     }
     activeTextEdit = { note, obj, objEl, body, overlay };
     lastSelectionRange = null;
-    el.ribbonFontFamilyLabel.textContent = 'Standard';
-    el.ribbonFontSizeLabel.textContent = 'Standard';
+    el.ribbonFontFamilyLabel.textContent = 'Calibri';
+    el.ribbonFontSizeLabel.textContent = '11';
     for (const btn of selectionFormatBtns()) btn.disabled = true;
     // Zeilen-weite Formatvorlagen (Überschrift, Listen) gelten für die ganze Zeile
     // und brauchen daher keine Textauswahl – sie sind während des ganzen
@@ -2102,7 +2122,7 @@
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'popover-item';
-      btn.textContent = size.px ? `${size.label} (${size.px}px)` : size.label;
+      btn.textContent = size.label;
       if (size.px) btn.dataset.px = String(size.px);
       el.fontSizeList.appendChild(btn);
     }
@@ -2247,7 +2267,7 @@
       else unwrapStyleFromRange(range, 'fontSize');
     });
     const entry = FONT_SIZES.find((s) => s.px === px);
-    el.ribbonFontSizeLabel.textContent = entry ? entry.label : 'Standard';
+    el.ribbonFontSizeLabel.textContent = entry ? entry.label : '11';
   }
 
   function applyFontFamilyChoice(css) {
@@ -2256,7 +2276,7 @@
       else unwrapStyleFromRange(range, 'fontFamily');
     });
     const entry = FONT_FAMILIES.find((f) => f.css === css);
-    el.ribbonFontFamilyLabel.textContent = entry ? entry.label : 'Standard';
+    el.ribbonFontFamilyLabel.textContent = entry ? entry.label : 'Calibri';
   }
 
   // ----- Zeichnen (globale Tinten-Ebene über der ganzen Fläche) -----
