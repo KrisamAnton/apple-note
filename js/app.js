@@ -30,7 +30,6 @@
     plus: '<svg viewBox="0 0 20 20"><path d="M9.2 2.5h1.6v6.7h6.7v1.6h-6.7v6.7H9.2v-6.7H2.5V9.2h6.7z"/></svg>',
     heading: '<svg viewBox="0 0 20 20"><text x="1.5" y="15" font-size="13" font-weight="800" fill="currentColor">H</text></svg>',
     openFile: '<svg viewBox="0 0 20 20"><path d="M8 3H4.5A1.5 1.5 0 0 0 3 4.5v11A1.5 1.5 0 0 0 4.5 17h11a1.5 1.5 0 0 0 1.5-1.5V12h-1.5v3.5h-11v-11H8V3z" fill="currentColor"/><path d="M11 3h6v6h-1.5V5.6l-6.15 6.15-1.06-1.06L14.44 4.5H11V3z" fill="currentColor"/></svg>',
-    grip: '<svg viewBox="0 0 20 20"><circle cx="6" cy="6" r="1.5"/><circle cx="10" cy="6" r="1.5"/><circle cx="14" cy="6" r="1.5"/><circle cx="6" cy="14" r="1.5"/><circle cx="10" cy="14" r="1.5"/><circle cx="14" cy="14" r="1.5"/></svg>',
     mic: '<svg viewBox="0 0 20 20"><path d="M10 2.5a2.5 2.5 0 0 0-2.5 2.5v4a2.5 2.5 0 0 0 5 0V5A2.5 2.5 0 0 0 10 2.5z" fill="currentColor"/><path d="M5.5 9v.5a4.5 4.5 0 0 0 9 0V9H16v.5a6 6 0 0 1-5.25 5.95V17.5h-1.5v-2.05A6 6 0 0 1 4 9.5V9h1.5z" fill="currentColor"/></svg>',
     transcript: '<svg viewBox="0 0 20 20"><path d="M3 4h14v1.6H3V4zm0 4.2h14v1.6H3V8.2zm0 4.2h9v1.6H3v-1.6z" fill="currentColor"/></svg>',
     rename: '<svg viewBox="0 0 20 20"><path d="M13.6 2.4a1.9 1.9 0 0 1 2.7 2.7L7.4 14 4 15l1-3.4 8.6-9.2z" fill="currentColor"/></svg>',
@@ -1063,25 +1062,6 @@
     return btn;
   }
 
-  // Eigener, kleiner Ziehpunkt oberhalb des Objekts speziell zum Verschieben –
-  // wie die kleine obere Leiste in OneNote. Unabhängig vom Inhaltsbereich
-  // (Text/Bild/PDF), damit ein Ziehen dort zuverlässig funktioniert, auch auf
-  // Touch-Geräten, wo ein Ziehen direkt auf dem Inhalt nicht immer zuverlässig
-  // als Verschieben statt als Scroll-Geste ankommt.
-  function makeMoveHandle(note, obj, objEl) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'object-toolbar-btn object-move-handle';
-    btn.innerHTML = `<svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.grip}</svg>`;
-    btn.title = 'Verschieben';
-    btn.setAttribute('aria-label', 'Verschieben');
-    btn.addEventListener('pointerdown', (e) => {
-      e.stopPropagation();
-      startObjectDrag(e, note, obj, objEl);
-    });
-    return btn;
-  }
-
   function buildObjectEl(note, obj, autoFocusText) {
     const objEl = document.createElement('div');
     objEl.className = 'canvas-object';
@@ -1090,9 +1070,14 @@
     if (obj.type === 'text') objEl.dataset.style = obj.style || 'boxed';
     applyObjRect(objEl, obj);
 
+    // Die Werkzeugleiste ist jetzt als kompletter grauer Balken (wie eine
+    // Fenster-Titelleiste, siehe OneNote) selbst der Ziehgriff zum Verschieben -
+    // ein eigener kleiner Verschieben-Knopf ist dadurch nicht mehr nötig. Die
+    // Knöpfe darin (Löschen usw.) stoppen die Ereignis-Weitergabe selbst
+    // (siehe makeToolbarBtn), lösen also kein Verschieben aus.
     const mainToolbar = document.createElement('div');
     mainToolbar.className = 'object-toolbar object-toolbar-main';
-    mainToolbar.appendChild(makeMoveHandle(note, obj, objEl));
+    mainToolbar.addEventListener('pointerdown', (e) => startObjectDrag(e, note, obj, objEl));
     if ((obj.type === 'pdf' || obj.type === 'file') && obj.fileData) {
       const label = obj.type === 'pdf' ? 'PDF öffnen' : 'Datei öffnen';
       mainToolbar.appendChild(makeToolbarBtn(ICONS.openFile, false, () => openAttachedFile(obj), label));
@@ -1112,17 +1097,9 @@
     else if (obj.type === 'audio') buildAudioContent(note, obj, objEl);
     else if (obj.type === 'file') buildFileContent(note, obj, objEl);
 
-    const handle = document.createElement('div');
-    handle.className = 'resize-handle';
-    handle.addEventListener('pointerdown', (e) => {
-      e.stopPropagation();
-      startObjectResize(e, note, obj, objEl, handle, 'both');
-    });
-    objEl.appendChild(handle);
-
-    // Zusätzlich zum Ziehpunkt in der Ecke lassen sich - wie bei einem normalen
-    // Fenster - auch die rechte Kante (nur Breite) und die untere Kante (nur
-    // Höhe) einzeln zum Größenändern greifen.
+    // Größe ändern nur noch über die rechte Kante (Breite) und die untere
+    // Kante (Höhe) - wie bei einem normalen Fenster, kein zusätzlicher runder
+    // Ziehpunkt in der Ecke mehr.
     const edgeRight = document.createElement('div');
     edgeRight.className = 'resize-edge resize-edge-right';
     edgeRight.addEventListener('pointerdown', (e) => {

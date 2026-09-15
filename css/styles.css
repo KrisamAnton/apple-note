@@ -16,6 +16,7 @@
   --selection-bg: rgba(167, 139, 250, 0.16);
   --selection-bg-strong: #a78bfa;
   --hover-bg: rgba(0, 0, 0, 0.045);
+  --titlebar-bg: #e7e7ea;
   --danger: #ff3b30;
   --shadow-popover: 0 12px 32px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.08);
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -38,6 +39,7 @@
     --selection-bg: rgba(196, 181, 253, 0.18);
     --selection-bg-strong: #c4b5fd;
     --hover-bg: rgba(255, 255, 255, 0.06);
+    --titlebar-bg: #3a3a3c;
     --shadow-popover: 0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
   }
 }
@@ -982,6 +984,30 @@ textarea {
   display: flex;
 }
 
+/* Die Werkzeugleiste eines ausgewählten Objekts ist als leicht grauer Balken
+   über die volle Breite gezogen (wie eine Fenster-Titelleiste, z. B. in
+   OneNote) und ist selbst der Ziehgriff zum Verschieben - kein eigener
+   Verschieben-Knopf mehr nötig. Die Knöpfe darin (Löschen usw.) stoppen die
+   Ereignis-Weitergabe selbst, lösen also kein Verschieben aus. */
+.object-toolbar-main {
+  left: 0;
+  right: 0;
+  justify-content: flex-end;
+  background: var(--titlebar-bg);
+  border-radius: 6px 6px 0 0;
+  box-shadow: none;
+  cursor: grab;
+  touch-action: none;
+}
+
+.object-toolbar-main:active {
+  cursor: grabbing;
+}
+
+.canvas-object.toolbar-below .object-toolbar-main {
+  border-radius: 0 0 6px 6px;
+}
+
 .object-toolbar-btn {
   width: 26px;
   height: 26px;
@@ -1012,19 +1038,6 @@ textarea {
   height: 15px;
 }
 
-/* Eigener Ziehpunkt zum Verschieben (kleine Leiste oberhalb des Objekts, wie
-   in OneNote) - unabhängig vom Inhalt, damit Ziehen auf Touch-Geräten
-   zuverlässig als Verschieben statt als Scroll-Geste ankommt. */
-.object-move-handle {
-  color: var(--accent);
-  cursor: grab;
-  touch-action: none;
-}
-
-.object-move-handle:active {
-  cursor: grabbing;
-}
-
 .resize-handle {
   position: absolute;
   right: -8px;
@@ -1039,14 +1052,11 @@ textarea {
   touch-action: none;
 }
 
-.canvas-object.selected .resize-handle {
-  display: block;
-}
-
-/* Zusätzlich zum runden Ziehpunkt in der Ecke (Breite+Höhe gemeinsam) lassen
-   sich - wie bei einem normalen Fenster - auch die rechte Kante (nur Breite)
-   und die untere Kante (nur Höhe) einzeln greifen. Beide sparen bewusst die
-   Ecke aus, damit sie sich nicht mit dem runden Ziehpunkt überschneiden. */
+/* Größe ändern nur noch über die rechte Kante (Breite) und die untere Kante
+   (Höhe) - wie bei einem normalen Fenster, kein runder Ziehpunkt in der Ecke
+   mehr (der galt als optisch störend). Beide Kanten überlappen sich bewusst
+   in der Ecke ein kleines Stück, damit dort keine tote Zone ohne Ziehpunkt
+   entsteht. */
 .resize-edge {
   position: absolute;
   display: none;
@@ -1056,7 +1066,7 @@ textarea {
 
 .resize-edge-right {
   top: 0;
-  bottom: 16px;
+  bottom: 0;
   right: -4px;
   width: 8px;
   cursor: ew-resize;
@@ -1064,7 +1074,7 @@ textarea {
 
 .resize-edge-bottom {
   left: 0;
-  right: 16px;
+  right: 0;
   bottom: -4px;
   height: 8px;
   cursor: ns-resize;
