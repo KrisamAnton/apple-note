@@ -501,11 +501,19 @@ textarea {
   transform: rotate(90deg);
 }
 
+/* Positioniert statt im normalen Zeilenfluss (der dafür sonst dauerhaft Platz
+   reserviert hätte, obwohl die Knöpfe nur bei Hover sichtbar sind) - dadurch
+   kann der Titel fast bis zum rechten Rand der Spalte reichen, statt immer
+   vorzeitig durch den reservierten Platz für diese Knöpfe abgeschnitten zu
+   werden. Bei Hover legen sie sich einfach über das Ende des (nötigenfalls
+   mit Ellipse abgeschnittenen) Titels. */
 .note-add-sub {
-  flex: none;
+  position: absolute;
+  right: 30px;
+  top: 50%;
+  transform: translateY(-50%);
   width: 22px;
   height: 22px;
-  margin-top: -1px;
   border: none;
   background: transparent;
   color: var(--text-tertiary);
@@ -533,10 +541,12 @@ textarea {
 }
 
 .note-delete-btn {
-  flex: none;
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
   width: 22px;
   height: 22px;
-  margin-top: -1px;
   border: none;
   background: transparent;
   color: var(--danger);
@@ -1690,6 +1700,27 @@ textarea {
 .popover-wide {
   min-width: 280px;
   max-width: 320px;
+}
+
+/* Schlichte, kompakte Liste (Schriftart/-größe) statt großer Kacheln - wie
+   ein normales Auswahlfeld/Dropdown (siehe native <select>-Listen), nicht
+   wie ein Raster aus großen Schaltflächen. */
+.popover-compact {
+  min-width: 70px;
+  max-width: 170px;
+  padding: 4px;
+  border-radius: 6px;
+}
+
+.popover-compact .popover-list {
+  max-height: 240px;
+}
+
+.popover-compact .popover-item {
+  padding: 4px 10px;
+  border-radius: 3px;
+  font-size: 13px;
+  font-weight: 400;
 }
 
 .popover-item-rich {

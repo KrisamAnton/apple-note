@@ -18,7 +18,11 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
   „+"-Symbol, das beim Überfahren einer Notiz in der Liste erscheint.
   Die Notizliste zeigt das Ganze als ein- und ausklappbaren Baum;
   Löschen fragt nach und entfernt dann die gesamte Unterseiten-Kette,
-  Verschieben in einen anderen Ordner nimmt den Unterbaum automatisch mit
+  Verschieben in einen anderen Ordner nimmt den Unterbaum automatisch mit.
+  „Unterseite hinzufügen"/„Löschen" erscheinen erst bei Hover über der
+  Zeile und legen sich dann über das Ende des Titels, statt dauerhaft
+  Platz zu beanspruchen - der Titel reicht dadurch fast bis zum
+  rechten Rand der Spalte
 - **Notizen manuell per Ziehen umsortieren** (wie in OneNote): eine Zeile
   in der Notizliste lang drücken (kurzer Puls zeigt das "Aufheben" an),
   dann an die gewünschte Stelle ziehen und loslassen. Beim Ziehen über
@@ -51,7 +55,13 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
       Roman, Georgia, Courier New, Verdana, Comic Sans MS) und
       **Schriftgröße** (echte Punktgrößen 8–72, wie in Word) – beide als
       eigene Auswahlfelder mit Rahmen, genau wie in einer Textverarbeitung,
-      plus **Textfarbe** (8 Farben)
+      plus **Textfarbe** (8 Farben). Ohne markierten Text (nur Cursor in
+      der Zeile) wirkt die Formatierung auf die ganze aktuelle Zeile,
+      statt wirkungslos zu bleiben
+    - **Rückgängig/Wiederherstellen**: die beiden Pfeil-Symbole ganz links
+      im Ribbon (Strg+Z/Strg+Y funktionieren ebenso) nutzen den nativen
+      Bearbeitungsverlauf des Browsers im gerade bearbeiteten Textfeld -
+      deckt vor allem getippten/gelöschten Text zuverlässig ab
     - **Aufzählungszeichen** und **Nummerierung**: wirken auf die aktuelle
       Zeile bzw. Auswahl, wie in Word/OneNote
     - **Bilder direkt in den Text einfügen** (wie in OneNote): ein Bild in

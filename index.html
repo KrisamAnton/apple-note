@@ -74,6 +74,17 @@
 
       <article class="editor" id="editor" hidden>
         <div class="editor-toolbar ribbon">
+          <div class="ribbon-group">
+            <button class="toolbar-btn" id="undoBtn" type="button" disabled aria-label="Rückgängig" title="Rückgängig (Strg+Z)">
+              <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M6 4 2 8l4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 8h9a5 5 0 1 1 0 10h-1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </button>
+            <button class="toolbar-btn" id="redoBtn" type="button" disabled aria-label="Wiederherstellen" title="Wiederherstellen (Strg+Y)">
+              <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M14 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 8H9a5 5 0 1 0 0 10h1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+
+          <div class="ribbon-divider"></div>
+
           <div class="ribbon-group" id="formatGroup">
             <button class="toolbar-btn" id="headingBtn" type="button" disabled aria-label="Formatvorlage (Überschrift)" title="Formatvorlage (Überschrift)">
               <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><text x="1.5" y="15" font-size="13" font-weight="800" fill="currentColor">H</text></svg>
@@ -290,8 +301,7 @@
 
   <!-- Schriftgröße -->
   <div class="popover-backdrop" id="fontSizePopoverBackdrop" hidden>
-    <div class="popover" id="fontSizePopover">
-      <p class="popover-title">Schriftgröße</p>
+    <div class="popover popover-compact" id="fontSizePopover">
       <div class="popover-list" id="fontSizeList"></div>
     </div>
   </div>
@@ -306,8 +316,7 @@
 
   <!-- Schriftart -->
   <div class="popover-backdrop" id="fontFamilyPopoverBackdrop" hidden>
-    <div class="popover" id="fontFamilyPopover">
-      <p class="popover-title">Schriftart</p>
+    <div class="popover popover-compact" id="fontFamilyPopover">
       <div class="popover-list" id="fontFamilyList"></div>
     </div>
   </div>

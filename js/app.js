@@ -367,6 +367,8 @@
     movePopover: document.getElementById('movePopover'),
     movePopoverList: document.getElementById('movePopoverList'),
     addTextBtn: document.getElementById('addTextBtn'),
+    undoBtn: document.getElementById('undoBtn'),
+    redoBtn: document.getElementById('redoBtn'),
     headingBtn: document.getElementById('headingBtn'),
     boldBtn: document.getElementById('boldBtn'),
     italicBtn: document.getElementById('italicBtn'),
@@ -1773,7 +1775,7 @@
   // Formatierungs-Buttons, die auf die ganze Zeile wirken und daher schon nutzbar
   // sind, sobald ein Text-Objekt bearbeitet wird – keine Auswahl nötig.
   function editingOnlyFormatBtns() {
-    return [el.headingBtn, el.bulletListBtn, el.numberedListBtn];
+    return [el.headingBtn, el.bulletListBtn, el.numberedListBtn, el.undoBtn, el.redoBtn];
   }
 
   // Setzt den Cursor möglichst genau an die angeklickte Bildschirmposition,
@@ -1809,7 +1811,10 @@
     lastSelectionRange = null;
     el.ribbonFontFamilyLabel.textContent = 'Calibri';
     el.ribbonFontSizeLabel.textContent = '11';
-    for (const btn of selectionFormatBtns()) btn.disabled = true;
+    // Auch ohne markierten Text nutzbar (wirkt dann auf die ganze aktuelle
+    // Zeile, siehe currentFormatRange) - wie in Word, wo Schriftart/-größe &
+    // Co. auch ohne vorheriges Markieren anwendbar sind.
+    for (const btn of selectionFormatBtns()) btn.disabled = false;
     // Zeilen-weite Formatvorlagen (Überschrift, Listen) gelten für die ganze Zeile
     // und brauchen daher keine Textauswahl – sie sind während des ganzen
     // Bearbeitens nutzbar.
@@ -1893,7 +1898,10 @@
 
   // Merkt sich die zuletzt markierte (nicht eingeklappte) Textauswahl im gerade
   // bearbeiteten Text-Objekt, damit die Formatierungs-Buttons auch nach einem Klick
-  // in die Werkzeugleiste noch wissen, was formatiert werden soll.
+  // in die Werkzeugleiste noch wissen, was formatiert werden soll. Die Buttons
+  // selbst bleiben unabhängig davon nutzbar (siehe enterTextEdit/
+  // currentFormatRange) - ohne Auswahl wirkt eine Formatierung auf die ganze
+  // aktuelle Zeile statt stillschweigend nichts zu tun.
   document.addEventListener('selectionchange', () => {
     if (!activeTextEdit) return;
     const sel = window.getSelection();
@@ -1901,7 +1909,6 @@
       sel && sel.rangeCount > 0 && !sel.isCollapsed &&
       activeTextEdit.body.contains(sel.getRangeAt(0).commonAncestorContainer);
     lastSelectionRange = valid ? sel.getRangeAt(0).cloneRange() : null;
-    for (const btn of selectionFormatBtns()) btn.disabled = !valid;
   });
 
   // Entf/Rücktaste löscht das gerade ausgewählte Objekt (Bild/PDF/Audio/Text) -
@@ -1999,21 +2006,43 @@
     return ranges;
   }
 
+  // Liefert die Range, auf die eine Formatierung angewendet werden soll: eine
+  // echte Textauswahl, falls vorhanden - sonst (nur Cursor, nichts markiert)
+  // die ganze aktuelle Zeile, damit ein Klick auf Schriftart/-größe & Co.
+  // ohne vorheriges Markieren nicht stillschweigend wirkungslos bleibt
+  // (genau wie in Word: Formatierung ohne Auswahl wirkt auf die Zeile).
+  function currentFormatRange() {
+    if (!activeTextEdit) return null;
+    if (lastSelectionRange) return lastSelectionRange;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return null;
+    const { body } = activeTextEdit;
+    const caretRange = sel.getRangeAt(0);
+    if (!body.contains(caretRange.startContainer)) return null;
+    const nodes = getCurrentLineNodes(caretRange.startContainer, body);
+    if (nodes.length === 0) return null;
+    const range = document.createRange();
+    range.setStartBefore(nodes[0]);
+    range.setEndAfter(nodes[nodes.length - 1]);
+    return range;
+  }
+
   function withActiveSelection(fn) {
-    if (!activeTextEdit || !lastSelectionRange) {
+    const targetRange = currentFormatRange();
+    if (!activeTextEdit || !targetRange) {
       closeAllFormatPopovers();
       return;
     }
-    const { note, obj, body } = activeTextEdit;
-    const ranges = splitRangeByLine(lastSelectionRange, body);
+    const { note, obj, objEl, body } = activeTextEdit;
+    const ranges = splitRangeByLine(targetRange, body);
     for (const range of ranges) {
       expandRangeToElementBoundaries(range, body);
       fn(range, note, obj, body);
     }
     saveTextObjContent(note, obj, body);
     updateTextEmptyState(body);
+    growFreeTextToFit(obj, objEl, body);
     lastSelectionRange = null;
-    for (const btn of selectionFormatBtns()) btn.disabled = true;
     closeAllFormatPopovers();
     body.focus();
   }
@@ -2029,6 +2058,21 @@
     }
     document.execCommand(command);
     saveTextObjContent(activeTextEdit.note, activeTextEdit.obj, body);
+  }
+
+  // Rückgängig/Wiederherstellen über den nativen Undo-Verlauf des Browsers im
+  // gerade bearbeiteten Textfeld (Strg+Z/Strg+Y funktionieren dort ohnehin
+  // schon nativ - deckt vor allem getipptes/gelöschtes ab, nicht unbedingt
+  // jede über die Werkzeugleiste gesetzte Formatierung, da execCommand nur
+  // echte Tastatureingaben und selbst ausgeführte execCommand-Befehle
+  // zuverlässig auf den Verlauf legt).
+  function applyUndoRedo(command) {
+    if (!activeTextEdit) return;
+    const { note, obj, body } = activeTextEdit;
+    body.focus();
+    document.execCommand(command);
+    saveTextObjContent(note, obj, body);
+    updateTextEmptyState(body);
   }
 
   function applyListCommand(command) {
@@ -2144,7 +2188,7 @@
   }
 
   function openFormatPopover(backdropEl, popoverEl, anchorBtn) {
-    if (!activeTextEdit || !lastSelectionRange) return;
+    if (!activeTextEdit) return;
     buildMarkerGrid();
     buildColorGrid();
     buildFontSizeList();
@@ -3840,6 +3884,8 @@
     });
 
     el.addTextBtn.addEventListener('click', openTextStylePopover);
+    wireRibbonBtn(el.undoBtn, () => applyUndoRedo('undo'));
+    wireRibbonBtn(el.redoBtn, () => applyUndoRedo('redo'));
     wireRibbonBtn(el.headingBtn, () => openHeadingPopover(el.headingBtn));
     wireRibbonBtn(el.boldBtn, () => applyInlineCommand('bold'));
     wireRibbonBtn(el.italicBtn, () => applyInlineCommand('italic'));
