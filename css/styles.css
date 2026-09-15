@@ -1224,6 +1224,12 @@ textarea {
   color: inherit;
 }
 
+.note-link {
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .canvas-text-body .heading-1 {
   font-size: 22px;
   font-weight: 700;

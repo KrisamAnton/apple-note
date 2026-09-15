@@ -1531,11 +1531,20 @@
           startObjectDrag(e, note, obj, objEl);
         }
       };
-      const onUp = () => {
+      const onUp = (ev) => {
         cleanup();
         if (!moved) {
           e.preventDefault();
           e.stopPropagation();
+          // Ein Klick auf einen bereits erkannten Link soll ihn öffnen, statt
+          // (wie sonst bei jedem Klick auf die Fläche) in den Bearbeitungsmodus
+          // zu wechseln - die Überlagerung (overlay) läge sonst immer über dem
+          // eigentlichen <a>-Element und würde jeden Klick abfangen.
+          const link = findLinkAtPoint(body, ev.clientX, ev.clientY);
+          if (link) {
+            window.open(link.href, '_blank', 'noopener,noreferrer');
+            return;
+          }
           enterTextEdit(note, obj, objEl, body, overlay, startX, startY);
         }
       };
@@ -1855,7 +1864,74 @@
     for (const btn of editingOnlyFormatBtns()) btn.disabled = false;
   }
 
+  // Erkennt Internetadressen (http(s):// oder www.) im Text und macht daraus
+  // klickbare Links - läuft beim Verlassen eines Textfelds (nicht während des
+  // Tippens, das würde die Cursor-Position bei jedem Zeichen gefährden).
+  const URL_RE = /(https?:\/\/[^\s<]+|www\.[^\s<]+\.[^\s<]+)/gi;
+  const URL_TRAILING_PUNCT_RE = /[.,;:!?)\]}'"]+$/;
+
+  function linkifyBody(body) {
+    const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        // Text, der schon in einem Link steckt (oder z. B. im Bild-Platzhalter),
+        // nicht nochmal verlinken.
+        if (node.parentElement && node.parentElement.closest('a')) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
+    const textNodes = [];
+    let n;
+    while ((n = walker.nextNode())) textNodes.push(n);
+    for (const textNode of textNodes) linkifyTextNode(textNode);
+  }
+
+  function linkifyTextNode(textNode) {
+    const text = textNode.textContent;
+    URL_RE.lastIndex = 0;
+    const matches = [];
+    let m;
+    while ((m = URL_RE.exec(text))) {
+      let raw = m[0];
+      let end = m.index + raw.length;
+      const trailing = raw.match(URL_TRAILING_PUNCT_RE);
+      if (trailing) {
+        raw = raw.slice(0, raw.length - trailing[0].length);
+        end -= trailing[0].length;
+      }
+      if (raw.length < 4) continue;
+      matches.push({ start: m.index, end, raw });
+    }
+    // Von hinten nach vorne einsetzen, damit die Start/End-Indizes der
+    // übrigen Treffer im (noch unveränderten) Rest des Textknotens gültig bleiben.
+    for (let i = matches.length - 1; i >= 0; i--) {
+      const { start, end, raw } = matches[i];
+      const range = document.createRange();
+      range.setStart(textNode, start);
+      range.setEnd(textNode, end);
+      const a = document.createElement('a');
+      a.href = /^www\./i.test(raw) ? `https://${raw}` : raw;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.className = 'note-link';
+      range.surroundContents(a);
+    }
+  }
+
+  // Ermittelt, ob an einer Bildschirmposition ein erkannter Link liegt -
+  // gebraucht, weil das transparente Overlay über dem Textfeld (siehe
+  // buildTextContent) außerhalb des Bearbeitungsmodus alle Klicks abfängt und
+  // damit auch die eigentlichen <a>-Elemente darunter verdeckt.
+  function findLinkAtPoint(body, x, y) {
+    const links = body.querySelectorAll('a.note-link');
+    for (const a of links) {
+      const r = a.getBoundingClientRect();
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return a;
+    }
+    return null;
+  }
+
   function exitTextEdit(obj, body, overlay) {
+    linkifyBody(body);
     body.contentEditable = 'false';
     body.classList.remove('editing');
     overlay.style.display = '';

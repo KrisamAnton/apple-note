@@ -89,6 +89,13 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
       statt der Browser-Bildlaufleiste, da aktuelle Chrome-Versionen mit
       aktivierten Overlay-Scrollbalken eigene Scrollbar-Gestaltung nicht
       mehr zuverlässig anzeigen
+    - **Internetadressen werden automatisch zu Links**: eine erkannte
+      URL (beginnt mit „http://", „https://" oder „www.") wird beim
+      Verlassen des Textfelds automatisch unterstrichen und klickbar
+      gemacht. Außerhalb des Bearbeitungsmodus öffnet ein Klick darauf
+      direkt in einem neuen Tab; während des Bearbeitens platziert ein
+      einfacher Klick wie gewohnt nur den Cursor (Strg/Cmd+Klick öffnet
+      den Link auch dort)
 - **Werkzeugleiste im Ribbon-Stil** (an OneNote angelehnt): gruppierte
   Buttons mit Trennlinien (Formatvorlagen/Listen/Einfügen/Seite). Die
   Formatierungswerkzeuge (Überschrift, Schriftart, Fett, Kursiv,
