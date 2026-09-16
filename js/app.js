@@ -1609,6 +1609,7 @@
       // Neuladen sogar ganz verloren ging.
       saveTextObjContent(note, obj, body);
       updateTextEmptyState(body);
+      growObjWidthToFit(obj, objEl, body);
       growFreeTextToFit(obj, objEl, body);
       updateOverflowIndicators(objEl, body);
     });
@@ -1674,6 +1675,33 @@
     if (needed > obj.h) {
       obj.h = needed;
       objEl.style.height = `${obj.h}px`;
+    }
+  }
+
+  // Beim Einfügen (z. B. aus Word/Browser kopiert) blieb ein frisch angelegtes,
+  // schmales Textfeld schmal - jede Zeile brach dadurch sofort um, obwohl auf
+  // der Fläche reichlich Platz wäre, und man musste von Hand nachziehen. Diese
+  // Funktion misst, wie breit der eingefügte Inhalt ohne Umbruch tatsächlich
+  // wäre (über ein unsichtbares Mess-Element mit dem gleichen Schriftstil),
+  // und verbreitert das Textfeld bis zu einer sinnvollen Obergrenze passend
+  // dazu - verkleinert es aber nie automatisch wieder.
+  function growObjWidthToFit(obj, objEl, body) {
+    const MAX_WIDTH = 640;
+    const bodyStyle = getComputedStyle(body);
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position:absolute; visibility:hidden; left:-9999px; top:0; width:max-content; white-space:pre;';
+    probe.style.fontFamily = bodyStyle.fontFamily;
+    probe.style.fontSize = bodyStyle.fontSize;
+    probe.style.fontWeight = bodyStyle.fontWeight;
+    probe.style.lineHeight = bodyStyle.lineHeight;
+    probe.innerHTML = body.innerHTML;
+    document.body.appendChild(probe);
+    const neededWidth = probe.offsetWidth + 24; // + Innenabstand (padding) des Textfelds
+    probe.remove();
+    const target = Math.min(Math.max(neededWidth, obj.w), MAX_WIDTH);
+    if (target > obj.w) {
+      obj.w = target;
+      objEl.style.width = `${obj.w}px`;
     }
   }
 

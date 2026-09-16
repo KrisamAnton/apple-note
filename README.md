@@ -81,7 +81,11 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
       reinem Text zu werden. Aus Sicherheits- und Kompatibilitätsgründen
       wird nur eine begrenzte, ungefährliche Auswahl an Formatierungen
       übernommen (kein eingebetteter Code, keine Bilder/Tabellen aus der
-      Quelle - Bilder lassen sich wie gewohnt separat per Strg+V einfügen)
+      Quelle - Bilder lassen sich wie gewohnt separat per Strg+V einfügen).
+      Das Textfeld passt seine Breite dabei automatisch an den
+      eingefügten Inhalt an (bis zu einer sinnvollen Obergrenze), statt
+      wie zuvor in seiner ursprünglichen, oft schmalen Breite zu
+      bleiben und jede Zeile sofort umbrechen zu lassen
     - **Textmarker**: einen Textabschnitt markieren und über das
       Marker-Symbol in der Werkzeugleiste hervorheben – 5 Farben in
       je 3 Stärken (Leicht/Mittel/Stark). Hervorhebungen, Farbe und
