@@ -1908,6 +1908,18 @@
         node.remove();
         continue;
       }
+      if (node.nodeType === Node.TEXT_NODE) {
+        // Quellen wie OneNote brechen ihren HTML-Quelltext rein aus
+        // Lesbarkeitsgründen um (z. B. "Papa wurde\nmit der Rettung...") - im
+        // normalen Web ist das bedeutungslos, da Browser solche Leerzeichen/
+        // Zeilenumbrüche beim Anzeigen zu einem einzigen Leerzeichen
+        // zusammenfassen. Unser Textfeld nutzt aber white-space:pre-wrap
+        // (damit selbst getippte Zeilenumbrüche erhalten bleiben) und würde
+        // diese eigentlich unsichtbaren Umbrüche sonst als echte, harte
+        // Zeilenumbrüche mitten im Satz darstellen.
+        node.nodeValue = node.nodeValue.replace(/[ \t\r\n]+/g, ' ');
+        continue;
+      }
       if (node.nodeType !== Node.ELEMENT_NODE) continue;
       cleanPastedNode(node); // erst die Kinder bereinigen
       const tag = node.tagName;
