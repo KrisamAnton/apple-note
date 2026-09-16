@@ -1547,7 +1547,18 @@
         if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > 4) {
           moved = true;
           cleanup();
-          startObjectDrag(e, note, obj, objEl);
+          // Bei Touch NICHT startObjectDrag() aufrufen: das würde per
+          // setPointerCapture()/preventDefault() den Finger-Kontakt aktiv an
+          // sich reißen - das gewinnt gegen die native Wisch-Geste des
+          // Browsers, egal was touch-action in der CSS sagt (touch-action
+          // verhindert nur, dass der Browser von sich aus scrollt, schützt
+          // aber nicht davor, dass eigener Code die Geste per Pointer-Capture
+          // nachträglich doch noch an sich zieht). cleanup() hat unsere
+          // Listener bereits entfernt, es passiert also nichts weiter - der
+          // Browser wischt die Fläche ganz normal.
+          if (ev.pointerType !== 'touch') {
+            startObjectDrag(e, note, obj, objEl);
+          }
         }
       };
       const onUp = (ev) => {
