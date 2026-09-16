@@ -1910,14 +1910,28 @@
       }
       if (node.nodeType === Node.TEXT_NODE) {
         // Quellen wie OneNote brechen ihren HTML-Quelltext rein aus
-        // Lesbarkeitsgründen um (z. B. "Papa wurde\nmit der Rettung...") - im
-        // normalen Web ist das bedeutungslos, da Browser solche Leerzeichen/
-        // Zeilenumbrüche beim Anzeigen zu einem einzigen Leerzeichen
-        // zusammenfassen. Unser Textfeld nutzt aber white-space:pre-wrap
-        // (damit selbst getippte Zeilenumbrüche erhalten bleiben) und würde
-        // diese eigentlich unsichtbaren Umbrüche sonst als echte, harte
-        // Zeilenumbrüche mitten im Satz darstellen.
-        node.nodeValue = node.nodeValue.replace(/[ \t\r\n]+/g, ' ');
+        // Lesbarkeitsgründen um (z. B. "Papa wurde\nmit der Rettung..." oder
+        // Zeilenumbrüche/Leerzeilen ZWISCHEN zwei <p>-Absätzen) - im normalen
+        // Web ist das bedeutungslos, da Browser solche Leerzeichen/
+        // Zeilenumbrüche beim Anzeigen entweder zu einem einzigen Leerzeichen
+        // zusammenfassen oder (zwischen Block-Elementen) ganz ignorieren.
+        // Unser Textfeld nutzt aber white-space:pre-wrap (damit selbst
+        // getippte Zeilenumbrüche erhalten bleiben) und würde diese
+        // eigentlich unsichtbaren Umbrüche sonst als echte Zeilenumbrüche
+        // mitten im Satz bzw. als zusätzliche Leerzeile zwischen Absätzen
+        // darstellen. Ein Textknoten, der NUR aus solchen "normalen"
+        // Leerzeichen/Umbrüchen besteht, war reine Formatierung des
+        // Quelltexts (kein echter Inhalt) und wird komplett entfernt -
+        // wichtig: ein &nbsp; (geschütztes Leerzeichen,  ) zählt NICHT
+        // dazu, das ist echter, sichtbarer Inhalt (z. B. eine von OneNote
+        // absichtlich leer gelassene Zeile) und darf nicht mit JavaScripts
+        // Unicode-bewusstem trim() verwechselt werden, das   fälschlich
+        // ebenfalls als "Leerraum" einstufen würde.
+        if (/^[ \t\r\n]*$/.test(node.nodeValue)) {
+          node.remove();
+        } else {
+          node.nodeValue = node.nodeValue.replace(/[ \t\r\n]+/g, ' ');
+        }
         continue;
       }
       if (node.nodeType !== Node.ELEMENT_NODE) continue;
