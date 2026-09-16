@@ -1315,12 +1315,14 @@ textarea {
   position: absolute;
   inset: 0;
   cursor: grab;
-  /* Ohne das würde der Browser einen Ziehversuch mit dem Finger auf einem
-     bereits beschrifteten Textobjekt als Wisch-/Scroll-Geste der Fläche
-     interpretieren, statt ihn unserem eigenen Verschiebe-Handler zu geben –
-     das Objekt ließe sich dann nur noch über den Ziehpunkt in der Größe
-     ändern, aber nicht mehr verschieben. */
-  touch-action: none;
+  /* Bewusst KEIN touch-action:none hier - ein Finger-Ziehen soll (wie
+     erwartet) die ganze Fläche verschieben/zoomen, auch wenn es zufällig auf
+     einem Objekt beginnt, statt das Objekt selbst zu verschieben. Verschieben
+     per Finger bleibt über die kleine Titelleiste möglich (siehe
+     .object-toolbar-main), die eigens touch-action:none behält. Mit Maus/
+     Stift funktioniert das Ziehen auf der ganzen Fläche unverändert, da
+     touch-action nur Touch-Eingaben betrifft. */
+  touch-action: auto;
 }
 
 .canvas-object[data-type="text"][data-style="boxed"] {
@@ -1410,9 +1412,10 @@ textarea {
 .canvas-object[data-type="image"] {
   border-color: var(--border);
   background: var(--bg-elevated);
-  /* Wie beim Text-Objekt: sonst schnappt sich der Browser ein Ziehen mit dem
-     Finger als Scroll-Geste, statt es unserem Verschieben-Handler zu geben. */
-  touch-action: none;
+  /* Bewusst KEIN touch-action:none - ein Finger-Ziehen auf einem Bild soll
+     die Fläche verschieben/zoomen, nicht das Bild selbst (siehe Text-Objekt
+     weiter oben für die ausführliche Begründung). */
+  touch-action: auto;
 }
 
 .canvas-image-el {
@@ -1430,7 +1433,8 @@ textarea {
 .canvas-object[data-type="pdf"] {
   border-color: var(--border);
   background: var(--bg-elevated);
-  touch-action: none;
+  /* Bewusst KEIN touch-action:none - siehe Text-/Bild-Objekt weiter oben. */
+  touch-action: auto;
 }
 
 .pdf-badge {
@@ -1592,7 +1596,8 @@ textarea {
 .canvas-object[data-type="audio"] {
   border-color: var(--border);
   background: var(--bg-elevated);
-  touch-action: none;
+  /* Bewusst KEIN touch-action:none - siehe Text-/Bild-Objekt weiter oben. */
+  touch-action: auto;
 }
 
 /* Eigener Innen-Wrapper statt objEl (=.audio-chip) selbst: objEl trägt auch

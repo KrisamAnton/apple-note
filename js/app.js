@@ -1269,6 +1269,25 @@
     startAutoScroll('move');
   }
 
+  // Bild-/PDF-/Audio-Objekte starten das Verschieben (anders als Text, siehe
+  // buildTextContent) sofort beim ersten Antippen des ganzen Objekts, ohne
+  // erst eine Zieh-Bewegung abzuwarten - bei Touch würde das jeden Wisch-
+  // Versuch (Fläche verschieben/zoomen), der zufällig auf einem Objekt
+  // beginnt, sofort als "Objekt verschieben" kapern, noch bevor der Browser
+  // die native Wisch-Geste überhaupt erkennen kann. Bei Maus/Stift bleibt
+  // das sofortige Ziehen wie gewohnt bestehen. Verschieben per Finger
+  // funktioniert weiterhin über die kleine Titelleiste (object-toolbar-main).
+  function startObjectDragUnlessTouch(e, note, obj, objEl) {
+    if (e.pointerType === 'touch') {
+      // Trotzdem auswählen (damit ein einfaches Antippen wie gewohnt die
+      // Titelleiste/Ziehpunkte zeigt) - nur das sofortige Verschieben bei
+      // jeder Fingerbewegung entfällt hier bewusst.
+      selectObject(note, obj, objEl);
+      return;
+    }
+    startObjectDrag(e, note, obj, objEl);
+  }
+
   function onObjectDragMove(e) {
     if (!dragState || dragState.type !== 'move') return;
     const note = currentNote();
@@ -3259,7 +3278,7 @@
     img.draggable = false;
     objEl.appendChild(img);
 
-    objEl.addEventListener('pointerdown', (e) => startObjectDrag(e, note, obj, objEl));
+    objEl.addEventListener('pointerdown', (e) => startObjectDragUnlessTouch(e, note, obj, objEl));
   }
 
   // ----- Audio-Objekt -----
@@ -3302,7 +3321,7 @@
 
     body.appendChild(info);
 
-    objEl.addEventListener('pointerdown', (e) => startObjectDrag(e, note, obj, objEl));
+    objEl.addEventListener('pointerdown', (e) => startObjectDragUnlessTouch(e, note, obj, objEl));
 
     if (obj.transcriptStatus) {
       renderAudioTranscriptUI(note, obj, objEl);
@@ -3576,7 +3595,7 @@
     }
 
     if (obj.variant === 'file') wireFileChipInteraction(note, obj, objEl);
-    else objEl.addEventListener('pointerdown', (e) => startObjectDrag(e, note, obj, objEl));
+    else objEl.addEventListener('pointerdown', (e) => startObjectDragUnlessTouch(e, note, obj, objEl));
   }
 
   // Gemeinsame Klick-Logik für PDF-/Datei-Anhänge: ein einzelner Klick wählt
@@ -3599,7 +3618,7 @@
         return;
       }
       lastTapAt = now;
-      startObjectDrag(e, note, obj, objEl);
+      startObjectDragUnlessTouch(e, note, obj, objEl);
     });
   }
 
