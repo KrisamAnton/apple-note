@@ -1230,6 +1230,14 @@ textarea {
   cursor: pointer;
 }
 
+/* Aus eingefügtem HTML (Word, Browser & Co.) übernommene <p>-Zeilen sollen
+   genauso eng stehen wie selbst getippte Zeilen (<div>, ohne Rand) - ohne
+   das hier würde der Standard-Absatzabstand des Browsers zwischen jeder
+   einzelnen eingefügten Zeile eine auffällig große Lücke reißen. */
+.canvas-text-body p {
+  margin: 0;
+}
+
 .canvas-text-body .heading-1 {
   font-size: 22px;
   font-weight: 700;

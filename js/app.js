@@ -1686,7 +1686,7 @@
   // und verbreitert das Textfeld bis zu einer sinnvollen Obergrenze passend
   // dazu - verkleinert es aber nie automatisch wieder.
   function growObjWidthToFit(obj, objEl, body) {
-    const MAX_WIDTH = 640;
+    const MAX_WIDTH = 900;
     const bodyStyle = getComputedStyle(body);
     const probe = document.createElement('div');
     probe.style.cssText = 'position:absolute; visibility:hidden; left:-9999px; top:0; width:max-content; white-space:pre;';
@@ -1696,7 +1696,11 @@
     probe.style.lineHeight = bodyStyle.lineHeight;
     probe.innerHTML = body.innerHTML;
     document.body.appendChild(probe);
-    const neededWidth = probe.offsetWidth + 24; // + Innenabstand (padding) des Textfelds
+    // + Innenabstand/Rahmen des Textfelds plus etwas Sicherheitsabstand - ohne
+    // den brach eine Zeile gelegentlich doch noch knapp um, wenn die Messung
+    // (anderes Element, keine echte Zeilenumbruch-Logik) minimal von der
+    // tatsächlichen Breite im echten Textfeld abwich.
+    const neededWidth = probe.offsetWidth + 32;
     probe.remove();
     const target = Math.min(Math.max(neededWidth, obj.w), MAX_WIDTH);
     if (target > obj.w) {
