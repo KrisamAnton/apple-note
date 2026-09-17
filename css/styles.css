@@ -166,6 +166,13 @@ textarea {
   letter-spacing: -0.02em;
 }
 
+.sidebar-header-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
 .sidebar-add-btn {
   flex: none;
   width: 32px;
@@ -178,6 +185,7 @@ textarea {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  text-decoration: none;
 }
 
 .sidebar-add-btn:hover {
