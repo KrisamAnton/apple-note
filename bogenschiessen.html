@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Bogenschießen – Punktezähler</title>
+<style>
+  :root {
+    --bg: #f2f0e9;
+    --panel: #ffffff;
+    --border: #ddd8cc;
+    --ink: #2b2a26;
+    --muted: #7a766a;
+    --accent: #2f7d5a;
+    --accent-light: #e4f2ec;
+    --hit1: #2f7d5a;
+    --hit2: #c98a2c;
+    --miss: #b5473b;
+    --danger: #b5473b;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  body {
+    padding: 16px 16px 96px;
+    max-width: 720px;
+    margin: 0 auto;
+  }
+
+  h1 {
+    font-size: 1.4rem;
+    margin: 4px 0 16px;
+    text-align: center;
+  }
+
+  .players {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  @media (min-width: 520px) {
+    .players { grid-template-columns: repeat(4, 1fr); }
+  }
+
+  .player-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px;
+    text-align: center;
+  }
+
+  .player-card input {
+    width: 100%;
+    border: none;
+    background: transparent;
+    text-align: center;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--ink);
+    padding: 2px;
+    border-bottom: 1px solid transparent;
+  }
+
+  .player-card input:focus {
+    outline: none;
+    border-bottom: 1px solid var(--accent);
+  }
+
+  .player-card .total {
+    margin-top: 6px;
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+  .rounds {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .round {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+  }
+
+  .round-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  .round-header h2 {
+    font-size: 1rem;
+    margin: 0;
+    color: var(--muted);
+  }
+
+  .round-delete {
+    background: none;
+    border: none;
+    color: var(--danger);
+    font-size: 1.1rem;
+    padding: 4px 8px;
+    cursor: pointer;
+    border-radius: 8px;
+  }
+
+  .round-delete:active { background: #f4e6e4; }
+
+  .round-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    flex-wrap: wrap;
+  }
+
+  .round-row + .round-row {
+    border-top: 1px solid #f0eee6;
+  }
+
+  .round-row .name {
+    flex: 0 0 84px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .btn-group {
+    display: flex;
+    gap: 6px;
+    flex: 1;
+    min-width: 220px;
+  }
+
+  .score-btn {
+    flex: 1;
+    min-height: 44px;
+    border-radius: 10px;
+    border: 2px solid var(--border);
+    background: var(--panel);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--ink);
+    cursor: pointer;
+    padding: 4px 2px;
+    line-height: 1.2;
+  }
+
+  .score-btn.hit1.selected {
+    background: var(--hit1);
+    border-color: var(--hit1);
+    color: #fff;
+  }
+
+  .score-btn.hit2.selected {
+    background: var(--hit2);
+    border-color: var(--hit2);
+    color: #fff;
+  }
+
+  .score-btn.miss.selected {
+    background: var(--miss);
+    border-color: var(--miss);
+    color: #fff;
+  }
+
+  .actions {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    background: linear-gradient(to top, var(--bg) 70%, transparent);
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    max-width: 720px;
+    margin: 0 auto;
+  }
+
+  .btn {
+    border: none;
+    border-radius: 12px;
+    padding: 12px 18px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    flex: 1;
+    max-width: 320px;
+  }
+
+  .btn-secondary {
+    background: var(--panel);
+    color: var(--danger);
+    border: 1px solid var(--border);
+  }
+
+  .empty-hint {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin-top: 24px;
+  }
+</style>
+</head>
+<body>
+
+  <h1>🏹 Bogenschießen – Punktezähler</h1>
+
+  <div class="players" id="players"></div>
+
+  <div class="rounds" id="rounds"></div>
+  <p class="empty-hint" id="emptyHint" hidden>Noch keine Runden – unten „Neue Runde“ antippen.</p>
+
+  <div class="actions">
+    <button class="btn btn-primary" id="addRound">+ Neue Runde</button>
+    <button class="btn btn-secondary" id="newGame">Neues Spiel</button>
+  </div>
+
+<script>
+  const STORAGE_KEY = 'bogenschiessen-state-v1';
+  const POINTS = { hit1: 20, hit2: 10, miss: 0 };
+  const LABELS = { hit1: '1. Pfeil (20)', hit2: '2. Pfeil (10)', miss: 'Kein Treffer (0)' };
+
+  function defaultState() {
+    return {
+      players: ['Spieler 1', 'Spieler 2', 'Spieler 3', 'Spieler 4'],
+      rounds: [],
+    };
+  }
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return defaultState();
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed.players) || parsed.players.length !== 4 || !Array.isArray(parsed.rounds)) {
+        return defaultState();
+      }
+      return parsed;
+    } catch (e) {
+      return defaultState();
+    }
+  }
+
+  function saveState() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {
+      // Speichern fehlgeschlagen (z.B. privater Modus) – Spiel läuft trotzdem weiter im Speicher
+    }
+  }
+
+  let state = loadState();
+
+  const playersEl = document.getElementById('players');
+  const roundsEl = document.getElementById('rounds');
+  const emptyHint = document.getElementById('emptyHint');
+
+  function totals() {
+    const sums = [0, 0, 0, 0];
+    for (const round of state.rounds) {
+      round.scores.forEach((outcome, i) => {
+        if (outcome) sums[i] += POINTS[outcome];
+      });
+    }
+    return sums;
+  }
+
+  function renderPlayers() {
+    const sums = totals();
+    playersEl.innerHTML = '';
+    state.players.forEach((name, i) => {
+      const card = document.createElement('div');
+      card.className = 'player-card';
+      const input = document.createElement('input');
+      input.value = name;
+      input.maxLength = 20;
+      input.addEventListener('input', () => {
+        state.players[i] = input.value;
+        saveState();
+        renderRounds();
+      });
+      const total = document.createElement('div');
+      total.className = 'total';
+      total.textContent = sums[i];
+      card.appendChild(input);
+      card.appendChild(total);
+      playersEl.appendChild(card);
+    });
+  }
+
+  function renderRounds() {
+    roundsEl.innerHTML = '';
+    emptyHint.hidden = state.rounds.length !== 0;
+
+    state.rounds.forEach((round, ri) => {
+      const card = document.createElement('div');
+      card.className = 'round';
+
+      const header = document.createElement('div');
+      header.className = 'round-header';
+      const h2 = document.createElement('h2');
+      h2.textContent = `Runde ${ri + 1}`;
+      const del = document.createElement('button');
+      del.className = 'round-delete';
+      del.textContent = '🗑';
+      del.setAttribute('aria-label', `Runde ${ri + 1} löschen`);
+      del.addEventListener('click', () => {
+        state.rounds.splice(ri, 1);
+        saveState();
+        render();
+      });
+      header.appendChild(h2);
+      header.appendChild(del);
+      card.appendChild(header);
+
+      state.players.forEach((name, pi) => {
+        const row = document.createElement('div');
+        row.className = 'round-row';
+
+        const nameEl = document.createElement('div');
+        nameEl.className = 'name';
+        nameEl.textContent = name;
+        row.appendChild(nameEl);
+
+        const group = document.createElement('div');
+        group.className = 'btn-group';
+
+        ['hit1', 'hit2', 'miss'].forEach((key) => {
+          const btn = document.createElement('button');
+          btn.className = `score-btn ${key}`;
+          btn.textContent = LABELS[key];
+          if (round.scores[pi] === key) btn.classList.add('selected');
+          btn.addEventListener('click', () => {
+            round.scores[pi] = round.scores[pi] === key ? null : key;
+            saveState();
+            render();
+          });
+          group.appendChild(btn);
+        });
+
+        row.appendChild(group);
+        card.appendChild(row);
+      });
+
+      roundsEl.appendChild(card);
+    });
+  }
+
+  function render() {
+    renderPlayers();
+    renderRounds();
+  }
+
+  document.getElementById('addRound').addEventListener('click', () => {
+    state.rounds.push({ scores: [null, null, null, null] });
+    saveState();
+    render();
+    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+  });
+
+  document.getElementById('newGame').addEventListener('click', () => {
+    if (state.rounds.length === 0) return;
+    if (confirm('Neues Spiel starten? Alle Runden werden gelöscht (Spielernamen bleiben erhalten).')) {
+      state.rounds = [];
+      saveState();
+      render();
+    }
+  });
+
+  render();
+</script>
+</body>
+</html>
