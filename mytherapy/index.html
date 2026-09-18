@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<title>MediPlan – Medikamentenerinnerung</title>
+<meta name="description" content="MediPlan: Medikamentenplan, Erinnerungen und Einnahme-Verlauf, geräteübergreifend nutzbar." />
+<meta name="theme-color" content="#1f6f56" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="MediPlan" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ================= HEUTE ================= -->
+  <section class="view" id="view-today" data-view="today">
+    <header class="topbar">
+      <h1 class="app-title">MediPlan</h1>
+      <button class="icon-btn" id="btn-sync-status" title="Sync-Status" aria-label="Sync-Status">
+        <span id="sync-dot" class="sync-dot"></span>
+      </button>
+    </header>
+
+    <div class="day-nav">
+      <button class="icon-btn" id="day-prev" aria-label="Vorheriger Tag">&#8249;</button>
+      <button class="day-label" id="day-label">Heute</button>
+      <button class="icon-btn" id="day-next" aria-label="Nächster Tag">&#8250;</button>
+    </div>
+
+    <div class="progress-card" id="progress-card">
+      <div class="progress-ring">
+        <svg viewBox="0 0 60 60">
+          <circle class="ring-bg" cx="30" cy="30" r="26"></circle>
+          <circle class="ring-fg" id="progress-ring-fg" cx="30" cy="30" r="26"></circle>
+        </svg>
+        <span class="progress-num" id="progress-num">0/0</span>
+      </div>
+      <div class="progress-text">
+        <strong id="progress-title">Noch keine Einnahmen geplant</strong>
+        <span id="progress-sub">Füge dein erstes Medikament hinzu</span>
+      </div>
+    </div>
+
+    <div class="dose-list" id="dose-list"></div>
+
+    <div class="empty-state" id="today-empty" hidden>
+      <p>Für diesen Tag sind keine Einnahmen geplant.</p>
+      <button class="btn-primary" id="empty-add-med">Medikament hinzufügen</button>
+    </div>
+  </section>
+
+  <!-- ================= MEDIKAMENTE ================= -->
+  <section class="view" id="view-meds" data-view="meds" hidden>
+    <header class="topbar">
+      <h1 class="app-title">Medikamente</h1>
+      <button class="icon-btn primary" id="btn-add-med" aria-label="Medikament hinzufügen">+</button>
+    </header>
+    <div class="med-list" id="med-list"></div>
+    <div class="empty-state" id="meds-empty" hidden>
+      <p>Noch keine Medikamente angelegt.</p>
+      <button class="btn-primary" id="meds-empty-add">Erstes Medikament anlegen</button>
+    </div>
+  </section>
+
+  <!-- ================= VERLAUF ================= -->
+  <section class="view" id="view-history" data-view="history" hidden>
+    <header class="topbar">
+      <h1 class="app-title">Verlauf</h1>
+    </header>
+
+    <div class="stats-row">
+      <div class="stat-box">
+        <strong id="stat-adherence">–</strong>
+        <span>Ø Einnahmetreue (30 Tage)</span>
+      </div>
+      <div class="stat-box">
+        <strong id="stat-streak">–</strong>
+        <span>Tage-Streak</span>
+      </div>
+    </div>
+
+    <div class="month-nav">
+      <button class="icon-btn" id="month-prev" aria-label="Vorheriger Monat">&#8249;</button>
+      <span id="month-label">Monat</span>
+      <button class="icon-btn" id="month-next" aria-label="Nächster Monat">&#8250;</button>
+    </div>
+
+    <div class="calendar" id="calendar"></div>
+
+    <div class="day-detail" id="day-detail" hidden></div>
+
+    <button class="btn-secondary" id="btn-report">Bericht drucken / als PDF speichern</button>
+  </section>
+
+  <!-- ================= MEHR / EINSTELLUNGEN ================= -->
+  <section class="view" id="view-more" data-view="more" hidden>
+    <header class="topbar">
+      <h1 class="app-title">Mehr</h1>
+    </header>
+
+    <div class="settings-group">
+      <h2>Geräte-Synchronisierung</h2>
+      <div id="sync-panel"></div>
+    </div>
+
+    <div class="settings-group">
+      <h2>Erinnerungen</h2>
+      <label class="switch-row">
+        <span>Browser-Benachrichtigungen</span>
+        <input type="checkbox" id="toggle-notifications" />
+      </label>
+      <p class="hint" id="notif-hint"></p>
+      <label class="field-row">
+        <span>Verschieben um</span>
+        <select id="select-snooze">
+          <option value="10">10 Minuten</option>
+          <option value="15">15 Minuten</option>
+          <option value="30">30 Minuten</option>
+          <option value="60">1 Stunde</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="settings-group">
+      <h2>Erscheinungsbild</h2>
+      <label class="field-row">
+        <span>Design</span>
+        <select id="select-theme">
+          <option value="system">System</option>
+          <option value="light">Hell</option>
+          <option value="dark">Dunkel</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="settings-group">
+      <div class="group-head-row">
+        <h2>Messwerte</h2>
+        <button class="icon-btn primary" id="btn-add-measurement" aria-label="Messwert hinzufügen">+</button>
+      </div>
+      <div class="measurement-list" id="measurement-list"></div>
+      <p class="hint" id="measurement-empty">Noch keine Messwerte erfasst (z. B. Blutdruck, Blutzucker, Gewicht).</p>
+    </div>
+
+    <div class="settings-group">
+      <h2>Über MediPlan</h2>
+      <p class="hint">Eigenständiger Nachbau eines Medikamentenerinnerungs-Plans (inspiriert von Apps wie MyTherapy), als Web-App – installierbar auf jedem Handy, keine Store-Installation nötig.</p>
+    </div>
+  </section>
+
+  <nav class="tabbar">
+    <button class="tab-btn active" data-target="today">
+      <span class="tab-icon">&#128337;</span><span>Heute</span>
+    </button>
+    <button class="tab-btn" data-target="meds">
+      <span class="tab-icon">&#128138;</span><span>Medikamente</span>
+    </button>
+    <button class="tab-btn" data-target="history">
+      <span class="tab-icon">&#128197;</span><span>Verlauf</span>
+    </button>
+    <button class="tab-btn" data-target="more">
+      <span class="tab-icon">&#9881;&#65039;</span><span>Mehr</span>
+    </button>
+  </nav>
+</div>
+
+<!-- ================= MEDIKAMENT-FORMULAR (Modal) ================= -->
+<div class="modal-overlay" id="med-modal" hidden>
+  <div class="modal-sheet">
+    <header class="modal-head">
+      <button class="text-btn" id="med-cancel">Abbrechen</button>
+      <h2 id="med-modal-title">Medikament</h2>
+      <button class="text-btn primary" id="med-save">Sichern</button>
+    </header>
+    <div class="modal-body" id="med-form"></div>
+  </div>
+</div>
+
+<!-- ================= MESSWERT-FORMULAR (Modal) ================= -->
+<div class="modal-overlay" id="measurement-modal" hidden>
+  <div class="modal-sheet">
+    <header class="modal-head">
+      <button class="text-btn" id="measurement-cancel">Abbrechen</button>
+      <h2>Messwert</h2>
+      <button class="text-btn primary" id="measurement-save">Sichern</button>
+    </header>
+    <div class="modal-body" id="measurement-form"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
+<script src="js/firebase-config.js"></script>
+<script src="js/sync.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
