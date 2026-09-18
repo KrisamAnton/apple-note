@@ -17,6 +17,7 @@
     --hit2: #c98a2c;
     --miss: #b5473b;
     --danger: #b5473b;
+    --gold: #c9962c;
   }
 
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -30,22 +31,30 @@
   }
 
   body {
-    padding: 16px 16px 96px;
+    padding-bottom: 96px;
     max-width: 720px;
     margin: 0 auto;
   }
 
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg);
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
   h1 {
-    font-size: 1.4rem;
-    margin: 4px 0 16px;
+    font-size: 1.15rem;
+    margin: 0 0 10px;
     text-align: center;
   }
 
   .players {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
-    margin-bottom: 16px;
+    gap: 8px;
   }
 
   @media (min-width: 520px) {
@@ -56,7 +65,7 @@
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 12px;
-    padding: 10px;
+    padding: 8px;
     text-align: center;
   }
 
@@ -66,7 +75,7 @@
     background: transparent;
     text-align: center;
     font-weight: 600;
-    font-size: 0.95rem;
+    font-size: 0.88rem;
     color: var(--ink);
     padding: 2px;
     border-bottom: 1px solid transparent;
@@ -78,16 +87,39 @@
   }
 
   .player-card .total {
-    margin-top: 6px;
-    font-size: 1.6rem;
+    margin-top: 4px;
+    font-size: 1.4rem;
     font-weight: 700;
     color: var(--accent);
   }
 
-  .rounds {
+  .round-meta {
     display: flex;
-    flex-direction: column;
-    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 10px;
+  }
+
+  .round-meta .round-label {
+    font-size: 0.85rem;
+    color: var(--muted);
+    font-weight: 600;
+  }
+
+  .icon-btn {
+    border: none;
+    background: none;
+    font-size: 1.15rem;
+    padding: 4px 8px;
+    cursor: pointer;
+    border-radius: 8px;
+    color: var(--ink);
+  }
+
+  .icon-btn:active { background: var(--accent-light); }
+
+  main {
+    padding: 16px;
   }
 
   .round {
@@ -97,36 +129,11 @@
     padding: 12px;
   }
 
-  .round-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
-  }
-
-  .round-header h2 {
-    font-size: 1rem;
-    margin: 0;
-    color: var(--muted);
-  }
-
-  .round-delete {
-    background: none;
-    border: none;
-    color: var(--danger);
-    font-size: 1.1rem;
-    padding: 4px 8px;
-    cursor: pointer;
-    border-radius: 8px;
-  }
-
-  .round-delete:active { background: #f4e6e4; }
-
   .round-row {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 6px 0;
+    padding: 8px 0;
     flex-wrap: wrap;
   }
 
@@ -153,7 +160,7 @@
 
   .score-btn {
     flex: 1;
-    min-height: 44px;
+    min-height: 46px;
     border-radius: 10px;
     border: 2px solid var(--border);
     background: var(--panel);
@@ -219,37 +226,139 @@
     border: 1px solid var(--border);
   }
 
-  .empty-hint {
-    text-align: center;
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 20;
+  }
+
+  .modal-overlay[hidden] { display: none; }
+
+  .modal {
+    background: var(--panel);
+    border-radius: 16px 16px 0 0;
+    width: 100%;
+    max-width: 720px;
+    max-height: 80vh;
+    overflow-y: auto;
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  .modal-header h2 {
+    margin: 0;
+    font-size: 1.1rem;
+  }
+
+  .history-empty {
     color: var(--muted);
     font-size: 0.9rem;
-    margin-top: 24px;
+    text-align: center;
+    padding: 20px 0;
+  }
+
+  .history-entry {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+  }
+
+  .history-entry-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+
+  .history-date {
+    font-size: 0.85rem;
+    color: var(--muted);
+    font-weight: 600;
+  }
+
+  .history-delete {
+    background: none;
+    border: none;
+    color: var(--danger);
+    cursor: pointer;
+    font-size: 1rem;
+  }
+
+  .history-scores {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .history-score-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9rem;
+  }
+
+  .history-score-row .name {
+    font-weight: 600;
+  }
+
+  .history-score-row.winner .name::before {
+    content: "🏆 ";
   }
 </style>
 </head>
 <body>
 
-  <h1>🏹 Bogenschießen – Punktezähler</h1>
+  <div class="topbar">
+    <h1>🏹 Bogenschießen – Punktezähler</h1>
+    <div class="players" id="players"></div>
+    <div class="round-meta">
+      <span class="round-label" id="roundLabel"></span>
+      <button class="icon-btn" id="historyBtn" type="button" aria-label="Historie" title="Historie">📜 Historie</button>
+    </div>
+  </div>
 
-  <div class="players" id="players"></div>
-
-  <div class="rounds" id="rounds"></div>
-  <p class="empty-hint" id="emptyHint" hidden>Noch keine Runden – unten „Neue Runde“ antippen.</p>
+  <main>
+    <div class="round" id="round"></div>
+  </main>
 
   <div class="actions">
-    <button class="btn btn-primary" id="addRound">+ Neue Runde</button>
-    <button class="btn btn-secondary" id="newGame">Neues Spiel</button>
+    <button class="btn btn-primary" id="nextRound">Weiter →</button>
+    <button class="btn btn-secondary" id="finishGame">Spiel beenden</button>
+  </div>
+
+  <div class="modal-overlay" id="historyOverlay" hidden>
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Historie</h2>
+        <button class="icon-btn" id="closeHistory" type="button" aria-label="Schließen">✕</button>
+      </div>
+      <div id="historyList"></div>
+    </div>
   </div>
 
 <script>
-  const STORAGE_KEY = 'bogenschiessen-state-v1';
+  const STORAGE_KEY = 'bogenschiessen-state-v2';
   const POINTS = { hit1: 20, hit2: 10, miss: 0 };
   const LABELS = { hit1: '1. Pfeil (20)', hit2: '2. Pfeil (10)', miss: 'Kein Treffer (0)' };
 
   function defaultState() {
     return {
       players: ['Spieler 1', 'Spieler 2', 'Spieler 3', 'Spieler 4'],
-      rounds: [],
+      totals: [0, 0, 0, 0],
+      order: [0, 1, 2, 3],
+      round: 1,
+      current: [null, null, null, null],
+      history: [],
     };
   }
 
@@ -258,7 +367,13 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return defaultState();
       const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed.players) || parsed.players.length !== 4 || !Array.isArray(parsed.rounds)) {
+      if (
+        !Array.isArray(parsed.players) || parsed.players.length !== 4 ||
+        !Array.isArray(parsed.totals) || parsed.totals.length !== 4 ||
+        !Array.isArray(parsed.order) || parsed.order.length !== 4 ||
+        !Array.isArray(parsed.current) || parsed.current.length !== 4 ||
+        !Array.isArray(parsed.history)
+      ) {
         return defaultState();
       }
       return parsed;
@@ -275,122 +390,180 @@
     }
   }
 
+  function shuffledOrder() {
+    const order = [0, 1, 2, 3];
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [order[i], order[j]] = [order[j], order[i]];
+    }
+    return order;
+  }
+
   let state = loadState();
 
   const playersEl = document.getElementById('players');
-  const roundsEl = document.getElementById('rounds');
-  const emptyHint = document.getElementById('emptyHint');
-
-  function totals() {
-    const sums = [0, 0, 0, 0];
-    for (const round of state.rounds) {
-      round.scores.forEach((outcome, i) => {
-        if (outcome) sums[i] += POINTS[outcome];
-      });
-    }
-    return sums;
-  }
+  const roundEl = document.getElementById('round');
+  const roundLabel = document.getElementById('roundLabel');
+  const historyOverlay = document.getElementById('historyOverlay');
+  const historyList = document.getElementById('historyList');
 
   function renderPlayers() {
-    const sums = totals();
     playersEl.innerHTML = '';
-    state.players.forEach((name, i) => {
+    state.order.forEach((i) => {
       const card = document.createElement('div');
       card.className = 'player-card';
       const input = document.createElement('input');
-      input.value = name;
+      input.value = state.players[i];
       input.maxLength = 20;
       input.addEventListener('input', () => {
         state.players[i] = input.value;
         saveState();
-        renderRounds();
       });
       const total = document.createElement('div');
       total.className = 'total';
-      total.textContent = sums[i];
+      total.textContent = state.totals[i];
       card.appendChild(input);
       card.appendChild(total);
       playersEl.appendChild(card);
     });
+    roundLabel.textContent = `Runde ${state.round}`;
   }
 
-  function renderRounds() {
-    roundsEl.innerHTML = '';
-    emptyHint.hidden = state.rounds.length !== 0;
+  function renderRound() {
+    roundEl.innerHTML = '';
+    state.order.forEach((i) => {
+      const row = document.createElement('div');
+      row.className = 'round-row';
 
-    state.rounds.forEach((round, ri) => {
-      const card = document.createElement('div');
-      card.className = 'round';
+      const nameEl = document.createElement('div');
+      nameEl.className = 'name';
+      nameEl.textContent = state.players[i];
+      row.appendChild(nameEl);
 
-      const header = document.createElement('div');
-      header.className = 'round-header';
-      const h2 = document.createElement('h2');
-      h2.textContent = `Runde ${ri + 1}`;
-      const del = document.createElement('button');
-      del.className = 'round-delete';
-      del.textContent = '🗑';
-      del.setAttribute('aria-label', `Runde ${ri + 1} löschen`);
-      del.addEventListener('click', () => {
-        state.rounds.splice(ri, 1);
-        saveState();
-        render();
-      });
-      header.appendChild(h2);
-      header.appendChild(del);
-      card.appendChild(header);
+      const group = document.createElement('div');
+      group.className = 'btn-group';
 
-      state.players.forEach((name, pi) => {
-        const row = document.createElement('div');
-        row.className = 'round-row';
-
-        const nameEl = document.createElement('div');
-        nameEl.className = 'name';
-        nameEl.textContent = name;
-        row.appendChild(nameEl);
-
-        const group = document.createElement('div');
-        group.className = 'btn-group';
-
-        ['hit1', 'hit2', 'miss'].forEach((key) => {
-          const btn = document.createElement('button');
-          btn.className = `score-btn ${key}`;
-          btn.textContent = LABELS[key];
-          if (round.scores[pi] === key) btn.classList.add('selected');
-          btn.addEventListener('click', () => {
-            round.scores[pi] = round.scores[pi] === key ? null : key;
-            saveState();
-            render();
-          });
-          group.appendChild(btn);
+      ['hit1', 'hit2', 'miss'].forEach((key) => {
+        const btn = document.createElement('button');
+        btn.className = `score-btn ${key}`;
+        btn.textContent = LABELS[key];
+        if (state.current[i] === key) btn.classList.add('selected');
+        btn.addEventListener('click', () => {
+          state.current[i] = state.current[i] === key ? null : key;
+          saveState();
+          renderRound();
         });
-
-        row.appendChild(group);
-        card.appendChild(row);
+        group.appendChild(btn);
       });
 
-      roundsEl.appendChild(card);
+      row.appendChild(group);
+      roundEl.appendChild(row);
     });
   }
 
   function render() {
     renderPlayers();
-    renderRounds();
+    renderRound();
   }
 
-  document.getElementById('addRound').addEventListener('click', () => {
-    state.rounds.push({ scores: [null, null, null, null] });
+  function commitCurrentRound() {
+    state.current.forEach((outcome, i) => {
+      if (outcome) state.totals[i] += POINTS[outcome];
+    });
+  }
+
+  document.getElementById('nextRound').addEventListener('click', () => {
+    commitCurrentRound();
+    state.round += 1;
+    state.current = [null, null, null, null];
+    state.order = shuffledOrder();
     saveState();
     render();
-    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   });
 
-  document.getElementById('newGame').addEventListener('click', () => {
-    if (state.rounds.length === 0) return;
-    if (confirm('Neues Spiel starten? Alle Runden werden gelöscht (Spielernamen bleiben erhalten).')) {
-      state.rounds = [];
-      saveState();
-      render();
+  document.getElementById('finishGame').addEventListener('click', () => {
+    if (!confirm('Spiel beenden und Endstand in der Historie speichern?')) return;
+    commitCurrentRound();
+    state.history.unshift({
+      date: new Date().toISOString(),
+      players: state.players.map((name, i) => ({ name, total: state.totals[i] })),
+    });
+    state.totals = [0, 0, 0, 0];
+    state.round = 1;
+    state.current = [null, null, null, null];
+    state.order = shuffledOrder();
+    saveState();
+    render();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  function renderHistory() {
+    historyList.innerHTML = '';
+    if (state.history.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'history-empty';
+      empty.textContent = 'Noch keine gespeicherten Spiele.';
+      historyList.appendChild(empty);
+      return;
     }
+
+    state.history.forEach((entry, hi) => {
+      const card = document.createElement('div');
+      card.className = 'history-entry';
+
+      const header = document.createElement('div');
+      header.className = 'history-entry-header';
+      const date = document.createElement('span');
+      date.className = 'history-date';
+      const d = new Date(entry.date);
+      date.textContent = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const del = document.createElement('button');
+      del.className = 'history-delete';
+      del.textContent = '🗑';
+      del.setAttribute('aria-label', 'Eintrag löschen');
+      del.addEventListener('click', () => {
+        if (!confirm('Diesen Historien-Eintrag löschen?')) return;
+        state.history.splice(hi, 1);
+        saveState();
+        renderHistory();
+      });
+      header.appendChild(date);
+      header.appendChild(del);
+      card.appendChild(header);
+
+      const scores = document.createElement('div');
+      scores.className = 'history-scores';
+      const sorted = [...entry.players].sort((a, b) => b.total - a.total);
+      const maxScore = sorted.length ? sorted[0].total : 0;
+      sorted.forEach((p) => {
+        const row = document.createElement('div');
+        row.className = 'history-score-row' + (p.total === maxScore && maxScore > 0 ? ' winner' : '');
+        const name = document.createElement('span');
+        name.className = 'name';
+        name.textContent = p.name;
+        const score = document.createElement('span');
+        score.textContent = p.total;
+        row.appendChild(name);
+        row.appendChild(score);
+        scores.appendChild(row);
+      });
+      card.appendChild(scores);
+      historyList.appendChild(card);
+    });
+  }
+
+  document.getElementById('historyBtn').addEventListener('click', () => {
+    renderHistory();
+    historyOverlay.hidden = false;
+  });
+
+  document.getElementById('closeHistory').addEventListener('click', () => {
+    historyOverlay.hidden = true;
+  });
+
+  historyOverlay.addEventListener('click', (e) => {
+    if (e.target === historyOverlay) historyOverlay.hidden = true;
   });
 
   render();
