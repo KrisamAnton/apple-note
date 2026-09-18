@@ -259,6 +259,35 @@
 
   .modal-overlay[hidden] { display: none; }
 
+  #confirmOverlay {
+    z-index: 30;
+    align-items: center;
+    padding: 16px;
+  }
+
+  .confirm-modal {
+    border-radius: 16px;
+    width: 100%;
+    max-width: 360px;
+    padding: 20px;
+  }
+
+  .confirm-modal p {
+    margin: 0 0 16px;
+    font-size: 0.95rem;
+    line-height: 1.4;
+  }
+
+  .confirm-actions {
+    display: flex;
+    gap: 10px;
+  }
+
+  .confirm-actions .btn {
+    flex: 1;
+    padding: 12px 8px;
+  }
+
   .modal {
     background: var(--panel);
     border-radius: 16px 16px 0 0;
@@ -368,6 +397,16 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="confirmOverlay" hidden>
+    <div class="modal confirm-modal">
+      <p id="confirmMessage"></p>
+      <div class="confirm-actions">
+        <button class="btn btn-secondary" id="confirmCancel">Abbrechen</button>
+        <button class="btn btn-primary" id="confirmOk">Ja</button>
+      </div>
+    </div>
+  </div>
+
 <script>
   const STORAGE_KEY = 'bogenschiessen-state-v3';
   const POINTS = { hit1: 20, hit2: 10, miss: 0 };
@@ -430,6 +469,35 @@
   const prevBtn = document.getElementById('prevRound');
   const historyOverlay = document.getElementById('historyOverlay');
   const historyList = document.getElementById('historyList');
+  const confirmOverlay = document.getElementById('confirmOverlay');
+  const confirmMessage = document.getElementById('confirmMessage');
+
+  let confirmCallback = null;
+
+  function showConfirm(message, onConfirm) {
+    confirmMessage.textContent = message;
+    confirmCallback = onConfirm;
+    confirmOverlay.hidden = false;
+  }
+
+  document.getElementById('confirmOk').addEventListener('click', () => {
+    confirmOverlay.hidden = true;
+    const cb = confirmCallback;
+    confirmCallback = null;
+    if (cb) cb();
+  });
+
+  document.getElementById('confirmCancel').addEventListener('click', () => {
+    confirmOverlay.hidden = true;
+    confirmCallback = null;
+  });
+
+  confirmOverlay.addEventListener('click', (e) => {
+    if (e.target === confirmOverlay) {
+      confirmOverlay.hidden = true;
+      confirmCallback = null;
+    }
+  });
 
   function totals() {
     const sums = [0, 0, 0, 0];
@@ -532,17 +600,18 @@
   });
 
   document.getElementById('finishGame').addEventListener('click', () => {
-    if (!confirm('Spiel beenden und Endstand in der Historie speichern?')) return;
-    const sums = totals();
-    state.history.unshift({
-      date: new Date().toISOString(),
-      players: state.players.map((name, i) => ({ name, total: sums[i] })),
+    showConfirm('Spiel beenden und Endstand in der Historie speichern?', () => {
+      const sums = totals();
+      state.history.unshift({
+        date: new Date().toISOString(),
+        players: state.players.map((name, i) => ({ name, total: sums[i] })),
+      });
+      state.rounds = [newRound()];
+      state.viewIndex = 0;
+      saveState();
+      render();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     });
-    state.rounds = [newRound()];
-    state.viewIndex = 0;
-    saveState();
-    render();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   });
 
   function renderHistory() {
@@ -570,10 +639,11 @@
       del.textContent = '🗑';
       del.setAttribute('aria-label', 'Eintrag löschen');
       del.addEventListener('click', () => {
-        if (!confirm('Diesen Historien-Eintrag löschen?')) return;
-        state.history.splice(hi, 1);
-        saveState();
-        renderHistory();
+        showConfirm('Diesen Historien-Eintrag löschen?', () => {
+          state.history.splice(hi, 1);
+          saveState();
+          renderHistory();
+        });
       });
       header.appendChild(date);
       header.appendChild(del);
