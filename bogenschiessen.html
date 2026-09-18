@@ -201,36 +201,39 @@
     left: 0;
     right: 0;
     bottom: 0;
-    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
     background: linear-gradient(to top, var(--bg) 75%, transparent);
     display: flex;
-    gap: 8px;
-    justify-content: center;
+    gap: 6px;
     max-width: 720px;
     margin: 0 auto;
+    box-sizing: border-box;
   }
 
   .btn {
     border: none;
     border-radius: 12px;
-    padding: 12px 14px;
-    font-size: 0.9rem;
+    padding: 12px 4px;
+    font-size: 0.82rem;
     font-weight: 600;
     cursor: pointer;
+    flex: 1 1 0;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
   }
 
   .btn-primary {
     background: var(--accent);
     color: #fff;
-    flex: 1;
-    max-width: 260px;
   }
 
   .btn-secondary {
     background: var(--panel);
     color: var(--ink);
     border: 1px solid var(--border);
-    flex: 0 0 auto;
   }
 
   .btn-secondary:disabled {
@@ -242,7 +245,6 @@
     background: var(--panel);
     color: var(--danger);
     border: 1px solid var(--border);
-    flex: 0 0 auto;
   }
 
   .modal-overlay {
@@ -353,7 +355,7 @@
   <div class="actions">
     <button class="btn btn-secondary" id="prevRound">← Zurück</button>
     <button class="btn btn-primary" id="nextRound">Weiter →</button>
-    <button class="btn btn-finish" id="finishGame">Spiel beenden</button>
+    <button class="btn btn-finish" id="finishGame">Beenden</button>
   </div>
 
   <div class="modal-overlay" id="historyOverlay" hidden>
