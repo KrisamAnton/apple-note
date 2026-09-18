@@ -10,6 +10,11 @@ in der Größe ändern und aneinander anheften.
 **Status:** Laufende Weiterentwicklung. Weitere Anpassungen und
 Features werden Schritt für Schritt besprochen und umgesetzt.
 
+> Dieses Repository enthält außerdem **MediPlan** im Ordner
+> [`mytherapy/`](mytherapy/README.md), einen eigenständigen Nachbau einer
+> Medikamentenerinnerungs-App (inspiriert von MyTherapy) – siehe die
+> README dort für Details und Einrichtung.
+
 ## Funktionen
 
 - Notizen erstellen, bearbeiten und löschen
