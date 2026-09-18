@@ -31,7 +31,7 @@
   }
 
   body {
-    padding-bottom: 96px;
+    padding-bottom: 110px;
     max-width: 720px;
     margin: 0 auto;
   }
@@ -98,12 +98,17 @@
     align-items: center;
     justify-content: space-between;
     margin-top: 10px;
+    gap: 8px;
   }
 
   .round-meta .round-label {
     font-size: 0.85rem;
     color: var(--muted);
     font-weight: 600;
+  }
+
+  .round-meta .round-label.editing {
+    color: var(--hit2);
   }
 
   .icon-btn {
@@ -114,6 +119,7 @@
     cursor: pointer;
     border-radius: 8px;
     color: var(--ink);
+    white-space: nowrap;
   }
 
   .icon-btn:active { background: var(--accent-light); }
@@ -195,10 +201,10 @@
     left: 0;
     right: 0;
     bottom: 0;
-    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
-    background: linear-gradient(to top, var(--bg) 70%, transparent);
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    background: linear-gradient(to top, var(--bg) 75%, transparent);
     display: flex;
-    gap: 10px;
+    gap: 8px;
     justify-content: center;
     max-width: 720px;
     margin: 0 auto;
@@ -207,8 +213,8 @@
   .btn {
     border: none;
     border-radius: 12px;
-    padding: 12px 18px;
-    font-size: 0.95rem;
+    padding: 12px 14px;
+    font-size: 0.9rem;
     font-weight: 600;
     cursor: pointer;
   }
@@ -217,13 +223,26 @@
     background: var(--accent);
     color: #fff;
     flex: 1;
-    max-width: 320px;
+    max-width: 260px;
   }
 
   .btn-secondary {
     background: var(--panel);
+    color: var(--ink);
+    border: 1px solid var(--border);
+    flex: 0 0 auto;
+  }
+
+  .btn-secondary:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .btn-finish {
+    background: var(--panel);
     color: var(--danger);
     border: 1px solid var(--border);
+    flex: 0 0 auto;
   }
 
   .modal-overlay {
@@ -332,8 +351,9 @@
   </main>
 
   <div class="actions">
+    <button class="btn btn-secondary" id="prevRound">← Zurück</button>
     <button class="btn btn-primary" id="nextRound">Weiter →</button>
-    <button class="btn btn-secondary" id="finishGame">Spiel beenden</button>
+    <button class="btn btn-finish" id="finishGame">Spiel beenden</button>
   </div>
 
   <div class="modal-overlay" id="historyOverlay" hidden>
@@ -347,17 +367,28 @@
   </div>
 
 <script>
-  const STORAGE_KEY = 'bogenschiessen-state-v2';
+  const STORAGE_KEY = 'bogenschiessen-state-v3';
   const POINTS = { hit1: 20, hit2: 10, miss: 0 };
   const LABELS = { hit1: '1. Pfeil (20)', hit2: '2. Pfeil (10)', miss: 'Kein Treffer (0)' };
+
+  function shuffledOrder() {
+    const order = [0, 1, 2, 3];
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [order[i], order[j]] = [order[j], order[i]];
+    }
+    return order;
+  }
+
+  function newRound() {
+    return { scores: [null, null, null, null], order: shuffledOrder() };
+  }
 
   function defaultState() {
     return {
       players: ['Spieler 1', 'Spieler 2', 'Spieler 3', 'Spieler 4'],
-      totals: [0, 0, 0, 0],
-      order: [0, 1, 2, 3],
-      round: 1,
-      current: [null, null, null, null],
+      rounds: [newRound()],
+      viewIndex: 0,
       history: [],
     };
   }
@@ -369,9 +400,8 @@
       const parsed = JSON.parse(raw);
       if (
         !Array.isArray(parsed.players) || parsed.players.length !== 4 ||
-        !Array.isArray(parsed.totals) || parsed.totals.length !== 4 ||
-        !Array.isArray(parsed.order) || parsed.order.length !== 4 ||
-        !Array.isArray(parsed.current) || parsed.current.length !== 4 ||
+        !Array.isArray(parsed.rounds) || parsed.rounds.length === 0 ||
+        typeof parsed.viewIndex !== 'number' ||
         !Array.isArray(parsed.history)
       ) {
         return defaultState();
@@ -390,26 +420,34 @@
     }
   }
 
-  function shuffledOrder() {
-    const order = [0, 1, 2, 3];
-    for (let i = order.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [order[i], order[j]] = [order[j], order[i]];
-    }
-    return order;
-  }
-
   let state = loadState();
 
   const playersEl = document.getElementById('players');
   const roundEl = document.getElementById('round');
   const roundLabel = document.getElementById('roundLabel');
+  const prevBtn = document.getElementById('prevRound');
   const historyOverlay = document.getElementById('historyOverlay');
   const historyList = document.getElementById('historyList');
 
+  function totals() {
+    const sums = [0, 0, 0, 0];
+    state.rounds.forEach((round) => {
+      round.scores.forEach((outcome, i) => {
+        if (outcome) sums[i] += POINTS[outcome];
+      });
+    });
+    return sums;
+  }
+
+  function currentRound() {
+    return state.rounds[state.viewIndex];
+  }
+
   function renderPlayers() {
+    const sums = totals();
+    const round = currentRound();
     playersEl.innerHTML = '';
-    state.order.forEach((i) => {
+    round.order.forEach((i) => {
       const card = document.createElement('div');
       card.className = 'player-card';
       const input = document.createElement('input');
@@ -421,17 +459,22 @@
       });
       const total = document.createElement('div');
       total.className = 'total';
-      total.textContent = state.totals[i];
+      total.textContent = sums[i];
       card.appendChild(input);
       card.appendChild(total);
       playersEl.appendChild(card);
     });
-    roundLabel.textContent = `Runde ${state.round}`;
+
+    const isPast = state.viewIndex < state.rounds.length - 1;
+    roundLabel.textContent = `Runde ${state.viewIndex + 1} von ${state.rounds.length}` + (isPast ? ' (bearbeiten)' : '');
+    roundLabel.classList.toggle('editing', isPast);
+    prevBtn.disabled = state.viewIndex === 0;
   }
 
   function renderRound() {
     roundEl.innerHTML = '';
-    state.order.forEach((i) => {
+    const round = currentRound();
+    round.order.forEach((i) => {
       const row = document.createElement('div');
       row.className = 'round-row';
 
@@ -447,11 +490,11 @@
         const btn = document.createElement('button');
         btn.className = `score-btn ${key}`;
         btn.textContent = LABELS[key];
-        if (state.current[i] === key) btn.classList.add('selected');
+        if (round.scores[i] === key) btn.classList.add('selected');
         btn.addEventListener('click', () => {
-          state.current[i] = state.current[i] === key ? null : key;
+          round.scores[i] = round.scores[i] === key ? null : key;
           saveState();
-          renderRound();
+          render();
         });
         group.appendChild(btn);
       });
@@ -466,17 +509,21 @@
     renderRound();
   }
 
-  function commitCurrentRound() {
-    state.current.forEach((outcome, i) => {
-      if (outcome) state.totals[i] += POINTS[outcome];
-    });
-  }
+  document.getElementById('prevRound').addEventListener('click', () => {
+    if (state.viewIndex === 0) return;
+    state.viewIndex -= 1;
+    saveState();
+    render();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
 
   document.getElementById('nextRound').addEventListener('click', () => {
-    commitCurrentRound();
-    state.round += 1;
-    state.current = [null, null, null, null];
-    state.order = shuffledOrder();
+    if (state.viewIndex < state.rounds.length - 1) {
+      state.viewIndex += 1;
+    } else {
+      state.rounds.push(newRound());
+      state.viewIndex = state.rounds.length - 1;
+    }
     saveState();
     render();
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -484,15 +531,13 @@
 
   document.getElementById('finishGame').addEventListener('click', () => {
     if (!confirm('Spiel beenden und Endstand in der Historie speichern?')) return;
-    commitCurrentRound();
+    const sums = totals();
     state.history.unshift({
       date: new Date().toISOString(),
-      players: state.players.map((name, i) => ({ name, total: state.totals[i] })),
+      players: state.players.map((name, i) => ({ name, total: sums[i] })),
     });
-    state.totals = [0, 0, 0, 0];
-    state.round = 1;
-    state.current = [null, null, null, null];
-    state.order = shuffledOrder();
+    state.rounds = [newRound()];
+    state.viewIndex = 0;
     saveState();
     render();
     window.scrollTo({ top: 0, behavior: 'smooth' });
