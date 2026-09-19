@@ -2117,17 +2117,31 @@
     // Selection/Cursor-Position in einem gerade erst editierbar gewordenen
     // Bereich lässt manche Browser die Fläche TROTZDEM automatisch
     // verschieben, um die neue Cursor-Position "sichtbar" zu machen - dafür
-    // gibt es keine Option zum Abschalten. Da die angeklickte Stelle ja
-    // gerade erst sichtbar angeklickt wurde, war sie schon sichtbar; die
-    // Scroll-Position wird daher explizit zurückgesetzt (einmal sofort,
-    // einmal einen Frame später, falls der Browser erst beim nächsten
-    // Layout nachscrollt).
-    const restoreScroll = () => {
-      el.canvasWorkspace.scrollLeft = savedScrollLeft;
-      el.canvasWorkspace.scrollTop = savedScrollTop;
+    // gibt es keine Option zum Abschalten, und es passiert nicht über die
+    // JS-Eigenschaft scrollTop (daher per Property-Setter nicht abfangbar)
+    // und auch nicht unbedingt synchron oder im selben Frame. Stattdessen
+    // wird für ein kurzes Zeitfenster ein "scroll"-Event-Listener gesetzt,
+    // der JEDE Scroll-Änderung in dieser Zeit sofort wieder auf die vorher
+    // gemerkte Position zurücksetzt - dieses Event feuert nachweislich auch
+    // bei dem browsereigenen Nachscrollen.
+    let scrollLockActive = true;
+    const enforceScrollLock = () => {
+      if (!scrollLockActive) return;
+      if (
+        el.canvasWorkspace.scrollLeft !== savedScrollLeft ||
+        el.canvasWorkspace.scrollTop !== savedScrollTop
+      ) {
+        el.canvasWorkspace.scrollLeft = savedScrollLeft;
+        el.canvasWorkspace.scrollTop = savedScrollTop;
+      }
     };
-    restoreScroll();
-    requestAnimationFrame(restoreScroll);
+    el.canvasWorkspace.addEventListener('scroll', enforceScrollLock);
+    enforceScrollLock();
+    requestAnimationFrame(enforceScrollLock);
+    setTimeout(() => {
+      scrollLockActive = false;
+      el.canvasWorkspace.removeEventListener('scroll', enforceScrollLock);
+    }, 400);
     activeTextEdit = { note, obj, objEl, body, overlay };
     lastSelectionRange = null;
     el.ribbonFontFamilyLabel.textContent = 'Calibri';
