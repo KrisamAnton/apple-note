@@ -1738,7 +1738,15 @@
     obj.text = bodyToPlainText(body);
     note.updatedAt = Date.now();
     schedulePersist();
-    renderNoteList();
+    // Kein renderNoteList() hier: Die Liste zeigt nur den Notiztitel, den
+    // Textinhalt eines Objekts betrifft sie nicht. Ein Neuaufbau genau in
+    // diesem Moment (der beim Verlassen des Textfelds durch einen Klick auf
+    // eine andere Notiz in der Liste ausgelöst wird) ersetzt aber die gerade
+    // angeklickte Zeile durch ein neues DOM-Element, noch während der Klick
+    // in Bearbeitung ist - der Browser verwirft diesen Klick dann komplett
+    // (das angeklickte Element existiert ja nicht mehr), wodurch sich keine
+    // andere Notiz mehr öffnen ließ, bis man z. B. eine Hauptüberschrift
+    // anklickte (die keinen Blur mehr auslöste).
   }
 
   function updateTextEmptyState(body) {
@@ -2276,7 +2284,7 @@
       const objEl = findObjEl(obj.id);
       if (objEl) objEl.remove();
       schedulePersist();
-      renderNoteList();
+      // Kein renderNoteList() hier - siehe Begründung in saveTextObjContent().
     }
   }
 
