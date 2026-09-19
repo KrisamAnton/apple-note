@@ -523,6 +523,14 @@ html, body {
 .form-row { display: flex; gap: 10px; }
 .form-row .form-field { flex: 1; }
 
+.weekday-time-group {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+.weekday-time-group label { margin-bottom: 8px; }
+
 .form-inline-toggle {
   display: flex;
   align-items: center;

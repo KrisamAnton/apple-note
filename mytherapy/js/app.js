@@ -161,11 +161,19 @@ function computeDayStats(iso) {
   return { due, taken, ratio: due === 0 ? null : taken / due };
 }
 
+function measurementTimesForPlanOnDate(plan, iso) {
+  if (plan.frequency.type === 'weekdays') {
+    const weekday = fromISO(iso).getDay();
+    return (plan.frequency.timesByDay && plan.frequency.timesByDay[weekday]) || [];
+  }
+  return plan.times || [];
+}
+
 function measurementEntriesForDate(iso) {
   const entries = [];
   state.measurementPlans.forEach((plan) => {
     if (!isDueOnDate(plan, iso)) return;
-    (plan.times || []).forEach((t) => {
+    measurementTimesForPlanOnDate(plan, iso).forEach((t) => {
       const id = `${plan.id}::${iso}::${t.time}`;
       const record = state.measurementIntakes.find((i) => i.id === id);
       entries.push({
@@ -1039,7 +1047,11 @@ function defaultMeasurementPlan() {
     id: uid('mplan'),
     type: 'bp',
     times: [{ time: '07:00' }],
-    frequency: { type: 'daily', days: [], everyNDays: 1, anchorDate: todayISO() },
+    // timesByDay wird nur genutzt, wenn frequency.type === 'weekdays' ist -
+    // dort kann jeder Wochentag eigene, unterschiedliche Uhrzeiten haben
+    // (z. B. Mo 7/13 Uhr, Mi 8/18 Uhr). Bei täglich/Intervall gilt weiterhin
+    // die einheitliche "times"-Liste für jeden fälligen Tag.
+    frequency: { type: 'daily', days: [], timesByDay: {}, everyNDays: 1, anchorDate: todayISO() },
     startDate: todayISO(),
     endDate: null,
     hasEndDate: false,
@@ -1060,7 +1072,15 @@ function renderMeasurementPlans() {
   listEl.innerHTML = state.measurementPlans.map((plan) => {
     const type = MEASUREMENT_TYPES[plan.type];
     const freqLabel = frequencyLabel(plan);
-    const timesLabel = plan.frequency.type === 'asNeeded' ? 'Bei Bedarf' : (plan.times || []).map((t) => t.time).join(' · ');
+    const timesLabel = plan.frequency.type === 'asNeeded'
+      ? 'Bei Bedarf'
+      : plan.frequency.type === 'weekdays'
+      ? (plan.frequency.days || []).map((d) => {
+          const label = WEEKDAYS.find((w) => w.value === d).label;
+          const times = ((plan.frequency.timesByDay && plan.frequency.timesByDay[d]) || []).map((t) => t.time).join(', ');
+          return `${label} ${times}`;
+        }).join(' · ')
+      : (plan.times || []).map((t) => t.time).join(' · ');
     return `
       <div class="med-card" data-plan-id="${plan.id}">
         <div class="dose-icon" style="background:${MEASUREMENT_COLOR}">${type.icon}</div>
@@ -1104,11 +1124,20 @@ function syncPlanFormFieldsIntoState() {
   document.querySelectorAll('#measurement-plan-form [data-time-idx]').forEach((inp) => {
     if (planFormState.times[Number(inp.dataset.timeIdx)]) planFormState.times[Number(inp.dataset.timeIdx)].time = inp.value;
   });
+  document.querySelectorAll('#measurement-plan-form [data-wd-day]').forEach((inp) => {
+    const day = Number(inp.dataset.wdDay);
+    const idx = Number(inp.dataset.wdIdx);
+    const dayTimes = planFormState.frequency.timesByDay && planFormState.frequency.timesByDay[day];
+    if (dayTimes && dayTimes[idx]) dayTimes[idx].time = inp.value;
+  });
 }
 
 function renderMeasurementPlanForm() {
   syncPlanFormFieldsIntoState();
   const f = planFormState;
+  if (!f.frequency.timesByDay) f.frequency.timesByDay = {};
+  const isWeekdays = f.frequency.type === 'weekdays';
+
   const typeButtons = Object.entries(MEASUREMENT_TYPES).map(([key, v]) =>
     `<button type="button" data-type="${key}" class="${f.type === key ? 'selected' : ''}" style="background:${MEASUREMENT_COLOR}"><span class="pick-icon">${v.icon}</span><span>${v.label}</span></button>`
   ).join('');
@@ -1120,6 +1149,25 @@ function renderMeasurementPlanForm() {
       <input type="time" data-time-idx="${idx}" value="${t.time}" />
       <button type="button" data-remove-time="${idx}" aria-label="Uhrzeit entfernen">✕</button>
     </div>`).join('');
+
+  // Bei "Bestimmte Wochentage" bekommt jeder ausgewählte Tag seine eigene,
+  // unabhängige Liste an Uhrzeiten (z. B. Mo 7/13 Uhr, Mi 8/18 Uhr).
+  const weekdayTimesHtml = isWeekdays ? WEEKDAYS
+    .filter((w) => (f.frequency.days || []).includes(w.value))
+    .map((w) => {
+      const dayTimes = f.frequency.timesByDay[w.value] || [];
+      const rows = dayTimes.map((t, idx) => `
+        <div class="time-entry">
+          <input type="time" data-wd-day="${w.value}" data-wd-idx="${idx}" value="${t.time}" />
+          <button type="button" data-wd-remove="${w.value}:${idx}" aria-label="Uhrzeit entfernen">✕</button>
+        </div>`).join('');
+      return `
+        <div class="form-field weekday-time-group">
+          <label>${w.label}</label>
+          ${rows}
+          <button type="button" class="add-time-btn" data-wd-add="${w.value}">+ Uhrzeit für ${w.label}</button>
+        </div>`;
+    }).join('') : '';
 
   document.getElementById('measurement-plan-form').innerHTML = `
     <div class="form-field">
@@ -1137,10 +1185,16 @@ function renderMeasurementPlanForm() {
       </select>
     </div>
 
-    ${f.frequency.type === 'weekdays' ? `<div class="form-field"><label>Wochentage</label><div class="weekday-pick">${weekdayButtons}</div></div>` : ''}
+    ${isWeekdays ? `<div class="form-field"><label>Wochentage</label><div class="weekday-pick">${weekdayButtons}</div></div>` : ''}
     ${f.frequency.type === 'interval' ? `<div class="form-field"><label>Intervall (Tage)</label><input type="number" id="p-interval" min="1" value="${f.frequency.everyNDays || 1}" /></div>` : ''}
 
-    ${f.frequency.type !== 'asNeeded' ? `
+    ${isWeekdays ? `
+    <div class="form-field">
+      <label>Uhrzeiten je Wochentag</label>
+      ${weekdayTimesHtml || '<p class="hint">Bitte oben mindestens einen Wochentag auswählen.</p>'}
+    </div>` : ''}
+
+    ${(!isWeekdays && f.frequency.type !== 'asNeeded') ? `
     <div class="form-field">
       <label>Uhrzeiten</label>
       ${timesHtml}
@@ -1184,7 +1238,36 @@ function attachPlanFormListeners() {
     btn.addEventListener('click', () => {
       const day = Number(btn.dataset.day);
       const days = planFormState.frequency.days || [];
-      planFormState.frequency.days = days.includes(day) ? days.filter((d) => d !== day) : [...days, day];
+      if (!planFormState.frequency.timesByDay) planFormState.frequency.timesByDay = {};
+      if (days.includes(day)) {
+        planFormState.frequency.days = days.filter((d) => d !== day);
+        delete planFormState.frequency.timesByDay[day];
+      } else {
+        planFormState.frequency.days = [...days, day];
+        if (!planFormState.frequency.timesByDay[day]) planFormState.frequency.timesByDay[day] = [{ time: '08:00' }];
+      }
+      renderMeasurementPlanForm();
+    });
+  });
+  root.querySelectorAll('[data-wd-day]').forEach((inp) => {
+    inp.addEventListener('change', () => {
+      const day = Number(inp.dataset.wdDay);
+      const idx = Number(inp.dataset.wdIdx);
+      planFormState.frequency.timesByDay[day][idx].time = inp.value;
+    });
+  });
+  root.querySelectorAll('[data-wd-remove]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const [day, idx] = btn.dataset.wdRemove.split(':').map(Number);
+      planFormState.frequency.timesByDay[day].splice(idx, 1);
+      renderMeasurementPlanForm();
+    });
+  });
+  root.querySelectorAll('[data-wd-add]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const day = Number(btn.dataset.wdAdd);
+      if (!planFormState.frequency.timesByDay[day]) planFormState.frequency.timesByDay[day] = [];
+      planFormState.frequency.timesByDay[day].push({ time: '12:00' });
       renderMeasurementPlanForm();
     });
   });
@@ -1216,11 +1299,23 @@ function attachPlanFormListeners() {
 async function savePlanForm() {
   syncPlanFormFieldsIntoState();
   if (!planFormState.startDate) planFormState.startDate = todayISO();
-  if (planFormState.frequency.type !== 'asNeeded') {
+
+  if (planFormState.frequency.type === 'weekdays') {
+    const days = planFormState.frequency.days || [];
+    if (days.length === 0) { toast('Bitte mindestens einen Wochentag wählen'); return; }
+    for (const day of days) {
+      const times = (planFormState.frequency.timesByDay[day] || []).filter((t) => t.time);
+      planFormState.frequency.timesByDay[day] = times;
+      if (times.length === 0) {
+        toast(`Bitte für ${WEEKDAYS.find((w) => w.value === day).label} mindestens eine Uhrzeit angeben`);
+        return;
+      }
+    }
+  } else if (planFormState.frequency.type !== 'asNeeded') {
     planFormState.times = (planFormState.times || []).filter((t) => t.time);
+    if (planFormState.times.length === 0) { toast('Bitte mindestens eine Uhrzeit angeben'); return; }
   }
-  if (planFormState.frequency.type !== 'asNeeded' && planFormState.times.length === 0) { toast('Bitte mindestens eine Uhrzeit angeben'); return; }
-  if (planFormState.frequency.type === 'weekdays' && (!planFormState.frequency.days || planFormState.frequency.days.length === 0)) { toast('Bitte mindestens einen Wochentag wählen'); return; }
+
   await saveMeasurementPlan(planFormState);
   closeMeasurementPlanModal();
   toast('Gespeichert');
