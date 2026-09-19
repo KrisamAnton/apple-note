@@ -571,7 +571,8 @@ html, body {
   color: #fff;
 }
 .icon-pick button.selected, .color-pick button.selected {
-  border-color: var(--text);
+  border-color: #fff;
+  box-shadow: 0 0 0 2px var(--accent);
 }
 
 .weekday-pick { display: flex; gap: 6px; }
