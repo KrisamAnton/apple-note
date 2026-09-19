@@ -538,11 +538,20 @@
   }
 
   function startNoteDrag(note, item, pointerId) {
+    noteDragSuppressClick = true;
+    // Zusätzliches Sicherheitsnetz: sollte irgendetwas in dieser Funktion
+    // (oder später beim Loslassen) einen unerwarteten Fehler werfen, bevor
+    // die Klick-Sperre normal wieder aufgehoben wird, bliebe die Notizliste
+    // sonst dauerhaft unklickbar, bis die Seite neu geladen wird - daher
+    // ganz am Anfang gesetzt, noch vor jeder Berechnung, die scheitern könnte.
+    const dragSafetyTimeout = setTimeout(() => {
+      noteDragSuppressClick = false;
+    }, 5000);
+
     item.classList.add('note-item-picked');
     setTimeout(() => item.classList.remove('note-item-picked'), 220);
     item.classList.add('note-item-dragging');
     el.noteList.classList.add('note-list-dragging');
-    noteDragSuppressClick = true;
 
     const forbiddenIds = new Set([note.id, ...descendantNoteIds(note.id)]);
     let currentDrop = null;
@@ -573,8 +582,18 @@
       item.classList.remove('note-item-dragging');
       el.noteList.classList.remove('note-list-dragging');
       clearNoteDropIndicators();
-      if (currentDrop) applyNoteDrop(note, currentDrop);
-      setTimeout(() => { noteDragSuppressClick = false; }, 50);
+      // Ein Fehler beim Verschieben darf niemals dazu führen, dass Klicks auf
+      // die Notizliste dauerhaft blockiert bleiben (bisher konnte genau das
+      // passieren, wenn applyNoteDrop einen Fehler wirft - die Zeile darunter
+      // wurde dann nie mehr erreicht, und man musste die Seite neu laden).
+      try {
+        if (currentDrop) applyNoteDrop(note, currentDrop);
+      } catch (err) {
+        console.error('Notiz konnte nicht verschoben werden:', err);
+      } finally {
+        clearTimeout(dragSafetyTimeout);
+        setTimeout(() => { noteDragSuppressClick = false; }, 50);
+      }
     };
     try {
       item.setPointerCapture(pointerId);
@@ -2079,7 +2098,12 @@
     body.contentEditable = 'true';
     body.classList.add('editing');
     overlay.style.display = 'none';
-    body.focus();
+    // preventScroll: ohne das versucht der Browser bei jedem Fokussieren
+    // (auch nach dem Einfügen/Formatieren, wenn das Textfeld dadurch größer
+    // wird), das Element selbst "ideal" in den sichtbaren Bereich zu
+    // scrollen - auf der frei positionierbaren Fläche sprang die gerade
+    // bearbeitete Notiz dadurch gelegentlich ungewollt ganz nach oben.
+    body.focus({ preventScroll: true });
     if (typeof clientX === 'number' && typeof clientY === 'number') {
       placeCaretAtPoint(body, clientX, clientY);
     }
@@ -2388,7 +2412,7 @@
     updateOverflowIndicators(objEl, body);
     lastSelectionRange = null;
     closeAllFormatPopovers();
-    body.focus();
+    body.focus({ preventScroll: true });
     // Die ursprüngliche Selektion wurde durch das Umbauen des DOM oben
     // (extractContents/insertNode) ungültig - ohne eine neu gesetzte
     // Selektion hätte ein erneuter Formatierungsklick (ohne dass der Nutzer
@@ -2426,7 +2450,7 @@
   function applyInlineCommand(command) {
     if (!activeTextEdit) return;
     const { body } = activeTextEdit;
-    body.focus();
+    body.focus({ preventScroll: true });
     if (lastSelectionRange) {
       const sel = window.getSelection();
       sel.removeAllRanges();
@@ -2445,7 +2469,7 @@
   function applyUndoRedo(command) {
     if (!activeTextEdit) return;
     const { note, obj, body } = activeTextEdit;
-    body.focus();
+    body.focus({ preventScroll: true });
     document.execCommand(command);
     saveTextObjContent(note, obj, body);
     updateTextEmptyState(body);
@@ -2454,7 +2478,7 @@
   function applyListCommand(command) {
     if (!activeTextEdit) return;
     const { body } = activeTextEdit;
-    body.focus();
+    body.focus({ preventScroll: true });
     if (lastSelectionRange) {
       const sel = window.getSelection();
       sel.removeAllRanges();
@@ -2678,7 +2702,7 @@
     }
     headingTargetNode = null;
     closeAllFormatPopovers();
-    body.focus();
+    body.focus({ preventScroll: true });
   }
 
   function applyMarkerChoice(hex, alpha) {
