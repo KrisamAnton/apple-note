@@ -888,6 +888,16 @@ async function toggleNotifications(enabled) {
   renderMore();
 }
 
+async function sendTestNotification() {
+  if (!('Notification' in window)) { toast('Dieser Browser unterstützt keine Benachrichtigungen'); return; }
+  if (Notification.permission !== 'granted') { toast('Bitte zuerst oben die Benachrichtigungen aktivieren'); return; }
+  const result = await showAppNotification('Test-Erinnerung', {
+    body: 'Wenn du das siehst, funktionieren Benachrichtigungen auf diesem Gerät.',
+    icon: 'icons/icon-192.png',
+  });
+  toast(result.ok ? 'Test-Benachrichtigung gesendet – schau in deiner Benachrichtigungsleiste nach' : 'Fehlgeschlagen: ' + (result.error && result.error.message ? result.error.message : 'unbekannter Fehler'));
+}
+
 function applyTheme() {
   const t = state.settings.theme;
   if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
@@ -975,25 +985,51 @@ async function saveMeasurementForm() {
 // Erinnerungen (Notifications) – rein im Vordergrund/Hintergrund-Tab
 // ===================================================================
 
+// Zeigt eine Benachrichtigung an. Chrome auf Android (und einige andere
+// mobile Browser) werfen bei `new Notification()` einen Fehler, sobald ein
+// Service Worker aktiv ist ("Illegal constructor") - dort MUSS der Weg über
+// die ServiceWorkerRegistration gehen. Das funktioniert auch auf allen
+// anderen modernen Browsern, daher hier einheitlich verwendet.
+async function showAppNotification(title, options) {
+  try {
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.ready;
+      await reg.showNotification(title, options);
+      return { ok: true };
+    }
+    new Notification(title, options);
+    return { ok: true };
+  } catch (err) {
+    console.error('Benachrichtigung fehlgeschlagen', err);
+    return { ok: false, error: err };
+  }
+}
+
+function minutesSinceMidnight(hhmm) {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+}
+
 function checkReminders() {
   if (!state.settings.notifications || !('Notification' in window) || Notification.permission !== 'granted') return;
   const now = new Date();
   const iso = toISO(now);
-  const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
   doseEntriesForDate(iso).forEach((e) => {
     const effectiveTime = e.postponedTo || e.scheduledTime;
-    if (effectiveTime !== hhmm) return;
+    const diff = nowMinutes - minutesSinceMidnight(effectiveTime);
+    // Bis zu 10 Minuten nach der geplanten Zeit noch nachholen, falls der
+    // 20-Sekunden-Takt durch Drosselung im Hintergrund mal ausgesetzt hat.
+    if (diff < 0 || diff > 10) return;
     if (e.status === 'taken' || e.status === 'skipped') return;
     const key = `${e.id}_${effectiveTime}`;
     if (state.notifiedKeys.has(key)) return;
     state.notifiedKeys.add(key);
-    try {
-      new Notification('Medikamenten-Erinnerung', {
-        body: `${e.med.name} – ${doseLabel(e.med, e.amount)} jetzt einnehmen`,
-        icon: 'icons/icon-192.png',
-        tag: key,
-      });
-    } catch (err) { /* manche Browser erlauben Notification() nicht im Hintergrund-Tab */ }
+    showAppNotification('Medikamenten-Erinnerung', {
+      body: `${e.med.name} – ${doseLabel(e.med, e.amount)} jetzt einnehmen`,
+      icon: 'icons/icon-192.png',
+      tag: key,
+    });
   });
 }
 
@@ -1029,6 +1065,7 @@ function bindStaticEvents() {
   document.getElementById('toggle-notifications').addEventListener('change', (e) => toggleNotifications(e.target.checked));
   document.getElementById('select-snooze').addEventListener('change', (e) => { state.settings.snoozeMinutes = Number(e.target.value); saveSettings(); });
   document.getElementById('select-theme').addEventListener('change', (e) => { state.settings.theme = e.target.value; saveSettings(); applyTheme(); });
+  document.getElementById('btn-test-notification').addEventListener('click', sendTestNotification);
 
   document.getElementById('btn-add-measurement').addEventListener('click', openMeasurementModal);
   document.getElementById('measurement-cancel').addEventListener('click', closeMeasurementModal);
