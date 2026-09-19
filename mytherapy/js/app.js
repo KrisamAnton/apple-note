@@ -40,13 +40,15 @@ const state = {
   medications: [],
   intakes: [],
   measurements: [],
+  measurementPlans: [],
+  measurementIntakes: [],
   currentDate: new Date(),
   calYear: new Date().getFullYear(),
   calMonth: new Date().getMonth(),
   selectedCalDay: null,
   activeTab: 'today',
   editingMedId: null,
-  editingMeasurementId: null,
+  editingMeasurementPlanId: null,
   settings: loadSettings(),
   notifiedKeys: new Set(),
 };
@@ -159,6 +161,30 @@ function computeDayStats(iso) {
   return { due, taken, ratio: due === 0 ? null : taken / due };
 }
 
+function measurementEntriesForDate(iso) {
+  const entries = [];
+  state.measurementPlans.forEach((plan) => {
+    if (!isDueOnDate(plan, iso)) return;
+    (plan.times || []).forEach((t) => {
+      const id = `${plan.id}::${iso}::${t.time}`;
+      const record = state.measurementIntakes.find((i) => i.id === id);
+      entries.push({
+        id,
+        plan,
+        date: iso,
+        scheduledTime: t.time,
+        status: record ? record.status : 'pending',
+      });
+    });
+  });
+  entries.sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime));
+  return entries;
+}
+
+function asNeededMeasurementPlans() {
+  return state.measurementPlans.filter((p) => p.active && p.frequency.type === 'asNeeded');
+}
+
 // ===================================================================
 // Datenzugriff / Sync
 // ===================================================================
@@ -194,6 +220,25 @@ async function saveMeasurement(m) {
   await Sync.saveMeasurement(m);
 }
 
+async function saveMeasurementPlan(plan) {
+  plan.updatedAt = Date.now();
+  upsertLocalList(state.measurementPlans, plan);
+  renderActiveView();
+  await Sync.saveMeasurementPlan(plan);
+}
+
+async function deleteMeasurementPlanById(id) {
+  state.measurementPlans = state.measurementPlans.filter((p) => p.id !== id);
+  renderActiveView();
+  await Sync.deleteMeasurementPlan(id);
+}
+
+async function saveMeasurementIntake(intake) {
+  upsertLocalList(state.measurementIntakes, intake);
+  renderActiveView();
+  await Sync.saveMeasurementIntake(intake);
+}
+
 function initSync() {
   Sync.subscribeMedications((list) => {
     state.medications = list;
@@ -205,6 +250,14 @@ function initSync() {
   });
   Sync.subscribeMeasurements((list) => {
     state.measurements = list;
+    renderActiveView();
+  });
+  Sync.subscribeMeasurementPlans((list) => {
+    state.measurementPlans = list;
+    renderActiveView();
+  });
+  Sync.subscribeMeasurementIntakes((list) => {
+    state.measurementIntakes = list;
     renderActiveView();
   });
   updateSyncDot();
@@ -269,31 +322,37 @@ function renderToday() {
   document.getElementById('day-label').textContent = formatDayLabel(state.currentDate);
 
   const entries = doseEntriesForDate(iso);
+  const measurementEntries = measurementEntriesForDate(iso);
   const listEl = document.getElementById('dose-list');
   const emptyEl = document.getElementById('today-empty');
   const progressCard = document.getElementById('progress-card');
 
-  if (state.medications.length === 0) {
+  const hasAnyPlan = state.medications.length > 0 || state.measurementPlans.length > 0;
+  if (!hasAnyPlan) {
     listEl.innerHTML = '';
     progressCard.hidden = true;
     emptyEl.hidden = false;
     return;
   }
 
-  progressCard.hidden = false;
+  progressCard.hidden = state.medications.length === 0;
   const due = entries.length;
   const taken = entries.filter((e) => e.status === 'taken').length;
-  const ring = document.getElementById('progress-ring-fg');
-  const circumference = 163.4;
-  const ratio = due === 0 ? 0 : taken / due;
-  ring.style.strokeDashoffset = String(circumference - circumference * ratio);
-  document.getElementById('progress-num').textContent = `${taken}/${due}`;
-  document.getElementById('progress-title').textContent =
-    due === 0 ? 'Für diesen Tag ist nichts geplant' : taken === due ? 'Alles erledigt 🎉' : `${due - taken} noch offen`;
-  document.getElementById('progress-sub').textContent =
-    due === 0 ? 'Genieß den Tag' : `${taken} von ${due} Einnahmen erledigt`;
+  if (state.medications.length > 0) {
+    const ring = document.getElementById('progress-ring-fg');
+    const circumference = 163.4;
+    const ratio = due === 0 ? 0 : taken / due;
+    ring.style.strokeDashoffset = String(circumference - circumference * ratio);
+    document.getElementById('progress-num').textContent = `${taken}/${due}`;
+    document.getElementById('progress-title').textContent =
+      due === 0 ? 'Für diesen Tag ist nichts geplant' : taken === due ? 'Alles erledigt 🎉' : `${due - taken} noch offen`;
+    document.getElementById('progress-sub').textContent =
+      due === 0 ? 'Genieß den Tag' : `${taken} von ${due} Einnahmen erledigt`;
+  }
 
-  emptyEl.hidden = entries.length > 0 || asNeededMeds().length > 0;
+  const asNeeded = asNeededMeds();
+  const asNeededMeasurements = asNeededMeasurementPlans();
+  emptyEl.hidden = entries.length > 0 || asNeeded.length > 0 || measurementEntries.length > 0 || asNeededMeasurements.length > 0;
 
   const sections = ['Morgens', 'Mittags', 'Abends', 'Nachts'];
   let html = '';
@@ -305,10 +364,22 @@ function renderToday() {
     html += `</div>`;
   });
 
-  const asNeeded = asNeededMeds();
   if (asNeeded.length > 0) {
     html += `<div class="dose-section"><div class="dose-section-title">Bei Bedarf</div>`;
     asNeeded.forEach((med) => { html += asNeededCardHtml(med, iso); });
+    html += `</div>`;
+  }
+
+  if (measurementEntries.length > 0) {
+    const doneCount = measurementEntries.filter((e) => e.status === 'taken').length;
+    html += `<div class="dose-section"><div class="dose-section-title">Messwerte (${doneCount}/${measurementEntries.length})</div>`;
+    measurementEntries.forEach((e) => { html += measurementCardHtml(e); });
+    html += `</div>`;
+  }
+
+  if (asNeededMeasurements.length > 0) {
+    html += `<div class="dose-section"><div class="dose-section-title">Messwerte bei Bedarf</div>`;
+    asNeededMeasurements.forEach((plan) => { html += asNeededMeasurementCardHtml(plan, iso); });
     html += `</div>`;
   }
 
@@ -319,6 +390,13 @@ function renderToday() {
       const { action, entryId } = btn.dataset;
       if (action === 'as-needed-log') {
         logAsNeeded(btn.dataset.medId, iso);
+      } else if (action === 'measurement-taken') {
+        openMeasurementModal({ planEntry: measurementEntries.find((e) => e.id === entryId) });
+      } else if (action === 'measurement-skip') {
+        handleMeasurementSkip(entryId);
+      } else if (action === 'measurement-as-needed-log') {
+        const plan = state.measurementPlans.find((p) => p.id === btn.dataset.planId);
+        openMeasurementModal({ planEntry: { plan, date: iso, scheduledTime: null } });
       } else {
         handleDoseAction(entryId, action);
       }
@@ -364,6 +442,42 @@ function asNeededCardHtml(med, iso) {
       </div>
       <div class="dose-actions">
         <button class="take" data-action="as-needed-log" data-med-id="${med.id}" title="Einnahme erfassen" aria-label="Einnahme erfassen">+</button>
+      </div>
+    </div>`;
+}
+
+function measurementCardHtml(e) {
+  const type = MEASUREMENT_TYPES[e.plan.type];
+  const statusLabel = { taken: 'Erledigt', skipped: 'Ausgelassen', pending: '' }[e.status];
+  return `
+    <div class="dose-card ${e.status === 'taken' ? 'taken' : ''}">
+      <div class="dose-icon" style="background:${MEASUREMENT_COLOR}">${type.icon}</div>
+      <div class="dose-info">
+        <div class="dose-name">${escapeHtml(type.label)}</div>
+        <div class="dose-status-line">
+          <span class="dose-time">${e.scheduledTime}</span>
+          ${statusLabel ? `<span class="status-pill ${e.status}">${statusLabel}</span>` : ''}
+        </div>
+      </div>
+      <div class="dose-actions">
+        <button class="take ${e.status === 'taken' ? 'active' : ''}" data-action="measurement-taken" data-entry-id="${e.id}" title="Erfassen" aria-label="Erfassen">✓</button>
+        <button class="skip ${e.status === 'skipped' ? 'active' : ''}" data-action="measurement-skip" data-entry-id="${e.id}" title="Auslassen" aria-label="Auslassen">✕</button>
+      </div>
+    </div>`;
+}
+
+function asNeededMeasurementCardHtml(plan, iso) {
+  const type = MEASUREMENT_TYPES[plan.type];
+  const count = state.measurementIntakes.filter((i) => i.planId === plan.id && i.date === iso && i.status === 'taken').length;
+  return `
+    <div class="dose-card">
+      <div class="dose-icon" style="background:${MEASUREMENT_COLOR}">${type.icon}</div>
+      <div class="dose-info">
+        <div class="dose-name">${escapeHtml(type.label)}</div>
+        <div class="dose-sub">heute ${count}×</div>
+      </div>
+      <div class="dose-actions">
+        <button class="take" data-action="measurement-as-needed-log" data-plan-id="${plan.id}" title="Erfassen" aria-label="Erfassen">+</button>
       </div>
     </div>`;
 }
@@ -440,6 +554,13 @@ async function logAsNeeded(medId, iso) {
   }
   await saveIntake({ id: uid('intake'), medId, date: iso, time, status: 'taken', actedAt: Date.now() });
   toast('Einnahme erfasst');
+}
+
+async function handleMeasurementSkip(entryId) {
+  const existing = state.measurementIntakes.find((i) => i.id === entryId);
+  const [planId, date, time] = entryId.split('::');
+  const nextStatus = existing && existing.status === 'skipped' ? 'pending' : 'skipped';
+  await saveMeasurementIntake({ id: entryId, planId, date, time, status: nextStatus, actedAt: Date.now() });
 }
 
 // Klick auf "Verschieben" ist ein eigener Listener, da handleDoseAction()
@@ -822,6 +943,7 @@ function renderMore() {
   document.getElementById('select-snooze').value = String(state.settings.snoozeMinutes);
   document.getElementById('select-theme').value = state.settings.theme;
 
+  renderMeasurementPlans();
   renderMeasurements();
 }
 
@@ -901,11 +1023,208 @@ function applyTheme() {
 // ---- Messwerte ----
 
 const MEASUREMENT_TYPES = {
-  bp: { label: 'Blutdruck', unit: 'mmHg' },
-  sugar: { label: 'Blutzucker', unit: 'mg/dl' },
-  weight: { label: 'Gewicht', unit: 'kg' },
-  pulse: { label: 'Puls', unit: 'bpm' },
+  bp: { label: 'Blutdruck', unit: 'mmHg', icon: '🩺' },
+  sugar: { label: 'Blutzucker', unit: 'mg/dl', icon: '🩸' },
+  weight: { label: 'Gewicht', unit: 'kg', icon: '⚖️' },
+  pulse: { label: 'Puls', unit: 'bpm', icon: '❤️' },
 };
+const MEASUREMENT_COLOR = '#2a6fb0';
+
+// ---- Mess-Pläne (wann/wie oft welcher Messwert fällig ist) ----
+
+let planFormState = null;
+
+function defaultMeasurementPlan() {
+  return {
+    id: uid('mplan'),
+    type: 'bp',
+    times: [{ time: '07:00' }],
+    frequency: { type: 'daily', days: [], everyNDays: 1, anchorDate: todayISO() },
+    startDate: todayISO(),
+    endDate: null,
+    hasEndDate: false,
+    active: true,
+    createdAt: Date.now(),
+  };
+}
+
+function renderMeasurementPlans() {
+  const listEl = document.getElementById('measurement-plan-list');
+  const emptyEl = document.getElementById('measurement-plan-empty');
+  if (state.measurementPlans.length === 0) {
+    listEl.innerHTML = '';
+    emptyEl.hidden = false;
+    return;
+  }
+  emptyEl.hidden = true;
+  listEl.innerHTML = state.measurementPlans.map((plan) => {
+    const type = MEASUREMENT_TYPES[plan.type];
+    const freqLabel = frequencyLabel(plan);
+    const timesLabel = plan.frequency.type === 'asNeeded' ? 'Bei Bedarf' : (plan.times || []).map((t) => t.time).join(' · ');
+    return `
+      <div class="med-card" data-plan-id="${plan.id}">
+        <div class="dose-icon" style="background:${MEASUREMENT_COLOR}">${type.icon}</div>
+        <div class="med-meta">
+          <div class="med-name">${escapeHtml(type.label)}</div>
+          <div class="med-sub">${freqLabel}</div>
+          <div class="med-sub">${timesLabel}</div>
+        </div>
+        <span class="chevron">›</span>
+      </div>`;
+  }).join('');
+  listEl.querySelectorAll('.med-card').forEach((card) => {
+    card.addEventListener('click', () => openMeasurementPlanModal(card.dataset.planId));
+  });
+}
+
+function openMeasurementPlanModal(planId) {
+  state.editingMeasurementPlanId = planId || null;
+  const existing = planId ? state.measurementPlans.find((p) => p.id === planId) : null;
+  planFormState = existing ? JSON.parse(JSON.stringify(existing)) : defaultMeasurementPlan();
+  if (planFormState.hasEndDate === undefined) planFormState.hasEndDate = !!planFormState.endDate;
+  document.getElementById('measurement-plan-modal-title').textContent = existing ? 'Mess-Plan bearbeiten' : 'Neuer Mess-Plan';
+  renderMeasurementPlanForm();
+  document.getElementById('measurement-plan-modal').hidden = false;
+}
+
+function closeMeasurementPlanModal() {
+  document.getElementById('measurement-plan-modal').hidden = true;
+  document.getElementById('measurement-plan-form').innerHTML = '';
+  planFormState = null;
+  state.editingMeasurementPlanId = null;
+}
+
+function syncPlanFormFieldsIntoState() {
+  if (!document.getElementById('p-frequency')) return;
+  planFormState.startDate = document.getElementById('p-start').value || planFormState.startDate;
+  const endInput = document.getElementById('p-end');
+  planFormState.endDate = planFormState.hasEndDate && endInput ? (endInput.value || null) : null;
+  const intervalInput = document.getElementById('p-interval');
+  if (intervalInput) planFormState.frequency.everyNDays = Number(intervalInput.value) || 1;
+  document.querySelectorAll('#measurement-plan-form [data-time-idx]').forEach((inp) => {
+    if (planFormState.times[Number(inp.dataset.timeIdx)]) planFormState.times[Number(inp.dataset.timeIdx)].time = inp.value;
+  });
+}
+
+function renderMeasurementPlanForm() {
+  syncPlanFormFieldsIntoState();
+  const f = planFormState;
+  const typeButtons = Object.entries(MEASUREMENT_TYPES).map(([key, v]) =>
+    `<button type="button" data-type="${key}" class="${f.type === key ? 'selected' : ''}" style="background:${MEASUREMENT_COLOR}">${v.icon}</button>`
+  ).join('');
+  const weekdayButtons = WEEKDAYS.map((w) =>
+    `<button type="button" data-day="${w.value}" class="${(f.frequency.days || []).includes(w.value) ? 'selected' : ''}">${w.label}</button>`
+  ).join('');
+  const timesHtml = (f.times || []).map((t, idx) => `
+    <div class="time-entry">
+      <input type="time" data-time-idx="${idx}" value="${t.time}" />
+      <button type="button" data-remove-time="${idx}" aria-label="Uhrzeit entfernen">✕</button>
+    </div>`).join('');
+
+  document.getElementById('measurement-plan-form').innerHTML = `
+    <div class="form-field">
+      <label>Art</label>
+      <div class="icon-pick">${typeButtons}</div>
+    </div>
+
+    <div class="form-field">
+      <label>Häufigkeit</label>
+      <select id="p-frequency">
+        <option value="daily" ${f.frequency.type === 'daily' ? 'selected' : ''}>Täglich</option>
+        <option value="weekdays" ${f.frequency.type === 'weekdays' ? 'selected' : ''}>Bestimmte Wochentage</option>
+        <option value="interval" ${f.frequency.type === 'interval' ? 'selected' : ''}>Alle X Tage</option>
+        <option value="asNeeded" ${f.frequency.type === 'asNeeded' ? 'selected' : ''}>Bei Bedarf</option>
+      </select>
+    </div>
+
+    ${f.frequency.type === 'weekdays' ? `<div class="form-field"><label>Wochentage</label><div class="weekday-pick">${weekdayButtons}</div></div>` : ''}
+    ${f.frequency.type === 'interval' ? `<div class="form-field"><label>Intervall (Tage)</label><input type="number" id="p-interval" min="1" value="${f.frequency.everyNDays || 1}" /></div>` : ''}
+
+    ${f.frequency.type !== 'asNeeded' ? `
+    <div class="form-field">
+      <label>Uhrzeiten</label>
+      ${timesHtml}
+      <button type="button" class="add-time-btn" id="p-add-time">+ Uhrzeit hinzufügen</button>
+    </div>` : ''}
+
+    <div class="form-row">
+      <div class="form-field">
+        <label>Beginn</label>
+        <input type="date" id="p-start" value="${f.startDate}" />
+      </div>
+      <div class="form-field">
+        <label>Ende</label>
+        <input type="date" id="p-end" value="${f.endDate || ''}" ${f.hasEndDate ? '' : 'disabled'} />
+      </div>
+    </div>
+    <label class="switch-row">
+      <span>Enddatum festlegen</span>
+      <input type="checkbox" id="p-has-end" ${f.hasEndDate ? 'checked' : ''} />
+    </label>
+
+    ${state.editingMeasurementPlanId ? `<button type="button" class="delete-med-btn" id="p-delete">Mess-Plan löschen</button>` : ''}
+  `;
+
+  attachPlanFormListeners();
+}
+
+function attachPlanFormListeners() {
+  const root = document.getElementById('measurement-plan-form');
+  root.querySelectorAll('[data-type]').forEach((btn) => {
+    btn.addEventListener('click', () => { planFormState.type = btn.dataset.type; renderMeasurementPlanForm(); });
+  });
+  const freqSel = document.getElementById('p-frequency');
+  freqSel.addEventListener('change', () => {
+    if (freqSel.value === 'weekdays' && planFormState.frequency.type !== 'weekdays') planFormState.frequency.days = [];
+    planFormState.frequency.type = freqSel.value;
+    if (freqSel.value === 'interval' && !planFormState.frequency.everyNDays) planFormState.frequency.everyNDays = 1;
+    renderMeasurementPlanForm();
+  });
+  root.querySelectorAll('[data-day]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const day = Number(btn.dataset.day);
+      const days = planFormState.frequency.days || [];
+      planFormState.frequency.days = days.includes(day) ? days.filter((d) => d !== day) : [...days, day];
+      renderMeasurementPlanForm();
+    });
+  });
+  const intervalInput = document.getElementById('p-interval');
+  if (intervalInput) intervalInput.addEventListener('input', () => { planFormState.frequency.everyNDays = Number(intervalInput.value) || 1; });
+
+  root.querySelectorAll('[data-time-idx]').forEach((inp) => {
+    inp.addEventListener('change', () => { planFormState.times[Number(inp.dataset.timeIdx)].time = inp.value; });
+  });
+  root.querySelectorAll('[data-remove-time]').forEach((btn) => {
+    btn.addEventListener('click', () => { planFormState.times.splice(Number(btn.dataset.removeTime), 1); renderMeasurementPlanForm(); });
+  });
+  const addTimeBtn = document.getElementById('p-add-time');
+  if (addTimeBtn) addTimeBtn.addEventListener('click', () => { planFormState.times.push({ time: '12:00' }); renderMeasurementPlanForm(); });
+
+  const hasEnd = document.getElementById('p-has-end');
+  hasEnd.addEventListener('change', () => { planFormState.hasEndDate = hasEnd.checked; if (!hasEnd.checked) planFormState.endDate = null; renderMeasurementPlanForm(); });
+
+  const delBtn = document.getElementById('p-delete');
+  if (delBtn) delBtn.addEventListener('click', async () => {
+    if (confirm('Diesen Mess-Plan wirklich löschen? Bereits erfasste Werte bleiben erhalten.')) {
+      await deleteMeasurementPlanById(state.editingMeasurementPlanId);
+      closeMeasurementPlanModal();
+      toast('Mess-Plan gelöscht');
+    }
+  });
+}
+
+async function savePlanForm() {
+  syncPlanFormFieldsIntoState();
+  if (!planFormState.startDate) planFormState.startDate = todayISO();
+  if (planFormState.frequency.type !== 'asNeeded') {
+    planFormState.times = (planFormState.times || []).filter((t) => t.time);
+  }
+  if (planFormState.frequency.type !== 'asNeeded' && planFormState.times.length === 0) { toast('Bitte mindestens eine Uhrzeit angeben'); return; }
+  if (planFormState.frequency.type === 'weekdays' && (!planFormState.frequency.days || planFormState.frequency.days.length === 0)) { toast('Bitte mindestens einen Wochentag wählen'); return; }
+  await saveMeasurementPlan(planFormState);
+  closeMeasurementPlanModal();
+  toast('Gespeichert');
+}
 
 function renderMeasurements() {
   const list = [...state.measurements].sort((a, b) => b.takenAt - a.takenAt).slice(0, 20);
@@ -921,18 +1240,27 @@ function renderMeasurements() {
   }).join('');
 }
 
-function openMeasurementModal() {
+let measurementPlanContext = null;
+
+function openMeasurementModal(opts) {
+  const planEntry = opts && opts.planEntry;
+  measurementPlanContext = planEntry || null;
+  const lockedType = planEntry ? planEntry.plan.type : null;
+  const defaultTime = planEntry && planEntry.scheduledTime
+    ? planEntry.scheduledTime
+    : (() => { const n = new Date(); return `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`; })();
+
   document.getElementById('measurement-form').innerHTML = `
     <div class="form-field">
       <label>Art</label>
-      <select id="m-type">
-        ${Object.entries(MEASUREMENT_TYPES).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('')}
+      <select id="m-type" ${lockedType ? 'disabled' : ''}>
+        ${Object.entries(MEASUREMENT_TYPES).map(([k, v]) => `<option value="${k}" ${lockedType === k ? 'selected' : ''}>${v.label}</option>`).join('')}
       </select>
     </div>
     <div id="m-value-fields"></div>
     <div class="form-field">
       <label>Uhrzeit</label>
-      <input type="time" id="m-time" value="${(() => { const n = new Date(); return `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`; })()}" />
+      <input type="time" id="m-time" value="${defaultTime}" />
     </div>
     <div class="form-field">
       <label>Notiz</label>
@@ -959,6 +1287,7 @@ function openMeasurementModal() {
 
 function closeMeasurementModal() {
   document.getElementById('measurement-modal').hidden = true;
+  measurementPlanContext = null;
 }
 
 async function saveMeasurementForm() {
@@ -978,6 +1307,21 @@ async function saveMeasurementForm() {
     record.value = Number(document.getElementById('m-value').value) || 0;
   }
   await saveMeasurement(record);
+
+  if (measurementPlanContext) {
+    const { plan, date, scheduledTime } = measurementPlanContext;
+    const intakeId = scheduledTime ? `${plan.id}::${date}::${scheduledTime}` : uid('mintake');
+    await saveMeasurementIntake({
+      id: intakeId,
+      planId: plan.id,
+      date,
+      time: timeValue,
+      status: 'taken',
+      valueRecordId: record.id,
+      actedAt: Date.now(),
+    });
+  }
+
   closeMeasurementModal();
   toast('Messwert gespeichert');
 }
@@ -1032,6 +1376,21 @@ function checkReminders() {
       tag: key,
     });
   });
+
+  measurementEntriesForDate(iso).forEach((e) => {
+    const diff = nowMinutes - minutesSinceMidnight(e.scheduledTime);
+    if (diff < 0 || diff > 10) return;
+    if (e.status === 'taken' || e.status === 'skipped') return;
+    const key = `${e.id}_${e.scheduledTime}`;
+    if (state.notifiedKeys.has(key)) return;
+    state.notifiedKeys.add(key);
+    const type = MEASUREMENT_TYPES[e.plan.type];
+    showAppNotification('Messwert-Erinnerung', {
+      body: `${type.label} jetzt messen/eintragen`,
+      icon: 'icons/icon-192.png',
+      tag: key,
+    });
+  });
 }
 
 // ===================================================================
@@ -1068,9 +1427,13 @@ function bindStaticEvents() {
   document.getElementById('select-theme').addEventListener('change', (e) => { state.settings.theme = e.target.value; saveSettings(); applyTheme(); });
   document.getElementById('btn-test-notification').addEventListener('click', sendTestNotification);
 
-  document.getElementById('btn-add-measurement').addEventListener('click', openMeasurementModal);
+  document.getElementById('btn-add-measurement').addEventListener('click', () => openMeasurementModal());
   document.getElementById('measurement-cancel').addEventListener('click', closeMeasurementModal);
   document.getElementById('measurement-save').addEventListener('click', saveMeasurementForm);
+
+  document.getElementById('btn-add-measurement-plan').addEventListener('click', () => openMeasurementPlanModal(null));
+  document.getElementById('measurement-plan-cancel').addEventListener('click', closeMeasurementPlanModal);
+  document.getElementById('measurement-plan-save').addEventListener('click', savePlanForm);
 
   document.getElementById('btn-sync-status').addEventListener('click', () => switchTab('more'));
 }
