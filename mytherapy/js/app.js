@@ -194,12 +194,6 @@ async function saveMeasurement(m) {
   await Sync.saveMeasurement(m);
 }
 
-async function deleteMeasurementById(id) {
-  state.measurements = state.measurements.filter((m) => m.id !== id);
-  renderActiveView();
-  await Sync.deleteMeasurement(id);
-}
-
 function initSync() {
   Sync.subscribeMedications((list) => {
     state.medications = list;
@@ -923,11 +917,8 @@ function renderMeasurements() {
     const type = MEASUREMENT_TYPES[m.type] || { label: m.type, unit: '' };
     const valueStr = m.type === 'bp' ? `${m.sys}/${m.dia} ${type.unit}` : `${m.value} ${type.unit}`;
     const dateStr = new Date(m.takenAt).toLocaleString('de-AT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-    return `<div class="measurement-row"><span>${type.label}: <strong>${valueStr}</strong> · ${dateStr}</span><button data-del-measurement="${m.id}">Löschen</button></div>`;
+    return `<div class="measurement-row"><span>${type.label}: <strong>${valueStr}</strong> · ${dateStr}</span></div>`;
   }).join('');
-  listEl.querySelectorAll('[data-del-measurement]').forEach((btn) => {
-    btn.addEventListener('click', () => deleteMeasurementById(btn.dataset.delMeasurement));
-  });
 }
 
 function openMeasurementModal() {
@@ -939,6 +930,10 @@ function openMeasurementModal() {
       </select>
     </div>
     <div id="m-value-fields"></div>
+    <div class="form-field">
+      <label>Uhrzeit</label>
+      <input type="time" id="m-time" value="${(() => { const n = new Date(); return `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`; })()}" />
+    </div>
     <div class="form-field">
       <label>Notiz</label>
       <input type="text" id="m-notes" placeholder="optional" />
@@ -969,7 +964,13 @@ function closeMeasurementModal() {
 async function saveMeasurementForm() {
   const type = document.getElementById('m-type').value;
   const notes = document.getElementById('m-notes').value;
-  const record = { id: uid('meas'), type, notes, takenAt: Date.now() };
+  const timeValue = document.getElementById('m-time').value;
+  const takenAt = new Date();
+  if (timeValue) {
+    const [h, m] = timeValue.split(':').map(Number);
+    takenAt.setHours(h, m, 0, 0);
+  }
+  const record = { id: uid('meas'), type, notes, takenAt: takenAt.getTime() };
   if (type === 'bp') {
     record.sys = Number(document.getElementById('m-sys').value) || 0;
     record.dia = Number(document.getElementById('m-dia').value) || 0;

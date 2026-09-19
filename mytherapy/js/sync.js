@@ -135,6 +135,5 @@ const Sync = (() => {
     deleteMedication: (id) => remove('medications', LOCAL_KEYS.medications, id),
     saveIntake: (intake) => upsert('intakes', LOCAL_KEYS.intakes, intake),
     saveMeasurement: (m) => upsert('measurements', LOCAL_KEYS.measurements, m),
-    deleteMeasurement: (id) => remove('measurements', LOCAL_KEYS.measurements, id),
   };
 })();
