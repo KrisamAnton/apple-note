@@ -495,6 +495,15 @@ function doseLabel(med, amount) {
   return `${a} ${med.dosageUnit || ''}`.trim();
 }
 
+function strengthLabel(med) {
+  const parts = [];
+  if (med.strengthAmount) parts.push(`${med.strengthAmount} ${med.strengthUnit || ''}`.trim());
+  (med.extraIngredients || []).forEach((ing) => {
+    if (ing.name || ing.amount) parts.push(`${ing.name ? ing.name + ' ' : ''}${ing.amount || ''} ${ing.unit || ''}`.trim());
+  });
+  return parts.join(' + ');
+}
+
 function escapeHtml(str) {
   return String(str || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
@@ -596,11 +605,13 @@ function renderMeds() {
     const freqLabel = frequencyLabel(med);
     const timesLabel = med.frequency.type === 'asNeeded' ? 'Bei Bedarf' : (med.times || []).map((t) => t.time).join(' · ');
     const lowStock = med.stock && med.stock.enabled && med.stock.count <= med.stock.threshold;
+    const strength = strengthLabel(med);
     return `
       <div class="med-card" data-med-id="${med.id}">
         <div class="dose-icon" style="background:${med.color}">${form.icon}</div>
         <div class="med-meta">
           <div class="med-name">${escapeHtml(med.name)}</div>
+          ${strength ? `<div class="med-sub">${escapeHtml(strength)}</div>` : ''}
           <div class="med-sub">${escapeHtml(doseLabel(med))} · ${freqLabel}</div>
           <div class="med-sub">${timesLabel}</div>
           ${lowStock ? `<span class="med-stock-warn">Nur noch ${med.stock.count} – nachfüllen</span>` : ''}
@@ -635,6 +646,9 @@ function defaultMed() {
     color: COLORS[0],
     dosageAmount: 1,
     dosageUnit: 'Tablette(n)',
+    strengthAmount: '',
+    strengthUnit: 'mg',
+    extraIngredients: [],
     times: [{ time: '08:00', amount: 1 }],
     frequency: { type: 'daily', days: [1, 2, 3, 4, 5, 6, 0], everyNDays: 1, anchorDate: todayISO() },
     startDate: todayISO(),
@@ -652,6 +666,11 @@ function openMedModal(medId) {
   const existing = medId ? state.medications.find((m) => m.id === medId) : null;
   formState = existing ? JSON.parse(JSON.stringify(existing)) : defaultMed();
   if (formState.hasEndDate === undefined) formState.hasEndDate = !!formState.endDate;
+  // Ältere, bereits gespeicherte Medikamente kennen diese Felder noch nicht -
+  // sinnvolle Standardwerte ergänzen, statt sie leer/undefined zu lassen.
+  if (formState.strengthAmount === undefined) formState.strengthAmount = '';
+  if (formState.strengthUnit === undefined) formState.strengthUnit = 'mg';
+  if (!formState.extraIngredients) formState.extraIngredients = [];
   document.getElementById('med-modal-title').textContent = existing ? 'Medikament bearbeiten' : 'Neues Medikament';
   renderMedForm();
   document.getElementById('med-modal').hidden = false;
@@ -669,6 +688,17 @@ function syncFormFieldsIntoState() {
   formState.name = document.getElementById('f-name').value;
   formState.dosageAmount = Number(document.getElementById('f-amount').value) || 0;
   formState.dosageUnit = document.getElementById('f-unit').value;
+  formState.strengthAmount = document.getElementById('f-strength-amount').value;
+  formState.strengthUnit = document.getElementById('f-strength-unit').value;
+  document.querySelectorAll('#med-form [data-ing-name-idx]').forEach((inp) => {
+    if (formState.extraIngredients[Number(inp.dataset.ingNameIdx)]) formState.extraIngredients[Number(inp.dataset.ingNameIdx)].name = inp.value;
+  });
+  document.querySelectorAll('#med-form [data-ing-amount-idx]').forEach((inp) => {
+    if (formState.extraIngredients[Number(inp.dataset.ingAmountIdx)]) formState.extraIngredients[Number(inp.dataset.ingAmountIdx)].amount = inp.value;
+  });
+  document.querySelectorAll('#med-form [data-ing-unit-idx]').forEach((inp) => {
+    if (formState.extraIngredients[Number(inp.dataset.ingUnitIdx)]) formState.extraIngredients[Number(inp.dataset.ingUnitIdx)].unit = inp.value;
+  });
   formState.startDate = document.getElementById('f-start').value || formState.startDate;
   const endInput = document.getElementById('f-end');
   formState.endDate = formState.hasEndDate && endInput ? (endInput.value || null) : null;
@@ -705,6 +735,24 @@ function renderMedForm() {
       <input type="number" min="0" step="0.5" data-amount-idx="${idx}" value="${t.amount || 1}" style="max-width:70px" />
       <button type="button" data-remove-time="${idx}" aria-label="Uhrzeit entfernen">✕</button>
     </div>`).join('');
+  const ingredientsHtml = (f.extraIngredients || []).map((ing, idx) => `
+    <div class="weekday-time-group">
+      <div class="form-field">
+        <label>Weiterer Wirkstoff</label>
+        <input type="text" data-ing-name-idx="${idx}" value="${escapeHtml(ing.name)}" placeholder="z. B. Hydrochlorothiazid" />
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>Stärke</label>
+          <input type="number" step="0.01" min="0" data-ing-amount-idx="${idx}" value="${ing.amount}" placeholder="z. B. 12.5" />
+        </div>
+        <div class="form-field">
+          <label>Einheit</label>
+          <input type="text" data-ing-unit-idx="${idx}" value="${escapeHtml(ing.unit)}" placeholder="mg" />
+        </div>
+      </div>
+      <button type="button" class="delete-med-btn" data-remove-ingredient="${idx}">Diesen Wirkstoff entfernen</button>
+    </div>`).join('');
 
   document.getElementById('med-form').innerHTML = `
     <div class="form-field">
@@ -731,6 +779,22 @@ function renderMedForm() {
         <label>Einheit</label>
         <input type="text" id="f-unit" value="${escapeHtml(f.dosageUnit)}" placeholder="Tablette(n), ml, Tropfen …" />
       </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-field">
+        <label>Stärke (Wirkstoffmenge)</label>
+        <input type="number" id="f-strength-amount" min="0" step="0.01" value="${f.strengthAmount}" placeholder="z. B. 400" />
+      </div>
+      <div class="form-field">
+        <label>Einheit</label>
+        <input type="text" id="f-strength-unit" value="${escapeHtml(f.strengthUnit)}" placeholder="mg" />
+      </div>
+    </div>
+
+    <div class="form-field">
+      ${ingredientsHtml}
+      <button type="button" class="add-time-btn" id="f-add-ingredient">+ weiteren Wirkstoff hinzufügen</button>
     </div>
 
     <div class="form-field">
@@ -829,6 +893,12 @@ function attachFormListeners() {
   const addTimeBtn = document.getElementById('f-add-time');
   if (addTimeBtn) addTimeBtn.addEventListener('click', () => { formState.times.push({ time: '12:00', amount: 1 }); renderMedForm(); });
 
+  document.getElementById('med-form').querySelectorAll('[data-remove-ingredient]').forEach((btn) => {
+    btn.addEventListener('click', () => { formState.extraIngredients.splice(Number(btn.dataset.removeIngredient), 1); renderMedForm(); });
+  });
+  const addIngredientBtn = document.getElementById('f-add-ingredient');
+  if (addIngredientBtn) addIngredientBtn.addEventListener('click', () => { formState.extraIngredients.push({ name: '', amount: '', unit: 'mg' }); renderMedForm(); });
+
   const hasEnd = document.getElementById('f-has-end');
   if (hasEnd) hasEnd.addEventListener('change', () => { formState.hasEndDate = hasEnd.checked; if (!hasEnd.checked) formState.endDate = null; renderMedForm(); });
 
@@ -850,6 +920,7 @@ async function saveMedForm() {
   formState.name = formState.name.trim();
   formState.dosageUnit = formState.dosageUnit.trim();
   if (!formState.dosageAmount) formState.dosageAmount = 1;
+  formState.extraIngredients = (formState.extraIngredients || []).filter((ing) => ing.name.trim() || ing.amount);
   if (!formState.startDate) formState.startDate = todayISO();
   if (formState.frequency.type !== 'asNeeded') {
     formState.times = (formState.times || []).filter((t) => t.time);
