@@ -683,7 +683,7 @@ function renderMedForm() {
   syncFormFieldsIntoState();
   const f = formState;
   const formIcons = Object.entries(MED_FORMS).map(([key, v]) =>
-    `<button type="button" data-form="${key}" class="${f.form === key ? 'selected' : ''}" style="background:${f.color}">${v.icon}</button>`
+    `<button type="button" data-form="${key}" class="${f.form === key ? 'selected' : ''}" style="background:${f.color}"><span class="pick-icon">${v.icon}</span><span>${v.label}</span></button>`
   ).join('');
   const colorButtons = COLORS.map((c) =>
     `<button type="button" data-color="${c}" class="${f.color === c ? 'selected' : ''}" style="background:${c}">${f.color === c ? '✓' : ''}</button>`
@@ -1110,7 +1110,7 @@ function renderMeasurementPlanForm() {
   syncPlanFormFieldsIntoState();
   const f = planFormState;
   const typeButtons = Object.entries(MEASUREMENT_TYPES).map(([key, v]) =>
-    `<button type="button" data-type="${key}" class="${f.type === key ? 'selected' : ''}" style="background:${MEASUREMENT_COLOR}">${v.icon}</button>`
+    `<button type="button" data-type="${key}" class="${f.type === key ? 'selected' : ''}" style="background:${MEASUREMENT_COLOR}"><span class="pick-icon">${v.icon}</span><span>${v.label}</span></button>`
   ).join('');
   const weekdayButtons = WEEKDAYS.map((w) =>
     `<button type="button" data-day="${w.value}" class="${(f.frequency.days || []).includes(w.value) ? 'selected' : ''}">${w.label}</button>`
