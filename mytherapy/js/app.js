@@ -794,7 +794,7 @@ function renderMedForm() {
 
     <div class="form-field">
       ${ingredientsHtml}
-      <button type="button" class="add-time-btn" id="f-add-ingredient">+ weiteren Wirkstoff hinzufügen</button>
+      <button type="button" class="add-time-btn" id="f-add-ingredient">+ Zusätzlichen Wirkstoff angeben (optional)</button>
     </div>
 
     <div class="form-field">
