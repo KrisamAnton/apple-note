@@ -357,6 +357,7 @@
     newFolderBtn: document.getElementById('newFolderBtn'),
     noteList: document.getElementById('noteList'),
     noteCount: document.getElementById('noteCount'),
+    collapseAllBtn: document.getElementById('collapseAllBtn'),
     newNoteBtn: document.getElementById('newNoteBtn'),
     searchInput: document.getElementById('searchInput'),
     editorEmpty: document.getElementById('editorEmpty'),
@@ -836,6 +837,35 @@
 
   // ---------- Rendering: Note list ----------
 
+  // IDs aller Notizen aus der übergebenen Liste, die (innerhalb dieser Liste)
+  // mindestens eine Unterseite haben - also genau die, für die überhaupt ein
+  // Auf-/Zuklapp-Pfeil angezeigt wird.
+  function collapsibleNoteIds(notes) {
+    const idsInList = new Set(notes.map((n) => n.id));
+    const withChildren = new Set();
+    for (const note of notes) {
+      if (note.parentNoteId && idsInList.has(note.parentNoteId)) {
+        withChildren.add(note.parentNoteId);
+      }
+    }
+    return withChildren;
+  }
+
+  function updateCollapseAllButton(collapsibleIds) {
+    const btn = el.collapseAllBtn;
+    if (!btn) return;
+    if (collapsibleIds.size === 0) {
+      btn.hidden = true;
+      return;
+    }
+    btn.hidden = false;
+    const allCollapsed = [...collapsibleIds].every((id) => collapsedNoteIds.has(id));
+    btn.classList.toggle('expanded', !allCollapsed);
+    const label = allCollapsed ? 'Alle Hauptüberschriften aufklappen' : 'Alle Hauptüberschriften zuklappen';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+  }
+
   function renderNoteList() {
     const notes = getVisibleNotes();
     el.noteList.innerHTML = '';
@@ -848,6 +878,7 @@
       empty.className = 'note-list-empty';
       empty.textContent = searchQuery ? 'Keine Ergebnisse' : 'Keine Notizen';
       el.noteList.appendChild(empty);
+      updateCollapseAllButton(new Set());
       return;
     }
 
@@ -858,6 +889,7 @@
       : buildNoteTree(notes);
 
     const isSearchMode = searchQuery.trim().length > 0;
+    updateCollapseAllButton(isSearchMode ? new Set() : collapsibleNoteIds(notes));
 
     for (const { note, depth, hasChildren } of rows) {
       const item = document.createElement('div');
@@ -4328,6 +4360,15 @@
 
     el.newFolderBtn.addEventListener('click', createFolder);
     el.newNoteBtn.addEventListener('click', createNote);
+    el.collapseAllBtn.addEventListener('click', () => {
+      const ids = collapsibleNoteIds(getVisibleNotes());
+      const allCollapsed = ids.size > 0 && [...ids].every((id) => collapsedNoteIds.has(id));
+      for (const id of ids) {
+        if (allCollapsed) collapsedNoteIds.delete(id);
+        else collapsedNoteIds.add(id);
+      }
+      renderNoteList();
+    });
     el.moveNoteBtn.addEventListener('click', openMovePopover);
     el.popoverBackdrop.addEventListener('click', (e) => {
       if (e.target === el.popoverBackdrop) closeMovePopover();

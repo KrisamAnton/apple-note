@@ -48,9 +48,14 @@
 
       <div class="note-count-row">
         <p class="note-count" id="noteCount"></p>
-        <button class="sidebar-add-btn" id="newNoteBtn" type="button" aria-label="Neue Notiz" title="Neue Notiz">
-          <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M9.2 2.5h1.6v6.7h6.7v1.6h-6.7v6.7H9.2v-6.7H2.5V9.2h6.7z"/></svg>
-        </button>
+        <div class="note-count-row-actions">
+          <button class="collapse-all-btn" id="collapseAllBtn" type="button" hidden>
+            <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M7 4.5 13 10l-6 5.5v-2.2L10.4 10 7 6.7z"/></svg>
+          </button>
+          <button class="sidebar-add-btn" id="newNoteBtn" type="button" aria-label="Neue Notiz" title="Neue Notiz">
+            <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M9.2 2.5h1.6v6.7h6.7v1.6h-6.7v6.7H9.2v-6.7H2.5V9.2h6.7z"/></svg>
+          </button>
+        </div>
       </div>
 
       <div class="note-list" id="noteList">

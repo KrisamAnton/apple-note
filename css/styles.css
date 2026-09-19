@@ -379,6 +379,12 @@ textarea {
   letter-spacing: 0.02em;
 }
 
+.note-count-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .note-count-row .sidebar-add-btn {
   width: 26px;
   height: 26px;
@@ -387,6 +393,36 @@ textarea {
 .note-count-row .sidebar-add-btn .icon {
   width: 15px;
   height: 15px;
+}
+
+/* Klappt alle Hauptüberschriften auf einmal zu/auf, damit man bei vielen
+   Notizen mit Unterseiten schnell nur die Hauptüberschriften sieht. */
+.collapse-all-btn {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.collapse-all-btn:hover {
+  background: var(--hover-bg);
+}
+
+.collapse-all-btn .icon {
+  width: 26px;
+  height: 26px;
+  transition: transform 0.15s;
+}
+
+.collapse-all-btn.expanded .icon {
+  transform: rotate(90deg);
 }
 
 .note-list {
@@ -471,8 +507,8 @@ textarea {
 .note-toggle,
 .note-toggle-spacer {
   flex: none;
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   margin-top: 0;
 }
 
@@ -492,8 +528,8 @@ textarea {
 }
 
 .note-toggle .icon {
-  width: 17px;
-  height: 17px;
+  width: 21px;
+  height: 21px;
   transition: transform 0.15s;
 }
 
