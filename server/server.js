@@ -193,6 +193,37 @@ function runTranscriptionJob(jobId, filePath) {
 // Code auf dem Server längst aktuell war. "no-cache" erzwingt bei jedem Laden
 // eine Rückfrage beim Server (per ETag/Last-Modified genügt meist ein schneller
 // 304-Abgleich statt einer erneuten vollen Übertragung).
+//
+// Das allein reicht aber nicht: Cloudflare (oder ein anderer Proxy vor dem
+// Server) kann diese Vorgabe für einzelne Dateitypen wie .js/.css trotzdem
+// ignorieren und stundenlang eine alte Fassung ausliefern (beobachtet:
+// "Cache-Control: max-age=14400" statt "no-cache" beim Abruf über die
+// öffentliche Domain, obwohl der Server selbst korrekt "no-cache" sendet).
+// Deshalb bekommen app.js und styles.css in der von hier ausgelieferten
+// index.html zusätzlich einen Versions-Anhang ("?v=..."), der sich bei jeder
+// inhaltlichen Änderung automatisch ändert (Änderungszeitpunkt der Datei) -
+// das ist für jeden Cache dazwischen eine komplett neue, nie zuvor gesehene
+// Adresse und kann daher nicht als "alt" ausgeliefert werden, unabhängig
+// davon, welche Cache-Regeln ein Proxy für diesen Dateityp sonst anwendet.
+function readVersionedIndexHtml() {
+  let html = fs.readFileSync(path.join(PROJECT_ROOT, 'index.html'), 'utf8');
+  const versionOf = (relPath) => {
+    try {
+      return Math.round(fs.statSync(path.join(PROJECT_ROOT, relPath)).mtimeMs);
+    } catch (e) {
+      return Date.now();
+    }
+  };
+  html = html.replace('href="css/styles.css"', `href="css/styles.css?v=${versionOf('css/styles.css')}"`);
+  html = html.replace('src="js/app.js"', `src="js/app.js?v=${versionOf('js/app.js')}"`);
+  return html;
+}
+
+app.get(['/', '/index.html'], (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.type('html').send(readVersionedIndexHtml());
+});
+
 app.use(
   express.static(PROJECT_ROOT, {
     setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
