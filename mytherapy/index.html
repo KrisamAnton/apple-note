@@ -142,11 +142,21 @@
 
     <div class="settings-group">
       <div class="group-head-row">
-        <h2>Messwerte</h2>
-        <button class="icon-btn primary" id="btn-add-measurement" aria-label="Messwert hinzufügen">+</button>
+        <h2>Mess-Pläne</h2>
+        <button class="icon-btn primary" id="btn-add-measurement-plan" aria-label="Mess-Plan hinzufügen">+</button>
+      </div>
+      <p class="hint">Lege fest, welche Messwerte du wie oft erfassen willst (z. B. Blutdruck täglich morgens) – erscheint dann unter „Heute" und in den Erinnerungen.</p>
+      <div class="med-list" id="measurement-plan-list"></div>
+      <p class="hint" id="measurement-plan-empty">Noch kein Mess-Plan angelegt.</p>
+    </div>
+
+    <div class="settings-group">
+      <div class="group-head-row">
+        <h2>Messwerte-Verlauf</h2>
+        <button class="icon-btn primary" id="btn-add-measurement" aria-label="Messwert manuell erfassen">+</button>
       </div>
       <div class="measurement-list" id="measurement-list"></div>
-      <p class="hint" id="measurement-empty">Noch keine Messwerte erfasst (z. B. Blutdruck, Blutzucker, Gewicht).</p>
+      <p class="hint" id="measurement-empty">Noch keine Messwerte erfasst.</p>
     </div>
 
     <div class="settings-group">
@@ -192,6 +202,18 @@
       <button class="text-btn primary" id="measurement-save">Sichern</button>
     </header>
     <div class="modal-body" id="measurement-form"></div>
+  </div>
+</div>
+
+<!-- ================= MESS-PLAN-FORMULAR (Modal) ================= -->
+<div class="modal-overlay" id="measurement-plan-modal" hidden>
+  <div class="modal-sheet">
+    <header class="modal-head">
+      <button class="text-btn" id="measurement-plan-cancel">Abbrechen</button>
+      <h2 id="measurement-plan-modal-title">Mess-Plan</h2>
+      <button class="text-btn primary" id="measurement-plan-save">Sichern</button>
+    </header>
+    <div class="modal-body" id="measurement-plan-form"></div>
   </div>
 </div>
 

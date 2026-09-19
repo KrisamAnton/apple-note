@@ -14,6 +14,8 @@ const Sync = (() => {
     medications: 'mt_local_medications',
     intakes: 'mt_local_intakes',
     measurements: 'mt_local_measurements',
+    measurementPlans: 'mt_local_measurement_plans',
+    measurementIntakes: 'mt_local_measurement_intakes',
     code: 'mt_household_code',
   };
 
@@ -131,9 +133,14 @@ const Sync = (() => {
     subscribeMedications: (cb) => subscribe('medications', LOCAL_KEYS.medications, cb),
     subscribeIntakes: (cb) => subscribe('intakes', LOCAL_KEYS.intakes, cb),
     subscribeMeasurements: (cb) => subscribe('measurements', LOCAL_KEYS.measurements, cb),
+    subscribeMeasurementPlans: (cb) => subscribe('measurementPlans', LOCAL_KEYS.measurementPlans, cb),
+    subscribeMeasurementIntakes: (cb) => subscribe('measurementIntakes', LOCAL_KEYS.measurementIntakes, cb),
     saveMedication: (med) => upsert('medications', LOCAL_KEYS.medications, med),
     deleteMedication: (id) => remove('medications', LOCAL_KEYS.medications, id),
     saveIntake: (intake) => upsert('intakes', LOCAL_KEYS.intakes, intake),
     saveMeasurement: (m) => upsert('measurements', LOCAL_KEYS.measurements, m),
+    saveMeasurementPlan: (plan) => upsert('measurementPlans', LOCAL_KEYS.measurementPlans, plan),
+    deleteMeasurementPlan: (id) => remove('measurementPlans', LOCAL_KEYS.measurementPlans, id),
+    saveMeasurementIntake: (intake) => upsert('measurementIntakes', LOCAL_KEYS.measurementIntakes, intake),
   };
 })();
