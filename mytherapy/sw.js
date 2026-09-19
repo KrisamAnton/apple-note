@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const CACHE_NAME = `mediplan-pwa-${CACHE_VERSION}`;
 
 const APP_SHELL = [
@@ -40,7 +40,11 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
 
   event.respondWith(
-    fetch(request)
+    // cache: 'no-store' erzwingt, dass jede Anfrage wirklich neu vom Server
+    // geholt wird (nicht aus dem HTTP-Cache des Browsers) - so kommt nach
+    // jedem Update immer sofort die neueste Version an, ohne dass man erst
+    // Browser-Daten löschen oder einen Cache-Buster in der URL anhängen muss.
+    fetch(request, { cache: 'no-store' })
       .then((response) => {
         if (response && response.ok && response.type === 'basic') {
           const clone = response.clone();
