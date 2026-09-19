@@ -2094,6 +2094,12 @@
   }
 
   function enterTextEdit(note, obj, objEl, body, overlay, clientX, clientY) {
+    // Sicherheitsnetz gegen das browsereigene Scrollen beim erstmaligen
+    // Aktivieren eines contentEditable-Bereichs (siehe unten) - Position
+    // VOR jeder Änderung merken, um sie danach explizit wiederherzustellen.
+    const savedScrollLeft = el.canvasWorkspace.scrollLeft;
+    const savedScrollTop = el.canvasWorkspace.scrollTop;
+
     selectObject(note, obj, objEl);
     body.contentEditable = 'true';
     body.classList.add('editing');
@@ -2107,6 +2113,21 @@
     if (typeof clientX === 'number' && typeof clientY === 'number') {
       placeCaretAtPoint(body, clientX, clientY);
     }
+    // preventScroll allein reichte nicht: Das erstmalige Setzen einer neuen
+    // Selection/Cursor-Position in einem gerade erst editierbar gewordenen
+    // Bereich lässt manche Browser die Fläche TROTZDEM automatisch
+    // verschieben, um die neue Cursor-Position "sichtbar" zu machen - dafür
+    // gibt es keine Option zum Abschalten. Da die angeklickte Stelle ja
+    // gerade erst sichtbar angeklickt wurde, war sie schon sichtbar; die
+    // Scroll-Position wird daher explizit zurückgesetzt (einmal sofort,
+    // einmal einen Frame später, falls der Browser erst beim nächsten
+    // Layout nachscrollt).
+    const restoreScroll = () => {
+      el.canvasWorkspace.scrollLeft = savedScrollLeft;
+      el.canvasWorkspace.scrollTop = savedScrollTop;
+    };
+    restoreScroll();
+    requestAnimationFrame(restoreScroll);
     activeTextEdit = { note, obj, objEl, body, overlay };
     lastSelectionRange = null;
     el.ribbonFontFamilyLabel.textContent = 'Calibri';
