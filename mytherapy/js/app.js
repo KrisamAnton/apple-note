@@ -536,6 +536,7 @@ function openMedModal(medId) {
 
 function closeMedModal() {
   document.getElementById('med-modal').hidden = true;
+  document.getElementById('med-form').innerHTML = '';
   formState = null;
   state.editingMedId = null;
 }
