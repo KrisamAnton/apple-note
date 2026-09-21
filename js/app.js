@@ -1070,6 +1070,15 @@
     };
   }
 
+  // Merkt sich, für welche Notiz die Fläche zuletzt aufgebaut wurde: Nur bei
+  // einem echten Wechsel zu einer ANDEREN Notiz soll die Scroll-Position auf
+  // links oben zurückgesetzt werden (sonst bleibt man immer dort stehen, wo
+  // man zuletzt in der vorherigen Notiz hingescrollt hatte). Ein erneuter
+  // Aufruf für dieselbe Notiz (z. B. durch selectFolder(), das renderEditor()
+  // auch aufruft, wenn die aktuell offene Notiz im neu gewählten Ordner
+  // bleibt) darf die Scroll-Position dagegen nicht antasten.
+  let lastRenderedCanvasNoteId = undefined;
+
   function renderCanvas(note) {
     deactivateDrawMode();
     clearStrokeSelection();
@@ -1077,13 +1086,21 @@
     for (const child of [...el.canvasSurface.children]) {
       if (child !== el.inkLayer) child.remove();
     }
-    if (!note) return;
+    if (!note) {
+      lastRenderedCanvasNoteId = undefined;
+      return;
+    }
     el.canvasSurface.dataset.bg = note.background || 'dots';
     const sorted = [...note.objects].sort((a, b) => (a.z || 0) - (b.z || 0));
     for (const obj of sorted) {
       el.canvasSurface.insertBefore(buildObjectEl(note, obj), el.inkLayer);
     }
     updateSurfaceSize(note, true);
+    if (note.id !== lastRenderedCanvasNoteId) {
+      el.canvasWorkspace.scrollLeft = 0;
+      el.canvasWorkspace.scrollTop = 0;
+    }
+    lastRenderedCanvasNoteId = note.id;
   }
 
   function findObjEl(id) {
