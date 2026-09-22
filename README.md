@@ -174,6 +174,18 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
     Dateiname und Typ (z. B. „WORD") abgelegt; ein Klick auf den Anhang
     bzw. den „Datei öffnen"-Knopf lädt die Original-Datei herunter, die
     sich danach lokal in der zugehörigen App (z. B. Word) öffnen lässt
+  - **Zugangsdaten** (Schlüssel-Symbol): strukturiert Benutzername,
+    Passwort und beliebig viele weitere frei benennbare Felder (z. B.
+    PIN, PUK) zu einer Karte zusammen, statt sie als unformatierten
+    Text abzutippen. Zugeklappt zeigt die Karte nur ihre Bezeichnung,
+    ein Klick darauf blendet alle Felder ein (und wieder aus) - der
+    aufgeklappte Zustand wird nicht gespeichert, jede Karte startet
+    nach einem Notizwechsel/Neuladen wieder zugeklappt. Über den
+    Stift-Knopf an der Karte lassen sich Bezeichnung und Felder jederzeit
+    nachbearbeiten (Felder hinzufügen/entfernen/umbenennen). Bezeichnung
+    und Feldinhalte sind über die normale Volltextsuche auffindbar.
+    Werden genauso wie alle anderen Notizinhalte unverschlüsselt auf dem
+    eigenen Server gespeichert
 - **Sprachnotizen aufnehmen**: über das Mikrofon-Symbol im Ribbon direkt im
   Browser aufnehmen (nochmal klicken zum Beenden, der Button pulsiert rot
   währenddessen). Die Aufnahme wird als eigenes Objekt mit Abspiel-Player an

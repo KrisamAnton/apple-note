@@ -8,7 +8,7 @@
   const MAX_OBJ_DIM = 20000;
   let SURFACE_W = BASE_SURFACE_W;
   let SURFACE_H = BASE_SURFACE_H;
-  const MIN_SIZES = { text: [140, 60], image: [60, 60], pdf: [60, 60] };
+  const MIN_SIZES = { text: [140, 60], image: [60, 60], pdf: [60, 60], credential: [200, 70] };
   // Muss zum Linien-Hintergrund (.canvas-surface[data-bg="lines"]) passen: Zeilenabstand
   // 28px, die sichtbare Linie liegt am unteren Rand jedes 28px-Bandes (bei 27px).
   const LINE_PITCH = 28;
@@ -33,6 +33,7 @@
     mic: '<svg viewBox="0 0 20 20"><path d="M10 2.5a2.5 2.5 0 0 0-2.5 2.5v4a2.5 2.5 0 0 0 5 0V5A2.5 2.5 0 0 0 10 2.5z" fill="currentColor"/><path d="M5.5 9v.5a4.5 4.5 0 0 0 9 0V9H16v.5a6 6 0 0 1-5.25 5.95V17.5h-1.5v-2.05A6 6 0 0 1 4 9.5V9h1.5z" fill="currentColor"/></svg>',
     transcript: '<svg viewBox="0 0 20 20"><path d="M3 4h14v1.6H3V4zm0 4.2h14v1.6H3V8.2zm0 4.2h9v1.6H3v-1.6z" fill="currentColor"/></svg>',
     rename: '<svg viewBox="0 0 20 20"><path d="M13.6 2.4a1.9 1.9 0 0 1 2.7 2.7L7.4 14 4 15l1-3.4 8.6-9.2z" fill="currentColor"/></svg>',
+    key: '<svg viewBox="0 0 20 20"><path d="M8 2a4.5 4.5 0 0 0-4.24 6h-.01L1 10.75V15h1.5v-1.5H4V12h1.5v-1.5h1.28A4.5 4.5 0 1 0 8 2zm3.3 4.5a1.3 1.3 0 1 1 0-2.6 1.3 1.3 0 0 1 0 2.6z" fill="currentColor"/></svg>',
   };
 
   const MARKER_COLORS = [
@@ -416,6 +417,14 @@
     pdfFileInput: document.getElementById('pdfFileInput'),
     addAudioBtn: document.getElementById('addAudioBtn'),
     addFileBtn: document.getElementById('addFileBtn'),
+    addCredentialBtn: document.getElementById('addCredentialBtn'),
+    credentialPopoverBackdrop: document.getElementById('credentialPopoverBackdrop'),
+    credentialPopover: document.getElementById('credentialPopover'),
+    credentialTitleInput: document.getElementById('credentialTitleInput'),
+    credentialFieldsList: document.getElementById('credentialFieldsList'),
+    credentialAddFieldBtn: document.getElementById('credentialAddFieldBtn'),
+    credentialCancelBtn: document.getElementById('credentialCancelBtn'),
+    credentialSaveBtn: document.getElementById('credentialSaveBtn'),
     fileFileInput: document.getElementById('fileFileInput'),
     backgroundBtn: document.getElementById('backgroundBtn'),
     backgroundPopoverBackdrop: document.getElementById('backgroundPopoverBackdrop'),
@@ -444,7 +453,11 @@
       .filter((o) => o.type === 'text')
       .map((o) => o.text || '')
       .join(' ');
-    return `${note.title || ''} ${objectText}`;
+    const credentialText = note.objects
+      .filter((o) => o.type === 'credential')
+      .map((o) => `${o.title || ''} ${(o.fields || []).map((f) => `${f.label} ${f.value}`).join(' ')}`)
+      .join(' ');
+    return `${note.title || ''} ${objectText} ${credentialText}`;
   }
 
   // Baut aus einer flachen Notizliste (z. B. eines Ordners) eine Tiefensuche-Reihenfolge
@@ -1178,6 +1191,9 @@
     if (obj.type === 'audio') {
       mainToolbar.appendChild(makeToolbarBtn(ICONS.transcript, false, () => startTranscription(note, obj, objEl), 'In Text umwandeln'));
     }
+    if (obj.type === 'credential') {
+      mainToolbar.appendChild(makeToolbarBtn(ICONS.rename, false, () => openCredentialPopover(note, obj, mainToolbar), 'Bearbeiten'));
+    }
     mainToolbar.appendChild(makeToolbarBtn(ICONS.trash, true, () => deleteObject(note, obj.id), 'Löschen'));
     objEl.appendChild(mainToolbar);
 
@@ -1186,6 +1202,7 @@
     else if (obj.type === 'pdf') buildPdfContent(note, obj, objEl);
     else if (obj.type === 'audio') buildAudioContent(note, obj, objEl);
     else if (obj.type === 'file') buildFileContent(note, obj, objEl);
+    else if (obj.type === 'credential') buildCredentialContent(note, obj, objEl);
 
     // Größe ändern nur noch über die rechte Kante (Breite) und die untere
     // Kante (Höhe) - wie bei einem normalen Fenster, kein zusätzlicher runder
@@ -3996,6 +4013,53 @@
     wireFileChipInteraction(note, obj, objEl);
   }
 
+  // Zugangsdaten-Karte: zeigt zugeklappt nur die Bezeichnung, ein Klick
+  // darauf blendet die enthaltenen Felder (Benutzername, Passwort, ...) ein.
+  // Der aufgeklappte Zustand wird bewusst NICHT gespeichert - jede Karte
+  // startet nach einem Neuaufbau der Fläche (z. B. Notizwechsel) wieder
+  // zugeklappt.
+  function buildCredentialContent(note, obj, objEl) {
+    const card = document.createElement('div');
+    card.className = 'credential-card';
+
+    const header = document.createElement('div');
+    header.className = 'credential-card-header';
+    header.innerHTML = `<svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.key}</svg>`;
+    const title = document.createElement('span');
+    title.className = 'credential-card-title';
+    title.textContent = obj.title || 'Zugangsdaten';
+    header.appendChild(title);
+    card.appendChild(header);
+
+    const fieldsEl = document.createElement('div');
+    fieldsEl.className = 'credential-card-fields';
+    for (const field of obj.fields || []) {
+      const row = document.createElement('div');
+      row.className = 'credential-card-field';
+      const labelEl = document.createElement('span');
+      labelEl.className = 'credential-card-field-label';
+      labelEl.textContent = `${field.label}:`;
+      const valueEl = document.createElement('span');
+      valueEl.className = 'credential-card-field-value';
+      valueEl.textContent = field.value;
+      row.appendChild(labelEl);
+      row.appendChild(valueEl);
+      fieldsEl.appendChild(row);
+    }
+    card.appendChild(fieldsEl);
+
+    card.addEventListener('click', (e) => {
+      // Textmarkieren (z. B. um ein Passwort zu kopieren) soll nicht
+      // gleichzeitig wieder zuklappen.
+      if (window.getSelection().toString()) return;
+      selectObject(note, obj, objEl);
+      objEl.classList.toggle('expanded');
+      e.stopPropagation();
+    });
+
+    objEl.appendChild(card);
+  }
+
   // ----- Objekte hinzufügen / löschen -----
 
   function addTextObject(style) {
@@ -4274,6 +4338,110 @@
     el.textStylePopoverBackdrop.hidden = true;
   }
 
+  // ---------- Zugangsdaten-Popover (anlegen/bearbeiten) ----------
+
+  let editingCredentialObj = null; // null = neue Karte wird angelegt
+  let credentialFieldsDraft = []; // [{label, value}, ...] - Entwurf, solange das Popover offen ist
+
+  function renderCredentialFieldRows() {
+    el.credentialFieldsList.innerHTML = '';
+    credentialFieldsDraft.forEach((field, idx) => {
+      const row = document.createElement('div');
+      row.className = 'credential-field-row';
+
+      const labelInput = document.createElement('input');
+      labelInput.type = 'text';
+      labelInput.className = 'credential-field-label-input';
+      labelInput.placeholder = 'Bezeichnung';
+      labelInput.value = field.label;
+      labelInput.addEventListener('input', () => { field.label = labelInput.value; });
+
+      const valueInput = document.createElement('input');
+      valueInput.type = 'text';
+      valueInput.className = 'credential-field-value-input';
+      valueInput.placeholder = 'Wert';
+      valueInput.value = field.value;
+      valueInput.addEventListener('input', () => { field.value = valueInput.value; });
+
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'credential-field-remove-btn';
+      removeBtn.setAttribute('aria-label', 'Feld entfernen');
+      removeBtn.textContent = '×';
+      removeBtn.addEventListener('click', () => {
+        credentialFieldsDraft.splice(idx, 1);
+        renderCredentialFieldRows();
+      });
+
+      row.appendChild(labelInput);
+      row.appendChild(valueInput);
+      row.appendChild(removeBtn);
+      el.credentialFieldsList.appendChild(row);
+    });
+  }
+
+  function openCredentialPopover(note, obj, anchorEl) {
+    if (!note) return;
+    editingCredentialObj = obj || null;
+    el.credentialTitleInput.value = obj ? obj.title : '';
+    credentialFieldsDraft = obj
+      ? obj.fields.map((f) => ({ ...f }))
+      : [{ label: 'Benutzername', value: '' }, { label: 'Passwort', value: '' }];
+    renderCredentialFieldRows();
+
+    el.credentialPopoverBackdrop.hidden = false;
+    const btnRect = anchorEl.getBoundingClientRect();
+    const popoverWidth = 360;
+    const left = Math.min(Math.max(8, btnRect.left), window.innerWidth - popoverWidth - 8);
+    const top = Math.min(btnRect.bottom + 6, window.innerHeight - 200);
+    el.credentialPopover.style.left = `${Math.max(8, left)}px`;
+    el.credentialPopover.style.top = `${Math.max(8, top)}px`;
+    el.credentialTitleInput.focus();
+  }
+
+  function closeCredentialPopover() {
+    el.credentialPopoverBackdrop.hidden = true;
+    editingCredentialObj = null;
+    credentialFieldsDraft = [];
+  }
+
+  function saveCredentialPopover() {
+    const note = currentNote();
+    if (!note) return closeCredentialPopover();
+    const title = el.credentialTitleInput.value.trim();
+    if (!title) {
+      el.credentialTitleInput.focus();
+      return;
+    }
+    const fields = credentialFieldsDraft
+      .map((f) => ({ label: f.label.trim(), value: f.value }))
+      .filter((f) => f.label || f.value);
+
+    if (editingCredentialObj) {
+      editingCredentialObj.title = title;
+      editingCredentialObj.fields = fields;
+    } else {
+      const { x, y } = nextPlacement(note, 260, 60 + fields.length * 26);
+      const obj = {
+        id: uid(),
+        type: 'credential',
+        x,
+        y,
+        w: 260,
+        h: 60 + Math.max(fields.length, 1) * 26,
+        z: 0,
+        title,
+        fields,
+      };
+      bringToFront(note, obj);
+      note.objects.push(obj);
+    }
+    note.updatedAt = Date.now();
+    schedulePersist();
+    renderCanvas(note);
+    closeCredentialPopover();
+  }
+
   // ---------- Responsive view state (mobile) ----------
 
   function goToView(view) {
@@ -4442,6 +4610,16 @@
       if (file) addFileObjectFromFile(file);
       el.fileFileInput.value = '';
     });
+    el.addCredentialBtn.addEventListener('click', () => openCredentialPopover(currentNote(), null, el.addCredentialBtn));
+    el.credentialPopoverBackdrop.addEventListener('click', (e) => {
+      if (e.target === el.credentialPopoverBackdrop) closeCredentialPopover();
+    });
+    el.credentialAddFieldBtn.addEventListener('click', () => {
+      credentialFieldsDraft.push({ label: '', value: '' });
+      renderCredentialFieldRows();
+    });
+    el.credentialCancelBtn.addEventListener('click', closeCredentialPopover);
+    el.credentialSaveBtn.addEventListener('click', saveCredentialPopover);
     // Klick/Tipp auf die leere Fläche legt sofort freien Text an (wie in OneNote) –
     // ABER erst, wenn feststeht, dass es wirklich ein Tipp war (kurz, ohne Bewegung,
     // nur ein Finger). Sonst wäre auf Touch-Geräten jedes Wischen zum Scrollen oder

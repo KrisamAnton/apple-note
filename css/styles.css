@@ -1893,6 +1893,201 @@ textarea {
   border-color: var(--accent);
 }
 
+/* ---------- Zugangsdaten (Formular zum Anlegen/Bearbeiten) ---------- */
+
+.popover-form {
+  min-width: 320px;
+  max-width: 360px;
+  padding: 10px;
+}
+
+.popover-text-input {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 14px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  margin: 0 0 8px;
+}
+
+.credential-fields-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.credential-field-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.credential-field-label-input {
+  flex: 0 0 38%;
+  min-width: 0;
+}
+
+.credential-field-value-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.credential-field-label-input,
+.credential-field-value-input {
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.credential-field-remove-btn {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 16px;
+  line-height: 1;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.credential-field-remove-btn:hover {
+  background: var(--hover-bg);
+  color: var(--danger);
+}
+
+.credential-add-field-btn {
+  display: block;
+  margin: 8px 0 4px;
+  padding: 6px 8px;
+  border: none;
+  background: transparent;
+  color: var(--accent-strong);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.credential-add-field-btn:hover {
+  background: var(--hover-bg);
+}
+
+.popover-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.popover-btn {
+  padding: 7px 14px;
+  border-radius: 7px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.popover-btn-secondary {
+  background: transparent;
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.popover-btn-secondary:hover {
+  background: var(--hover-bg);
+}
+
+.popover-btn-primary {
+  background: var(--accent-strong);
+  color: #fff;
+}
+
+.popover-btn-primary:hover {
+  background: var(--accent);
+}
+
+/* ---------- Zugangsdaten-Karte (auf der Fläche) ---------- */
+
+.credential-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 8px 10px;
+  overflow: auto;
+  cursor: pointer;
+}
+
+.credential-card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.credential-card-header .icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--accent-strong);
+}
+
+.credential-card-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.credential-card-fields {
+  display: none;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.canvas-object[data-type="credential"].expanded .credential-card-fields {
+  display: flex;
+}
+
+.credential-card-field {
+  display: flex;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.credential-card-field-label {
+  flex: none;
+  color: var(--text-tertiary);
+  font-weight: 600;
+}
+
+.credential-card-field-value {
+  min-width: 0;
+  color: var(--text-primary);
+  word-break: break-word;
+  user-select: text;
+}
+
 /* ---------- Responsive: iPad Portrait / kleinere Screens ---------- */
 
 @media (max-width: 1000px) {
