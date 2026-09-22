@@ -4378,6 +4378,14 @@
 
     state = await loadState();
     selectedNoteId = state.notes[0] ? state.notes[0].id : null;
+    // Bei jedem frischen Laden der Seite (Neustart, anderes Gerät, zweiter
+    // Tab) sollen alle Notizen mit Unterseiten zunächst zugeklappt sein.
+    // collapsedNoteIds lebt nur im Arbeitsspeicher dieser Seite (nicht in den
+    // gespeicherten Daten) - innerhalb einer laufenden Sitzung bleibt der
+    // Auf-/Zuklapp-Zustand daher beim Wechseln zwischen Ordnern/Notizen und
+    // beim Zurückgehen automatisch erhalten, ohne dass das extra gespeichert
+    // werden muss.
+    collapsedNoteIds = collapsibleNoteIds(state.notes);
 
     renderFolders();
     renderNoteList();
