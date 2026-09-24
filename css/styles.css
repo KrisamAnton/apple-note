@@ -1,7 +1,15 @@
 :root {
   color-scheme: light dark;
 
-  --bg-sidebar: #f2f1ec;
+  /* Die Seitenleiste ist bewusst IMMER dunkel (wie bei Wartix), unabhängig
+     vom Hell-/Dunkel-Modus des restlichen Programms - daher eigene, feste
+     Variablen statt der unten im Dark-Mode-Block umgeschalteten Farben. */
+  --sidebar-bg: #23262b;
+  --sidebar-text: #f2f2f4;
+  --sidebar-text-muted: rgba(242, 242, 244, 0.55);
+  --sidebar-hover: rgba(255, 255, 255, 0.08);
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+
   --bg-list: #fafaf8;
   --bg-editor: #ffffff;
   --bg-elevated: #ffffff;
@@ -24,7 +32,6 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg-sidebar: #1c1c1e;
     --bg-list: #202022;
     --bg-editor: #242426;
     --bg-elevated: #2c2c2e;
@@ -145,7 +152,8 @@ textarea {
 
 .sidebar {
   grid-area: sidebar;
-  background: var(--bg-sidebar);
+  background: var(--sidebar-bg);
+  color: var(--sidebar-text);
   display: flex;
   flex-direction: column;
   padding: env(safe-area-inset-top, 0) 0 env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0);
@@ -153,19 +161,28 @@ textarea {
   min-height: 0;
 }
 
+/* Logo-Bereich ist ein normales (nicht scroll-)Kind des Flex-Containers
+   ".sidebar" - nur ".folder-list" darunter hat overflow-y:auto. Dadurch
+   bleibt das Logo beim Scrollen der Ordnerliste automatisch immer an
+   gleicher Stelle stehen, ohne position:fixed/sticky und ohne dass
+   scrollender Inhalt dahinter "durchscheinen" könnte (er liegt ja gar
+   nicht darunter, sondern in einem eigenen Bereich danach).
+   Genauso für ".sidebar-footer" weiter unten. */
 .sidebar-header {
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 20px 14px 8px 20px;
+  padding: 16px 14px 8px 20px;
 }
 
-.sidebar-title {
-  font-size: 28px;
-  font-weight: 700;
-  margin: 0;
-  letter-spacing: -0.02em;
+.sidebar-logo {
+  display: block;
+  height: 56px;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
 }
 
 .sidebar-add-btn {
@@ -186,6 +203,18 @@ textarea {
   background: var(--hover-bg);
 }
 
+/* Im dunklen Seitenleisten-Hintergrund braucht der "Neuer Ordner"-Knopf
+   eigene, immer helle Farben statt der Farben, die sonst je nach Hell-/
+   Dunkelmodus wechseln (die passen nur zum hellen Notizlisten-Hintergrund,
+   wo der gleiche Knopf-Stil auch für "Neue Notiz" verwendet wird). */
+.sidebar .sidebar-add-btn {
+  color: var(--sidebar-text);
+}
+
+.sidebar .sidebar-add-btn:hover {
+  background: var(--sidebar-hover);
+}
+
 .sidebar-add-btn .icon {
   width: 18px;
   height: 18px;
@@ -203,7 +232,7 @@ textarea {
   gap: 10px;
   padding: 8px 10px;
   border-radius: 8px;
-  color: var(--text-primary);
+  color: var(--sidebar-text);
   font-size: 15px;
   cursor: pointer;
   user-select: none;
@@ -211,20 +240,20 @@ textarea {
 }
 
 .folder-item:hover {
-  background: var(--hover-bg);
+  background: var(--sidebar-hover);
 }
 
 .folder-item.active {
-  background: var(--selection-bg-strong);
-  color: #1c1c1e;
+  background: var(--accent-strong);
+  color: #fff;
 }
 
 .folder-item.active .folder-icon {
-  color: #1c1c1e;
+  color: #fff;
 }
 
 .folder-item.active .folder-count {
-  color: rgba(28, 28, 30, 0.65);
+  color: rgba(255, 255, 255, 0.75);
 }
 
 .folder-icon {
@@ -255,11 +284,11 @@ textarea {
 }
 
 .folder-color-dot:hover {
-  box-shadow: 0 0 0 3px var(--hover-bg);
+  box-shadow: 0 0 0 3px var(--sidebar-hover);
 }
 
 .folder-item.active .folder-color-dot:hover {
-  box-shadow: 0 0 0 3px rgba(28, 28, 30, 0.12);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.25);
 }
 
 .folder-name {
@@ -279,13 +308,13 @@ textarea {
 
 .folder-count {
   font-size: 15px;
-  color: var(--text-tertiary);
+  color: var(--sidebar-text-muted);
   flex: none;
 }
 
 .folder-divider {
   height: 1px;
-  background: var(--border);
+  background: var(--sidebar-border);
   margin: 8px 10px;
 }
 
@@ -293,7 +322,7 @@ textarea {
   display: none;
   border: none;
   background: transparent;
-  color: var(--text-tertiary);
+  color: var(--sidebar-text-muted);
   width: 22px;
   height: 22px;
   border-radius: 6px;
@@ -307,8 +336,43 @@ textarea {
 }
 
 .folder-delete:hover {
-  background: rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.12);
   color: var(--danger);
+}
+
+/* Fixer Fußbereich unten (Name + Abmelden) - wie ".sidebar-header" ein
+   normales Flex-Kind ohne eigenes Scrollen, bleibt daher beim Scrollen
+   der Ordnerliste immer sichtbar an gleicher Stelle. */
+.sidebar-footer {
+  flex: none;
+  padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--sidebar-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sidebar-user-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sidebar-text);
+}
+
+.sidebar-logout-btn {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: none;
+  background: rgba(255, 255, 255, 0.92);
+  color: #1c1c1e;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+}
+
+.sidebar-logout-btn:hover {
+  background: #ffffff;
 }
 
 /* ---------- Notizliste (Spalte 2) ---------- */
@@ -2177,4 +2241,10 @@ textarea {
 .editor-body::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.15);
   border-radius: 4px;
+}
+
+/* Auf dem immer dunklen Seitenleisten-Hintergrund braucht der Scrollbalken
+   der Ordnerliste eine helle statt dunkle Farbe, sonst wäre er unsichtbar. */
+.folder-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
 }

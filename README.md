@@ -218,6 +218,10 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
     frei verschiebbar
 - **Hintergrund umstellen** (Raster-Symbol): Punkte, Linien oder leer
   (Whiteboard) – pro Notiz einstellbar
+- **Seitenleiste** (Ordnerliste) ist fest dunkel gestaltet, unabhängig vom
+  Hell-/Dunkelmodus des restlichen Programms - mit eigenem Logo oben (bleibt
+  beim Scrollen der Ordnerliste an fester Stelle) und Name/„Abmelden"-Knopf
+  unten (aktuell nur optisch, KrisNote hat noch keine echte Anmeldung)
 - Helles und dunkles Erscheinungsbild (folgt den Systemeinstellungen)
 - Responsive: Split-View auf iPad/Desktop, Einzelspalten-Navigation auf
   kleinen Bildschirmen

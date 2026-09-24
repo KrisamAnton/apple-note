@@ -356,6 +356,7 @@
     listResizer: document.getElementById('listResizer'),
     folderList: document.getElementById('folderList'),
     newFolderBtn: document.getElementById('newFolderBtn'),
+    logoutBtn: document.getElementById('logoutBtn'),
     noteList: document.getElementById('noteList'),
     noteCount: document.getElementById('noteCount'),
     collapseAllBtn: document.getElementById('collapseAllBtn'),
@@ -4560,6 +4561,9 @@
     renderEditor();
 
     el.newFolderBtn.addEventListener('click', createFolder);
+    // Noch ohne echte Anmeldung (siehe README) - der Knopf lädt die Seite
+    // vorerst nur neu, damit er sich nicht funktionslos anfühlt.
+    el.logoutBtn.addEventListener('click', () => window.location.reload());
     el.newNoteBtn.addEventListener('click', createNote);
     el.collapseAllBtn.addEventListener('click', () => {
       const ids = collapsibleNoteIds(getVisibleNotes());

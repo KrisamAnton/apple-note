@@ -24,7 +24,7 @@
     <!-- Spalte 1: Ordner / Kategorien -->
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
-        <h1 class="sidebar-title">KrisNote</h1>
+        <img class="sidebar-logo" src="icons/sidebar-logo.png" alt="KrisNote" />
         <button class="sidebar-add-btn" id="newFolderBtn" type="button" aria-label="Neuer Ordner" title="Neuer Ordner">
           <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M9.2 2.5h1.6v6.7h6.7v1.6h-6.7v6.7H9.2v-6.7H2.5V9.2h6.7z"/></svg>
         </button>
@@ -33,6 +33,11 @@
       <nav class="folder-list" id="folderList">
         <!-- "Alle Notizen" und Ordner werden hier per JS eingefügt -->
       </nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-user-name">Anton Krisam</div>
+        <button class="sidebar-logout-btn" id="logoutBtn" type="button">Abmelden</button>
+      </div>
     </aside>
 
     <div class="sidebar-resizer" id="sidebarResizer"></div>
