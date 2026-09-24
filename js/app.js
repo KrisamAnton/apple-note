@@ -867,11 +867,21 @@
   }
 
   function deleteFolder(folderId) {
-    const count = notesInFolder(folderId).length;
-    const msg =
-      count > 0
-        ? `Ordner löschen? ${count} Notiz(en) darin werden zu "Alle Notizen" verschoben.`
-        : 'Diesen Ordner löschen?';
+    // Bewusst ALLE Notizen mit dieser folderId zählen, nicht nur die
+    // sichtbaren (notesInFolder blendet Papierkorb-Inhalte aus) - sonst
+    // wirkt ein Ordner, der nur noch gelöschte (aber im Papierkorb
+    // wiederherstellbare) Notizen enthält, fälschlich leer und lädt zum
+    // Löschen ein, obwohl darin noch etwas steckt.
+    const allNotesInFolder = state.notes.filter((n) => n.folderId === folderId);
+    const trashedCount = allNotesInFolder.filter((n) => isTrashed(n)).length;
+    const visibleCount = allNotesInFolder.length - trashedCount;
+    let msg = 'Diesen Ordner löschen?';
+    if (allNotesInFolder.length > 0) {
+      const parts = [];
+      if (visibleCount > 0) parts.push(`${visibleCount} Notiz(en)`);
+      if (trashedCount > 0) parts.push(`${trashedCount} im Papierkorb`);
+      msg = `Ordner löschen? ${parts.join(' und ')} darin werden zu "Alle Notizen" verschoben.`;
+    }
     if (!confirm(msg)) return;
     state.notes.forEach((n) => {
       if (n.folderId === folderId) n.folderId = null;
