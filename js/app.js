@@ -302,7 +302,10 @@
   // sonst würden Funktionen, die vor init() auf `state` zugreifen, ins Leere laufen.
   let state = createDefaultState();
   let selectedFolderId = null; // null = "Alle Notizen"
-  let selectedNoteId = state.notes[0] ? state.notes[0].id : null;
+  // Beim (Neu-)Start ist bewusst keine Notiz vorausgewählt - man landet in
+  // der leeren Editor-Ansicht (Willkommens-Grafik) statt zufällig in der
+  // zuletzt bearbeiteten Notiz.
+  let selectedNoteId = null;
   let searchQuery = '';
   let collapsedNoteIds = new Set();
   // Doppelklick-Erkennung für Ordner-Umbenennung: da jeder Klick renderFolders()
@@ -4546,7 +4549,6 @@
     goToView(isMobileLayout() ? 'folders' : 'notes');
 
     state = await loadState();
-    selectedNoteId = state.notes[0] ? state.notes[0].id : null;
     // Bei jedem frischen Laden der Seite (Neustart, anderes Gerät, zweiter
     // Tab) sollen alle Notizen mit Unterseiten zunächst zugeklappt sein.
     // collapsedNoteIds lebt nur im Arbeitsspeicher dieser Seite (nicht in den

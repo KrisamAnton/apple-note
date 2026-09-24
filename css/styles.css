@@ -4,7 +4,7 @@
   /* Die Seitenleiste ist bewusst IMMER dunkel (wie bei Wartix), unabhängig
      vom Hell-/Dunkel-Modus des restlichen Programms - daher eigene, feste
      Variablen statt der unten im Dark-Mode-Block umgeschalteten Farben. */
-  --sidebar-bg: #23262b;
+  --sidebar-bg: #3a3d43;
   --sidebar-text: #f2f2f4;
   --sidebar-text-muted: rgba(242, 242, 244, 0.55);
   --sidebar-hover: rgba(255, 255, 255, 0.08);
@@ -174,12 +174,12 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 16px 14px 8px 20px;
+  padding: 6px 14px 4px 20px;
 }
 
 .sidebar-logo {
   display: block;
-  height: 56px;
+  height: 70px;
   width: auto;
   max-width: 100%;
   object-fit: contain;
@@ -749,12 +749,14 @@ textarea {
   justify-content: center;
   color: var(--text-tertiary);
   gap: 12px;
+  padding: 24px;
 }
 
-.empty-icon {
-  width: 56px;
-  height: 56px;
-  opacity: 0.5;
+.editor-empty-image {
+  display: block;
+  width: 100%;
+  max-width: 480px;
+  height: auto;
 }
 
 .editor {
