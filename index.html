@@ -25,13 +25,19 @@
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
         <img class="sidebar-logo" src="icons/sidebar-logo.png" alt="KrisNote" />
-        <button class="sidebar-add-btn" id="newFolderBtn" type="button" aria-label="Neuer Ordner" title="Neuer Ordner">
-          <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M9.2 2.5h1.6v6.7h6.7v1.6h-6.7v6.7H9.2v-6.7H2.5V9.2h6.7z"/></svg>
-        </button>
+        <div class="sidebar-header-right">
+          <button class="sidebar-add-btn" id="newFolderBtn" type="button" aria-label="Neuer Ordner" title="Neuer Ordner">
+            <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M9.2 2.5h1.6v6.7h6.7v1.6h-6.7v6.7H9.2v-6.7H2.5V9.2h6.7z"/></svg>
+          </button>
+          <button class="all-notes-btn active" id="allNotesBtn" type="button">
+            <span class="all-notes-label">Alle Notizen</span>
+            <span class="all-notes-count" id="allNotesCount">0</span>
+          </button>
+        </div>
       </div>
 
       <nav class="folder-list" id="folderList">
-        <!-- "Alle Notizen" und Ordner werden hier per JS eingefügt -->
+        <!-- Ordner werden hier per JS eingefügt -->
       </nav>
 
       <div class="sidebar-footer">

@@ -170,19 +170,70 @@ textarea {
    Genauso für ".sidebar-footer" weiter unten. */
 .sidebar-header {
   flex: none;
+  height: 108px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: stretch;
   gap: 8px;
-  padding: 4px 14px 2px 20px;
+  padding: 8px 12px 8px 14px;
 }
 
 .sidebar-logo {
   display: block;
-  height: 74px;
+  height: 100%;
   width: auto;
-  max-width: 100%;
   object-fit: contain;
+  flex: none;
+}
+
+/* Rechte Spalte neben dem Logo: oben klein der "Neuer Ordner"-Knopf, darunter
+   füllt "Alle Notizen" (samt Anzahl) den Rest der Höhe/Breite aus - beide
+   zusammen sind jetzt genauso hoch wie das große Logo daneben. */
+.sidebar-header-right {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.all-notes-btn {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--sidebar-text);
+  cursor: pointer;
+  padding: 4px 4px;
+  text-align: center;
+}
+
+.all-notes-btn:hover {
+  background: var(--sidebar-hover);
+}
+
+.all-notes-btn.active {
+  background: var(--accent-strong);
+  color: #fff;
+}
+
+.all-notes-label {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.all-notes-count {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.1;
 }
 
 .sidebar-add-btn {

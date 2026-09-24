@@ -361,6 +361,8 @@
     sidebarResizer: document.getElementById('sidebarResizer'),
     listResizer: document.getElementById('listResizer'),
     folderList: document.getElementById('folderList'),
+    allNotesBtn: document.getElementById('allNotesBtn'),
+    allNotesCount: document.getElementById('allNotesCount'),
     newFolderBtn: document.getElementById('newFolderBtn'),
     logoutBtn: document.getElementById('logoutBtn'),
     noteList: document.getElementById('noteList'),
@@ -690,23 +692,12 @@
   // ---------- Rendering: Sidebar ----------
 
   function renderFolders() {
+    // "Alle Notizen" sitzt fest im Kopfbereich neben dem Logo (nicht mehr in
+    // der scrollenden Ordnerliste) - hier nur Zähler/aktiv-Status aktualisieren.
+    el.allNotesBtn.classList.toggle('active', selectedFolderId === null);
+    el.allNotesCount.textContent = state.notes.length;
+
     el.folderList.innerHTML = '';
-
-    const allItem = document.createElement('div');
-    allItem.className = 'folder-item' + (selectedFolderId === null ? ' active' : '');
-    allItem.innerHTML = `
-      <span class="folder-icon">${ICONS.allNotes}</span>
-      <span class="folder-name">Alle Notizen</span>
-      <span class="folder-count">${state.notes.length}</span>
-    `;
-    allItem.addEventListener('click', () => selectFolder(null));
-    el.folderList.appendChild(allItem);
-
-    if (state.folders.length > 0) {
-      const divider = document.createElement('div');
-      divider.className = 'folder-divider';
-      el.folderList.appendChild(divider);
-    }
 
     for (const folder of state.folders) {
       const item = document.createElement('div');
@@ -4570,6 +4561,7 @@
     renderEditor();
 
     el.newFolderBtn.addEventListener('click', createFolder);
+    el.allNotesBtn.addEventListener('click', () => selectFolder(null));
     // Noch ohne echte Anmeldung (siehe README) - der Knopf lädt die Seite
     // vorerst nur neu, damit er sich nicht funktionslos anfühlt.
     el.logoutBtn.addEventListener('click', () => window.location.reload());

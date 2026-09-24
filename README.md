@@ -219,9 +219,11 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
 - **Hintergrund umstellen** (Raster-Symbol): Punkte, Linien oder leer
   (Whiteboard) – pro Notiz einstellbar
 - **Seitenleiste** (Ordnerliste) ist fest dunkel gestaltet, unabhängig vom
-  Hell-/Dunkelmodus des restlichen Programms - mit eigenem Logo oben (bleibt
-  beim Scrollen der Ordnerliste an fester Stelle) und Name/„Abmelden"-Knopf
-  unten (aktuell nur optisch, KrisNote hat noch keine echte Anmeldung)
+  Hell-/Dunkelmodus des restlichen Programms - mit eigenem Logo oben links
+  (bleibt beim Scrollen der Ordnerliste an fester Stelle), daneben "Alle
+  Notizen" samt Anzahl als eigene, immer sichtbare Kachel (nicht Teil der
+  scrollenden Ordnerliste), und Name/„Abmelden"-Knopf unten (aktuell nur
+  optisch, KrisNote hat noch keine echte Anmeldung)
 - Beim (Neu-)Laden der Seite ist bewusst keine Notiz vorausgewählt - man
   landet in einer Willkommens-Ansicht (eigene Grafik) statt zufällig in
   der zuletzt bearbeiteten Notiz zu stehen
