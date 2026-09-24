@@ -306,6 +306,9 @@
   // der leeren Editor-Ansicht (Willkommens-Grafik) statt zufällig in der
   // zuletzt bearbeiteten Notiz.
   let selectedNoteId = null;
+  // Merkt je Hauptüberschrift (selectedFolderId, null = "Alle Notizen") die
+  // zuletzt dort geöffnete Notiz - siehe selectFolder().
+  const lastSelectedNoteIdByFolder = new Map();
   let searchQuery = '';
   let collapsedNoteIds = new Set();
   // Doppelklick-Erkennung für Ordner-Umbenennung: da jeder Klick renderFolders()
@@ -776,13 +779,16 @@
   }
 
   function selectFolder(folderId) {
+    // Merkt sich innerhalb der Sitzung je Hauptüberschrift, welche Notiz dort
+    // zuletzt geöffnet war - beim nächsten Wechsel dorthin wird das wieder
+    // hergestellt, statt jedes Mal leer/mit der Willkommens-Grafik zu starten.
+    // Lebt nur im Arbeitsspeicher (nicht gespeichert), ein echtes Neuladen
+    // startet also bewusst wieder ganz ohne Auswahl.
+    if (selectedNoteId) lastSelectedNoteIdByFolder.set(selectedFolderId, selectedNoteId);
     selectedFolderId = folderId;
-    // Die offene Notiz gehört evtl. gar nicht zum neu gewählten Ordner – dann den
-    // Editor leeren, statt eine Notiz aus einem anderen Ordner weiter anzuzeigen.
-    const note = findNote(selectedNoteId);
-    if (!note || (folderId !== null && note.folderId !== folderId)) {
-      selectedNoteId = null;
-    }
+    const rememberedId = lastSelectedNoteIdByFolder.get(folderId) || null;
+    const note = findNote(rememberedId);
+    selectedNoteId = note && (folderId === null || note.folderId === folderId) ? rememberedId : null;
     renderFolders();
     renderNoteList();
     renderEditor();
@@ -977,6 +983,7 @@
 
   function selectNote(id) {
     selectedNoteId = id;
+    lastSelectedNoteIdByFolder.set(selectedFolderId, id);
     goToView('editor');
     renderNoteList();
     renderEditor();
