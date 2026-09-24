@@ -854,7 +854,10 @@
     const folder = { id: uid(), name: 'Neuer Ordner', color };
     state.folders.push(folder);
     schedulePersist();
-    renderFolders();
+    // In den neuen Ordner hineinwechseln (nicht nur anlegen) - sonst landet
+    // eine direkt danach über "+ neue Notiz" angelegte Notiz unbemerkt im
+    // vorher aktiven Ordner statt im gerade erst erstellten.
+    selectFolder(folder.id);
     requestAnimationFrame(() => {
       const items = el.folderList.querySelectorAll('.folder-item .folder-name');
       const input = items[items.length - 1];
@@ -867,30 +870,43 @@
   }
 
   function deleteFolder(folderId) {
-    // Bewusst ALLE Notizen mit dieser folderId zählen, nicht nur die
-    // sichtbaren (notesInFolder blendet Papierkorb-Inhalte aus) - sonst
-    // wirkt ein Ordner, der nur noch gelöschte (aber im Papierkorb
-    // wiederherstellbare) Notizen enthält, fälschlich leer und lädt zum
-    // Löschen ein, obwohl darin noch etwas steckt.
-    const allNotesInFolder = state.notes.filter((n) => n.folderId === folderId);
-    const trashedCount = allNotesInFolder.filter((n) => isTrashed(n)).length;
-    const visibleCount = allNotesInFolder.length - trashedCount;
+    // Hauptseiten in diesem Ordner durchlaufen dieselbe Regel wie beim
+    // einzelnen Löschen über deleteNote(): nicht-leere wandern in den
+    // Papierkorb (statt einfach "ordnerlos" zu werden und dadurch leicht
+    // übersehen zu werden), wirklich leere werden wie sonst auch sofort
+    // endgültig entfernt. Unterseiten hängen automatisch am Schicksal ihrer
+    // Hauptseite (siehe isTrashed()) und werden hier nicht einzeln gezählt.
+    const notesInThisFolder = state.notes.filter((n) => n.folderId === folderId);
+    const rootsToTrash = notesInThisFolder.filter((n) => !n.parentNoteId && !isNoteEmpty(n));
+    const rootsToDelete = notesInThisFolder.filter((n) => !n.parentNoteId && isNoteEmpty(n));
+
     let msg = 'Diesen Ordner löschen?';
-    if (allNotesInFolder.length > 0) {
-      const parts = [];
-      if (visibleCount > 0) parts.push(`${visibleCount} Notiz(en)`);
-      if (trashedCount > 0) parts.push(`${trashedCount} im Papierkorb`);
-      msg = `Ordner löschen? ${parts.join(' und ')} darin werden zu "Alle Notizen" verschoben.`;
-    }
+    const parts = [];
+    if (rootsToTrash.length > 0) parts.push(`${rootsToTrash.length} Hauptseite(n) wandern in den Papierkorb`);
+    if (rootsToDelete.length > 0) parts.push(`${rootsToDelete.length} leere Hauptseite(n) werden endgültig gelöscht`);
+    if (parts.length > 0) msg = `Ordner löschen? ${parts.join(', ')}.`;
     if (!confirm(msg)) return;
+
+    for (const note of rootsToTrash) {
+      note.trashedAt = Date.now();
+      note.updatedAt = Date.now();
+    }
+    const deleteIds = new Set(rootsToDelete.map((n) => n.id));
+    if (deleteIds.size > 0) {
+      state.notes = state.notes.filter((n) => !deleteIds.has(n.id));
+    }
     state.notes.forEach((n) => {
       if (n.folderId === folderId) n.folderId = null;
     });
     state.folders = state.folders.filter((f) => f.id !== folderId);
     if (selectedFolderId === folderId) selectedFolderId = null;
+    if (deleteIds.has(selectedNoteId) || rootsToTrash.some((n) => n.id === selectedNoteId)) {
+      selectedNoteId = null;
+    }
     schedulePersist();
     renderFolders();
     renderNoteList();
+    renderEditor();
   }
 
   // ---------- Ordnerfarbe-Popover ----------
@@ -4726,7 +4742,10 @@
       trashVisible = el.trashVisibleCheckbox.checked;
       renderFolders();
     });
-    el.newNoteBtn.addEventListener('click', createNote);
+    // Als eigene Funktion statt direkt "createNote" übergeben, sonst würde der
+    // Klick-Event selbst als "parentNoteId" durchgereicht (createNote() ohne
+    // Argument = neue Hauptseite).
+    el.newNoteBtn.addEventListener('click', () => createNote());
     el.collapseAllBtn.addEventListener('click', () => {
       const ids = collapsibleNoteIds(getVisibleNotes());
       const allCollapsed = ids.size > 0 && [...ids].every((id) => collapsedNoteIds.has(id));
