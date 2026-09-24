@@ -484,7 +484,11 @@
   // Inhalt (weder Text/Bild/etc.-Objekte noch Zeichnungen).
   function isNoteEmpty(note) {
     const hasChildren = state.notes.some((n) => n.parentNoteId === note.id);
-    return !hasChildren && note.objects.length === 0 && note.ink.strokes.length === 0;
+    // Absichtlich defensiv: sehr alte, schon lange bestehende Notizen könnten
+    // (aus einer Zeit vor diesem Feld) kein "objects"/"ink" haben.
+    const objects = note.objects || [];
+    const strokes = (note.ink && note.ink.strokes) || [];
+    return !hasChildren && objects.length === 0 && strokes.length === 0;
   }
 
   function notesInFolder(folderId) {
@@ -810,7 +814,7 @@
     // unten explizit eingeblendet hat (siehe trashVisible) - kein echter
     // Ordner, taucht deshalb z. B. auch nicht bei "In Ordner verschieben" auf.
     if (trashVisible) {
-      const trashCount = state.notes.filter((n) => n.parentNoteId === null && n.trashedAt).length;
+      const trashCount = state.notes.filter((n) => !n.parentNoteId && n.trashedAt).length;
       const trashItem = document.createElement('div');
       trashItem.className = 'folder-item' + (selectedFolderId === TRASH_FOLDER_ID ? ' active' : '');
       trashItem.innerHTML = `
@@ -1127,7 +1131,7 @@
     const note = findNote(id);
     if (!note) return;
     const descendants = descendantNoteIds(id);
-    const isRoot = note.parentNoteId === null;
+    const isRoot = !note.parentNoteId;
 
     // Eine nicht-leere Hauptseite (hat Unterseiten und/oder eigenen Inhalt)
     // wandert in den Papierkorb statt wirklich gelöscht zu werden - darunter
