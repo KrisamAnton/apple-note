@@ -174,12 +174,12 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 6px 14px 4px 20px;
+  padding: 4px 14px 2px 20px;
 }
 
 .sidebar-logo {
   display: block;
-  height: 70px;
+  height: 74px;
   width: auto;
   max-width: 100%;
   object-fit: contain;
