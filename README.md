@@ -186,6 +186,19 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
     und Feldinhalte sind über die normale Volltextsuche auffindbar.
     Werden genauso wie alle anderen Notizinhalte unverschlüsselt auf dem
     eigenen Server gespeichert
+- **Papierkorb für gelöschte Hauptseiten**: Löscht man eine Hauptseite mit
+  Unterseiten und/oder eigenem Inhalt, wird sie nicht wirklich gelöscht,
+  sondern wandert (samt allen Unterseiten) in einen Papierkorb - nur eine
+  wirklich leere Hauptseite (keine Unterseiten, kein eigener Inhalt) sowie
+  einzelne Unterseiten werden weiterhin sofort endgültig gelöscht. Der
+  Papierkorb ist standardmäßig versteckt und erscheint erst als eigener
+  Eintrag in der Ordnerliste, wenn man über "Papierkorb anzeigen" (Klick auf
+  den Namen unten links) einmal einblendet - beim Abmelden bzw. einem echten
+  Neuladen ist er automatisch wieder versteckt (die gelöschten Seiten selbst
+  bleiben aber dauerhaft erhalten, bis man sie wiederherstellt). In der
+  Papierkorb-Ansicht ersetzt bei jeder Hauptseite ein "Wiederherstellen"-
+  Knopf den sonstigen Löschen-Knopf (mit Sicherheitsabfrage) und holt sie
+  endgültig zurück
 - **Sprachnotizen aufnehmen**: über das Mikrofon-Symbol im Ribbon direkt im
   Browser aufnehmen (nochmal klicken zum Beenden, der Button pulsiert rot
   währenddessen). Die Aufnahme wird als eigenes Objekt mit Abspiel-Player an

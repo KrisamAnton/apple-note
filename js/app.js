@@ -34,6 +34,7 @@
     transcript: '<svg viewBox="0 0 20 20"><path d="M3 4h14v1.6H3V4zm0 4.2h14v1.6H3V8.2zm0 4.2h9v1.6H3v-1.6z" fill="currentColor"/></svg>',
     rename: '<svg viewBox="0 0 20 20"><path d="M13.6 2.4a1.9 1.9 0 0 1 2.7 2.7L7.4 14 4 15l1-3.4 8.6-9.2z" fill="currentColor"/></svg>',
     key: '<svg viewBox="0 0 20 20"><path d="M8 2a4.5 4.5 0 0 0-4.24 6h-.01L1 10.75V15h1.5v-1.5H4V12h1.5v-1.5h1.28A4.5 4.5 0 1 0 8 2zm3.3 4.5a1.3 1.3 0 1 1 0-2.6 1.3 1.3 0 0 1 0 2.6z" fill="currentColor"/></svg>',
+    restore: '<svg viewBox="0 0 20 20"><path d="M4 10a6 6 0 1 0 1.9-4.36" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4.2 3.8v3.6h3.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   };
 
   const MARKER_COLORS = [
@@ -301,6 +302,13 @@
   // Platzhalter, bis init() den echten Stand vom Server geladen hat (async) –
   // sonst würden Funktionen, die vor init() auf `state` zugreifen, ins Leere laufen.
   let state = createDefaultState();
+  // Sonder-"Ordner" für gelöschte Hauptseiten (kein echter Eintrag in
+  // state.folders) - siehe deleteNote()/restoreNote() und renderFolders().
+  const TRASH_FOLDER_ID = '__trash__';
+  // Ob der Papierkorb gerade in der Ordnerliste eingeblendet ist - lebt nur
+  // im Arbeitsspeicher dieser Sitzung (nicht gespeichert): nach Abmelden
+  // bzw. einem echten Neuladen ist er wieder versteckt.
+  let trashVisible = false;
   let selectedFolderId = null; // null = "Alle Notizen"
   // Beim (Neu-)Start ist bewusst keine Notiz vorausgewählt - man landet in
   // der leeren Editor-Ansicht (Willkommens-Grafik) statt zufällig in der
@@ -365,6 +373,10 @@
     allNotesCount: document.getElementById('allNotesCount'),
     newFolderBtn: document.getElementById('newFolderBtn'),
     logoutBtn: document.getElementById('logoutBtn'),
+    sidebarUserBtn: document.getElementById('sidebarUserBtn'),
+    trashTogglePopoverBackdrop: document.getElementById('trashTogglePopoverBackdrop'),
+    trashTogglePopover: document.getElementById('trashTogglePopover'),
+    trashVisibleCheckbox: document.getElementById('trashVisibleCheckbox'),
     noteList: document.getElementById('noteList'),
     noteCount: document.getElementById('noteCount'),
     collapseAllBtn: document.getElementById('collapseAllBtn'),
@@ -453,8 +465,33 @@
 
   // ---------- Helpers ----------
 
+  // Eine Notiz gilt als "im Papierkorb", wenn sie selbst oder eine ihrer
+  // Vorfahren-Hauptseiten als gelöscht markiert ist (trashedAt) - so werden
+  // beim Löschen einer Hauptseite automatisch auch alle Unterseiten mit
+  // "unsichtbar", ohne dass jede einzeln markiert werden muss, und beim
+  // Wiederherstellen der Hauptseite sind sie ebenso automatisch wieder da.
+  function isTrashed(note) {
+    let current = note;
+    while (current) {
+      if (current.trashedAt) return true;
+      current = current.parentNoteId ? findNote(current.parentNoteId) : null;
+    }
+    return false;
+  }
+
+  // "Leer" im Sinn von "darf beim Löschen sofort endgültig verschwinden,
+  // statt in den Papierkorb zu wandern": keine Unterseiten UND kein eigener
+  // Inhalt (weder Text/Bild/etc.-Objekte noch Zeichnungen).
+  function isNoteEmpty(note) {
+    const hasChildren = state.notes.some((n) => n.parentNoteId === note.id);
+    return !hasChildren && note.objects.length === 0 && note.ink.strokes.length === 0;
+  }
+
   function notesInFolder(folderId) {
-    return state.notes.filter((n) => (folderId === null ? true : n.folderId === folderId));
+    if (folderId === TRASH_FOLDER_ID) {
+      return state.notes.filter((n) => isTrashed(n));
+    }
+    return state.notes.filter((n) => !isTrashed(n) && (folderId === null ? true : n.folderId === folderId));
   }
 
   function noteSearchableText(note) {
@@ -665,8 +702,9 @@
   function getVisibleNotes() {
     const q = searchQuery.trim().toLowerCase();
     // Bei aktiver Suche werden bewusst ALLE Notizen durchsucht (nicht nur der
-    // gerade geöffnete Ordner), damit man wirklich überall etwas findet.
-    let list = q ? state.notes : notesInFolder(selectedFolderId);
+    // gerade geöffnete Ordner), damit man wirklich überall etwas findet -
+    // Notizen im Papierkorb bleiben dabei aber wie überall sonst versteckt.
+    let list = q ? state.notes.filter((n) => !isTrashed(n)) : notesInFolder(selectedFolderId);
     if (q) list = list.filter((n) => noteSearchableText(n).toLowerCase().includes(q));
     return list.slice().sort((a, b) => b.updatedAt - a.updatedAt);
   }
@@ -695,7 +733,7 @@
     // "Alle Notizen" sitzt fest im Kopfbereich neben dem Logo (nicht mehr in
     // der scrollenden Ordnerliste) - hier nur Zähler/aktiv-Status aktualisieren.
     el.allNotesBtn.classList.toggle('active', selectedFolderId === null);
-    el.allNotesCount.textContent = state.notes.length;
+    el.allNotesCount.textContent = state.notes.filter((n) => !isTrashed(n)).length;
 
     el.folderList.innerHTML = '';
 
@@ -767,6 +805,22 @@
       });
       el.folderList.appendChild(item);
     }
+
+    // Der Papierkorb ist nur sichtbar, solange man ihn über den Nutzernamen
+    // unten explizit eingeblendet hat (siehe trashVisible) - kein echter
+    // Ordner, taucht deshalb z. B. auch nicht bei "In Ordner verschieben" auf.
+    if (trashVisible) {
+      const trashCount = state.notes.filter((n) => n.parentNoteId === null && n.trashedAt).length;
+      const trashItem = document.createElement('div');
+      trashItem.className = 'folder-item' + (selectedFolderId === TRASH_FOLDER_ID ? ' active' : '');
+      trashItem.innerHTML = `
+        <span class="folder-icon">${ICONS.trash}</span>
+        <span class="folder-name">Papierkorb</span>
+        <span class="folder-count">${trashCount}</span>
+      `;
+      trashItem.addEventListener('click', () => selectFolder(TRASH_FOLDER_ID));
+      el.folderList.appendChild(trashItem);
+    }
   }
 
   function selectFolder(folderId) {
@@ -779,7 +833,12 @@
     selectedFolderId = folderId;
     const rememberedId = lastSelectedNoteIdByFolder.get(folderId) || null;
     const note = findNote(rememberedId);
-    selectedNoteId = note && (folderId === null || note.folderId === folderId) ? rememberedId : null;
+    const belongsToFolder =
+      note &&
+      (folderId === TRASH_FOLDER_ID
+        ? isTrashed(note)
+        : !isTrashed(note) && (folderId === null || note.folderId === folderId));
+    selectedNoteId = belongsToFolder ? rememberedId : null;
     renderFolders();
     renderNoteList();
     renderEditor();
@@ -884,7 +943,15 @@
     const notes = getVisibleNotes();
     el.noteList.innerHTML = '';
 
-    const label = selectedFolderId === null ? 'Alle Notizen' : (state.folders.find((f) => f.id === selectedFolderId) || {}).name || '';
+    // Im Papierkorb legt man keine neuen Hauptseiten an.
+    el.newNoteBtn.hidden = selectedFolderId === TRASH_FOLDER_ID;
+
+    const label =
+      selectedFolderId === null
+        ? 'Alle Notizen'
+        : selectedFolderId === TRASH_FOLDER_ID
+          ? 'Papierkorb'
+          : (state.folders.find((f) => f.id === selectedFolderId) || {}).name || '';
     el.noteCount.textContent = notes.length > 0 ? `${label} (${notes.length})` : label;
 
     if (notes.length === 0) {
@@ -903,6 +970,7 @@
       : buildNoteTree(notes);
 
     const isSearchMode = searchQuery.trim().length > 0;
+    const isTrashView = selectedFolderId === TRASH_FOLDER_ID;
     updateCollapseAllButton(isSearchMode ? new Set() : collapsibleNoteIds(notes));
 
     for (const { note, depth, hasChildren } of rows) {
@@ -937,31 +1005,52 @@
       main.innerHTML = `<div class="note-title">${escapeHtml(note.title)}</div>`;
       item.appendChild(main);
 
-      const addSubBtn = document.createElement('button');
-      addSubBtn.type = 'button';
-      addSubBtn.className = 'note-add-sub';
-      addSubBtn.title = 'Unterseite hinzufügen';
-      addSubBtn.setAttribute('aria-label', 'Unterseite hinzufügen');
-      addSubBtn.innerHTML = `<svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.plus}</svg>`;
-      addSubBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        createNote(note.id);
-      });
-      item.appendChild(addSubBtn);
+      if (isTrashView) {
+        // Im Papierkorb gibt es nur bei der Hauptseite selbst (depth 0) eine
+        // Aktion - "Wiederherstellen" statt "Löschen", und kein "+" (neue
+        // Unterseiten legt man hier nicht an). Unterseiten (depth > 0)
+        // zeigen sich nur, hängen aber komplett am Schicksal ihrer
+        // Hauptseite - kein eigener Knopf nötig.
+        if (depth === 0) {
+          const restoreBtn = document.createElement('button');
+          restoreBtn.type = 'button';
+          restoreBtn.className = 'note-restore-btn';
+          restoreBtn.title = 'Wiederherstellen';
+          restoreBtn.setAttribute('aria-label', 'Wiederherstellen');
+          restoreBtn.innerHTML = `<svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.restore}</svg>`;
+          restoreBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            restoreNote(note.id);
+          });
+          item.appendChild(restoreBtn);
+        }
+      } else {
+        const addSubBtn = document.createElement('button');
+        addSubBtn.type = 'button';
+        addSubBtn.className = 'note-add-sub';
+        addSubBtn.title = 'Unterseite hinzufügen';
+        addSubBtn.setAttribute('aria-label', 'Unterseite hinzufügen');
+        addSubBtn.innerHTML = `<svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.plus}</svg>`;
+        addSubBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          createNote(note.id);
+        });
+        item.appendChild(addSubBtn);
 
-      const deleteBtn = document.createElement('button');
-      deleteBtn.type = 'button';
-      deleteBtn.className = 'note-delete-btn';
-      deleteBtn.title = 'Notiz löschen';
-      deleteBtn.setAttribute('aria-label', 'Notiz löschen');
-      deleteBtn.innerHTML = `<svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.trash}</svg>`;
-      deleteBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        deleteNote(note.id);
-      });
-      item.appendChild(deleteBtn);
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'note-delete-btn';
+        deleteBtn.title = 'Notiz löschen';
+        deleteBtn.setAttribute('aria-label', 'Notiz löschen');
+        deleteBtn.innerHTML = `<svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.trash}</svg>`;
+        deleteBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          deleteNote(note.id);
+        });
+        item.appendChild(deleteBtn);
+      }
 
-      if (!isSearchMode) wireNoteItemDrag(item, note);
+      if (!isSearchMode && !isTrashView) wireNoteItemDrag(item, note);
       item.addEventListener('click', () => {
         if (noteDragSuppressClick) return;
         selectNote(note.id);
@@ -1038,10 +1127,39 @@
     const note = findNote(id);
     if (!note) return;
     const descendants = descendantNoteIds(id);
+    const isRoot = note.parentNoteId === null;
+
+    // Eine nicht-leere Hauptseite (hat Unterseiten und/oder eigenen Inhalt)
+    // wandert in den Papierkorb statt wirklich gelöscht zu werden - darunter
+    // können Unterseiten mit noch wichtigen Informationen stecken. Nur eine
+    // wirklich leere Hauptseite, oder eine einzelne Unterseite (deren
+    // Löschen über ihre eigene Hauptseite jederzeit rückgängig gemacht
+    // werden kann, indem diese wiederhergestellt wird), wird sofort
+    // endgültig gelöscht.
+    if (isRoot && !isNoteEmpty(note)) {
+      const msg =
+        descendants.length > 0
+          ? `Diese Hauptseite und ${descendants.length} Unterseite(n) in den Papierkorb verschieben?`
+          : 'Diese Hauptseite in den Papierkorb verschieben?';
+      if (!confirm(msg)) return;
+      note.trashedAt = Date.now();
+      note.updatedAt = Date.now();
+      schedulePersist();
+      const toDeselect = new Set([id, ...descendants]);
+      if (toDeselect.has(selectedNoteId)) {
+        selectedNoteId = null;
+      }
+      renderFolders();
+      renderNoteList();
+      renderEditor();
+      goToView('notes');
+      return;
+    }
+
     const msg =
       descendants.length > 0
-        ? `Diese Notiz und ${descendants.length} Unterseite(n) löschen?`
-        : 'Diese Notiz löschen?';
+        ? `Diese Notiz und ${descendants.length} Unterseite(n) endgültig löschen?`
+        : 'Diese Notiz endgültig löschen?';
     if (!confirm(msg)) return;
     const toDelete = new Set([id, ...descendants]);
     state.notes = state.notes.filter((n) => !toDelete.has(n.id));
@@ -1053,6 +1171,21 @@
     renderNoteList();
     renderEditor();
     goToView('notes');
+  }
+
+  // Holt eine Hauptseite (samt Unterseiten, die automatisch über isTrashed()
+  // "mit verschwunden" waren) aus dem Papierkorb zurück - dauerhaft, nicht
+  // nur für diese Sitzung.
+  function restoreNote(id) {
+    const note = findNote(id);
+    if (!note || !note.trashedAt) return;
+    if (!confirm(`"${note.title || 'Ohne Titel'}" wiederherstellen?`)) return;
+    delete note.trashedAt;
+    note.updatedAt = Date.now();
+    schedulePersist();
+    renderFolders();
+    renderNoteList();
+    renderEditor();
   }
 
   // ---------- Freie Zeichenfläche: Objekte ----------
@@ -4565,6 +4698,20 @@
     // Noch ohne echte Anmeldung (siehe README) - der Knopf lädt die Seite
     // vorerst nur neu, damit er sich nicht funktionslos anfühlt.
     el.logoutBtn.addEventListener('click', () => window.location.reload());
+    el.sidebarUserBtn.addEventListener('click', () => {
+      el.trashVisibleCheckbox.checked = trashVisible;
+      el.trashTogglePopoverBackdrop.hidden = false;
+      const rect = el.sidebarUserBtn.getBoundingClientRect();
+      el.trashTogglePopover.style.left = `${rect.left}px`;
+      el.trashTogglePopover.style.bottom = `${window.innerHeight - rect.top + 6}px`;
+    });
+    el.trashTogglePopoverBackdrop.addEventListener('click', (e) => {
+      if (e.target === el.trashTogglePopoverBackdrop) el.trashTogglePopoverBackdrop.hidden = true;
+    });
+    el.trashVisibleCheckbox.addEventListener('change', () => {
+      trashVisible = el.trashVisibleCheckbox.checked;
+      renderFolders();
+    });
     el.newNoteBtn.addEventListener('click', createNote);
     el.collapseAllBtn.addEventListener('click', () => {
       const ids = collapsibleNoteIds(getVisibleNotes());

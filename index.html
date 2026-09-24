@@ -41,7 +41,7 @@
       </nav>
 
       <div class="sidebar-footer">
-        <div class="sidebar-user-name">Anton Krisam</div>
+        <button class="sidebar-user-name" id="sidebarUserBtn" type="button">Anton Krisam</button>
         <button class="sidebar-logout-btn" id="logoutBtn" type="button">Abmelden</button>
       </div>
     </aside>
@@ -277,6 +277,16 @@
         <button type="button" class="popover-btn popover-btn-secondary" id="credentialCancelBtn">Abbrechen</button>
         <button type="button" class="popover-btn popover-btn-primary" id="credentialSaveBtn">Speichern</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Papierkorb ein-/ausblenden -->
+  <div class="popover-backdrop" id="trashTogglePopoverBackdrop" hidden>
+    <div class="popover" id="trashTogglePopover">
+      <label class="popover-checkbox-item">
+        <input type="checkbox" id="trashVisibleCheckbox" />
+        <span>Papierkorb anzeigen</span>
+      </label>
     </div>
   </div>
 
