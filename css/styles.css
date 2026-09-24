@@ -1653,7 +1653,14 @@ textarea {
   height: 100%;
   object-fit: contain;
   display: block;
-  pointer-events: none;
+  /* Bewusst KEIN pointer-events:none mehr - sonst landet ein Rechtsklick nie
+     direkt auf dem <img>, und der Browser zeigt "Bild kopieren"/"Grafik
+     speichern unter" im Kontextmenü gar nicht erst an. Das Verschieben per
+     Ziehen funktioniert trotzdem weiter, weil der zugehörige Listener auf
+     dem übergeordneten Element sitzt und Pointer-Events dorthin durchreicht
+     (Event-Bubbling). -webkit-user-drag verhindert weiterhin, dass ein
+     Linksklick-Ziehen stattdessen das native "Bild aus der Seite ziehen"
+     auslöst und damit unser eigenes Verschieben stört. */
   user-select: none;
   -webkit-user-drag: none;
 }
