@@ -742,6 +742,7 @@
     el.folderList.innerHTML = '';
 
     for (const folder of state.folders) {
+      if (folder.trashedAt) continue;
       const item = document.createElement('div');
       item.className = 'folder-item' + (selectedFolderId === folder.id ? ' active' : '');
       const count = notesInFolder(folder.id).length;
@@ -870,6 +871,8 @@
   }
 
   function deleteFolder(folderId) {
+    const folder = state.folders.find((f) => f.id === folderId);
+    if (!folder) return;
     // Hauptseiten in diesem Ordner durchlaufen dieselbe Regel wie beim
     // einzelnen Löschen über deleteNote(): nicht-leere wandern in den
     // Papierkorb (statt einfach "ordnerlos" zu werden und dadurch leicht
@@ -895,10 +898,20 @@
     if (deleteIds.size > 0) {
       state.notes = state.notes.filter((n) => !deleteIds.has(n.id));
     }
-    state.notes.forEach((n) => {
-      if (n.folderId === folderId) n.folderId = null;
-    });
-    state.folders = state.folders.filter((f) => f.id !== folderId);
+
+    if (rootsToTrash.length > 0) {
+      // Der Ordner bleibt zusammen mit seinen in den Papierkorb gewanderten
+      // Hauptseiten erhalten (nur in der Seitenleiste versteckt) - sobald
+      // eine dieser Notizen wiederhergestellt wird, kommt der Ordner in
+      // restoreNote() automatisch mit zurück. folderId bleibt deshalb auf
+      // allen verbliebenen Notizen unverändert.
+      folder.trashedAt = Date.now();
+    } else {
+      // Nichts davon landet im Papierkorb (Ordner war leer oder enthielt
+      // nur leere Hauptseiten) - dafür gibt es keinen Wiederherstellen-
+      // Anlass, der Ordner wird wie bisher direkt entfernt.
+      state.folders = state.folders.filter((f) => f.id !== folderId);
+    }
     if (selectedFolderId === folderId) selectedFolderId = null;
     if (deleteIds.has(selectedNoteId) || rootsToTrash.some((n) => n.id === selectedNoteId)) {
       selectedNoteId = null;
@@ -1212,6 +1225,13 @@
     if (!confirm(`"${note.title || 'Ohne Titel'}" wiederherstellen?`)) return;
     delete note.trashedAt;
     note.updatedAt = Date.now();
+    // Gehörte diese Notiz zu einem inzwischen gelöschten Ordner, kommt der
+    // Ordner automatisch mit zurück - er wurde beim Löschen bewusst nicht
+    // entfernt, sondern nur versteckt (siehe deleteFolder()).
+    if (note.folderId) {
+      const folder = state.folders.find((f) => f.id === note.folderId);
+      if (folder && folder.trashedAt) delete folder.trashedAt;
+    }
     schedulePersist();
     renderFolders();
     renderNoteList();
@@ -4426,7 +4446,7 @@
     if (!note) return;
     el.movePopoverList.innerHTML = '';
 
-    const options = [{ id: null, name: 'Alle Notizen' }, ...state.folders];
+    const options = [{ id: null, name: 'Alle Notizen' }, ...state.folders.filter((f) => !f.trashedAt)];
     for (const opt of options) {
       const item = document.createElement('div');
       item.className = 'popover-item' + (note.folderId === opt.id ? ' current' : '');
