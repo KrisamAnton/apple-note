@@ -4438,6 +4438,18 @@
     body.querySelectorAll('.inline-pdf-chip').forEach((chip) => {
       if (chip.pdfChipWired) return;
       chip.pdfChipWired = true;
+      // Bereits vorher eingefügte Symbole (gespeichert, bevor es die
+      // Werkzeugleiste gab) haben die Knöpfe noch nicht im HTML - ohne sie
+      // wären solche älteren Symbole nie mehr zu öffnen oder umzubenennen.
+      // Fehlt die Leiste, wird sie hier nachträglich ergänzt.
+      if (!chip.querySelector('.inline-pdf-chip-toolbar')) {
+        const toolbar = document.createElement('span');
+        toolbar.className = 'inline-pdf-chip-toolbar';
+        toolbar.innerHTML =
+          `<span class="inline-pdf-chip-btn" data-action="open" title="Datei öffnen"><svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.openFile}</svg></span>` +
+          `<span class="inline-pdf-chip-btn" data-action="rename" title="Umbenennen"><svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.rename}</svg></span>`;
+        chip.appendChild(toolbar);
+      }
       const openBtn = chip.querySelector('.inline-pdf-chip-btn[data-action="open"]');
       const renameBtn = chip.querySelector('.inline-pdf-chip-btn[data-action="rename"]');
       if (openBtn) {
