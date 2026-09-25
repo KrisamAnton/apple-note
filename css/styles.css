@@ -2427,7 +2427,11 @@ textarea.popover-text-input {
   width: 16px;
   height: 16px;
   flex: none;
-  color: var(--accent-strong);
+  color: var(--danger);
+}
+
+.reminder-card-header.sent .icon {
+  color: #34c759;
 }
 
 .reminder-card-title {

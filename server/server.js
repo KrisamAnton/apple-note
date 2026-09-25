@@ -369,15 +369,37 @@ function buildSmtpTransportOptions(settings) {
   return opts;
 }
 
-async function sendReminderEmail(settings, note, obj) {
+// Baut den aktuellen "Standort" der Notiz als Brotkrumen-Pfad (Ordner ->
+// Hauptseite -> Unterseite(n)) - wird bei jedem Versand frisch aus dem
+// aktuellen Stand berechnet (nicht beim Anlegen der Erinnerung gespeichert),
+// damit ein späteres Umbenennen/Verschieben immer korrekt mitgeschickt wird.
+function buildNoteBreadcrumb(state, note) {
+  const notesById = new Map(state.notes.map((n) => [n.id, n]));
+  const chain = [];
+  let current = note;
+  const seen = new Set();
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id);
+    chain.unshift(current);
+    current = current.parentNoteId ? notesById.get(current.parentNoteId) : null;
+  }
+  const rootNote = chain[0];
+  const folder = rootNote && rootNote.folderId
+    ? (state.folders || []).find((f) => f.id === rootNote.folderId)
+    : null;
+  const titles = chain.map((n) => n.title || 'Ohne Titel');
+  return [folder ? folder.name : 'Alle Notizen', ...titles].join(' → ');
+}
+
+async function sendReminderEmail(settings, state, note, obj) {
   const transporter = nodemailer.createTransport(buildSmtpTransportOptions(settings));
   const fromName = settings.smtpFromName || 'KrisNote';
-  const noteTitle = note.title || 'Ohne Titel';
+  const breadcrumb = buildNoteBreadcrumb(state, note);
   await transporter.sendMail({
     from: `"${fromName}" <${settings.smtpUser}>`,
     to: settings.reminderEmail,
     subject: `Erinnerung: ${obj.title || 'Ohne Titel'}`,
-    text: `${obj.text || ''}\n\n---\nAus der Notiz "${noteTitle}" in KrisNote.`,
+    text: `${obj.text || ''}\n\n---\nFundort in KrisNote: ${breadcrumb}`,
   });
 }
 
@@ -421,7 +443,7 @@ async function checkAndSendDueReminders() {
     let anySent = false;
     for (const { note, obj } of due) {
       try {
-        await sendReminderEmail(settings, note, obj);
+        await sendReminderEmail(settings, state, note, obj);
         obj.sentAt = Date.now();
         anySent = true;
         console.log(`Erinnerung "${obj.title}" an ${settings.reminderEmail} verschickt.`);

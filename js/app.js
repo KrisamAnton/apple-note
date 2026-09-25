@@ -4885,7 +4885,7 @@
     card.className = 'reminder-card';
 
     const header = document.createElement('div');
-    header.className = 'reminder-card-header';
+    header.className = 'reminder-card-header' + (obj.sentAt ? ' sent' : '');
     header.innerHTML = `<svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.bell}</svg>`;
     const title = document.createElement('span');
     title.className = 'reminder-card-title';
@@ -5211,15 +5211,24 @@
       if (!note) return;
       pendingInlineReminderRange = null;
       pendingInlineReminderHost = null;
-      // currentFormatRange() liefert die markierte Textauswahl - oder, falls
-      // nur der Cursor steht (nichts markiert), die ganze aktuelle Zeile als
-      // Range (dieselbe Logik wie bei Schriftart/-größe ohne Auswahl).
-      const formatRange = activeTextEdit ? currentFormatRange() : null;
-      if (formatRange) {
-        pendingInlineReminderRange = formatRange.cloneRange();
-        pendingInlineReminderHost = activeTextEdit;
-        openReminderPopover(note, null, el.addReminderBtn, formatRange.toString().trim());
-        return;
+      if (activeTextEdit) {
+        const sel = window.getSelection();
+        const liveRange = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
+        if (liveRange && activeTextEdit.body.contains(liveRange.commonAncestorContainer)) {
+          // Für die Einfügestelle bewusst die ECHTE Cursor-/Auswahlposition
+          // verwenden (nicht die von currentFormatRange() bei fehlender
+          // Auswahl rekonstruierte "ganze Zeile"): jene Range beginnt
+          // außerhalb des Zeilen-Elements (davor als Geschwister-Knoten) -
+          // ein Einfügen dort setzt das Symbol als eigenen Block VOR die
+          // Zeile statt wirklich mitten im Textfluss. Für den Formulierungs-
+          // Vorschlag im Popover wird trotzdem die ganze Zeile herangezogen,
+          // falls nichts markiert ist.
+          pendingInlineReminderRange = liveRange.cloneRange();
+          pendingInlineReminderHost = activeTextEdit;
+          const prefillRange = liveRange.collapsed ? currentFormatRange() || liveRange : liveRange;
+          openReminderPopover(note, null, el.addReminderBtn, prefillRange.toString().trim());
+          return;
+        }
       }
       openReminderPopover(note, null, el.addReminderBtn, '');
     });
