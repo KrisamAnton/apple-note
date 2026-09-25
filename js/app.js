@@ -466,6 +466,7 @@
     reminderTitleInput: document.getElementById('reminderTitleInput'),
     reminderDateInput: document.getElementById('reminderDateInput'),
     reminderTextInput: document.getElementById('reminderTextInput'),
+    reminderDeleteBtn: document.getElementById('reminderDeleteBtn'),
     reminderCancelBtn: document.getElementById('reminderCancelBtn'),
     reminderSaveBtn: document.getElementById('reminderSaveBtn'),
     fileFileInput: document.getElementById('fileFileInput'),
@@ -1315,7 +1316,11 @@
       return;
     }
     el.canvasSurface.dataset.bg = note.background || 'dots';
-    const sorted = [...note.objects].sort((a, b) => (a.z || 0) - (b.z || 0));
+    // Inline-Erinnerungen (obj.inline) leben als kleines Glocken-Symbol direkt
+    // im Text eines Textobjekts (siehe insertInlineReminderMarker()) - sie
+    // bekommen hier bewusst KEIN eigenes, frei positioniertes Objekt auf der
+    // Fläche (kein x/y/w/h vorhanden).
+    const sorted = [...note.objects].filter((o) => !o.inline).sort((a, b) => (a.z || 0) - (b.z || 0));
     for (const obj of sorted) {
       el.canvasSurface.insertBefore(buildObjectEl(note, obj), el.inkLayer);
     }
@@ -1817,6 +1822,7 @@
     body.contentEditable = 'false';
     body.innerHTML = obj.html || '';
     enhanceInlineImages(body);
+    syncInlineReminderMarkers(note, obj, body);
     updateTextEmptyState(body);
     applyFreeLinesAlignment(note, obj, body);
     objEl.appendChild(body);
@@ -1875,6 +1881,15 @@
             window.open(link.href, '_blank', 'noopener,noreferrer');
             return;
           }
+          // Dieselbe Überlagerung würde sonst auch jeden Klick auf ein
+          // Erinnerungs-Symbol abfangen, statt ihn (per eigenem Klick-Handler,
+          // siehe syncInlineReminderMarkers()) zum Bearbeiten-Fenster
+          // durchzulassen.
+          const marker = findReminderMarkerAtPoint(body, ev.clientX, ev.clientY);
+          if (marker) {
+            marker.click();
+            return;
+          }
           enterTextEdit(note, obj, objEl, body, overlay, startX, startY);
         }
       };
@@ -1891,6 +1906,7 @@
     body.addEventListener('blur', () => exitTextEdit(obj, body, overlay));
     body.addEventListener('input', () => {
       stripInheritedHeadingOnFreshLine(body);
+      syncInlineReminderMarkers(note, obj, body);
       saveTextObjContent(note, obj, body);
       updateTextEmptyState(body);
       growFreeTextToFit(obj, objEl, body);
@@ -2507,6 +2523,15 @@
     for (const a of links) {
       const r = a.getBoundingClientRect();
       if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return a;
+    }
+    return null;
+  }
+
+  function findReminderMarkerAtPoint(body, x, y) {
+    const markers = body.querySelectorAll('.inline-reminder-marker');
+    for (const m of markers) {
+      const r = m.getBoundingClientRect();
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return m;
     }
     return null;
   }
@@ -4660,6 +4685,13 @@
   // ---------- Erinnerungs-Popover (anlegen/bearbeiten) ----------
 
   let editingReminderObj = null; // null = neue Erinnerung wird angelegt
+  // Nur gesetzt, während das Popover für eine INLINE-Erinnerung offen ist (Knopf
+  // "Erinnerung hinzufügen" bei aktivem Cursor in einem Textobjekt geklickt,
+  // siehe Wiring von addReminderBtn) - merkt sich, WO beim Speichern das
+  // Glocken-Symbol in den Text eingefügt werden soll.
+  let pendingInlineReminderRange = null;
+  let pendingInlineReminderHost = null;
+  let reminderPopoverJustOpened = false;
 
   // <input type="datetime-local"> erwartet/liefert "YYYY-MM-DDTHH:mm" in der
   // lokalen Zeit des Geräts (nicht UTC) - dieselbe Umrechnung nutzen wir zum
@@ -4695,8 +4727,20 @@
     el.reminderTitleInput.value = obj ? obj.title || '' : '';
     el.reminderDateInput.value = obj ? toDatetimeLocalValue(obj.remindAt) : '';
     el.reminderTextInput.value = obj ? obj.text || '' : prefillText || '';
+    el.reminderDeleteBtn.hidden = !obj;
 
     el.reminderPopoverBackdrop.hidden = false;
+    // Wird das Popover als Reaktion auf einen Klick geöffnet, der durch die
+    // Text-Verschiebe-Überlagerung hindurch simuliert wird (siehe
+    // findReminderMarkerAtPoint()-Zweig in buildTextContent()), löst derselbe
+    // Mausklick anschließend noch das native "click"-Ereignis des Browsers
+    // aus - dessen Ziel ist dann, weil der Hintergrund jetzt den ganzen
+    // Bildschirm bedeckt, plötzlich dieser Hintergrund selbst, was das gerade
+    // erst geöffnete Fenster sofort wieder schließen würde. Für einen sehr
+    // kurzen Moment wird ein Schließen-durch-Hintergrundklick deshalb bewusst
+    // ignoriert (siehe Wiring von reminderPopoverBackdrop).
+    reminderPopoverJustOpened = true;
+    setTimeout(() => { reminderPopoverJustOpened = false; }, 0);
     const btnRect = anchorEl.getBoundingClientRect();
     const popoverWidth = 320;
     const left = Math.min(Math.max(8, btnRect.left), window.innerWidth - popoverWidth - 8);
@@ -4709,6 +4753,8 @@
   function closeReminderPopover() {
     el.reminderPopoverBackdrop.hidden = true;
     editingReminderObj = null;
+    pendingInlineReminderRange = null;
+    pendingInlineReminderHost = null;
   }
 
   function saveReminderPopover() {
@@ -4730,6 +4776,19 @@
       // verschickte Erinnerung nicht mehr aktuell - erneut fällig machen,
       // statt stillschweigend nie wieder zu verschicken.
       editingReminderObj.sentAt = null;
+    } else if (pendingInlineReminderRange && pendingInlineReminderHost) {
+      const obj = {
+        id: uid(),
+        type: 'reminder',
+        inline: true,
+        parentTextObjId: pendingInlineReminderHost.obj.id,
+        title,
+        text,
+        remindAt,
+        sentAt: null,
+      };
+      note.objects.push(obj);
+      insertInlineReminderMarker(note, pendingInlineReminderHost, pendingInlineReminderRange, obj);
     } else {
       const { x, y } = nextPlacement(note, 240, 90);
       const obj = {
@@ -4752,6 +4811,73 @@
     schedulePersist();
     renderCanvas(note);
     closeReminderPopover();
+  }
+
+  // Fügt an der beim Öffnen gemerkten Cursor-/Auswahlposition (siehe Wiring von
+  // addReminderBtn) ein kleines Glocken-Symbol direkt in den Text ein - der
+  // ursprüngliche Text bleibt dabei erhalten, das Symbol landet nur davor.
+  function buildInlineReminderMarkerEl(obj) {
+    const span = document.createElement('span');
+    span.className = 'inline-reminder-marker' + (obj.sentAt ? ' sent' : '');
+    span.contentEditable = 'false';
+    span.dataset.reminderId = obj.id;
+    span.title = obj.title || 'Erinnerung';
+    span.innerHTML = `<svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.bell}</svg>`;
+    return span;
+  }
+
+  function insertInlineReminderMarker(note, hostTextEdit, range, obj) {
+    const { body } = hostTextEdit;
+    const marker = buildInlineReminderMarkerEl(obj);
+    range.collapse(true);
+    range.insertNode(marker);
+
+    // Cursor direkt hinter das neue Symbol setzen, damit man ohne Klick
+    // weitertippen kann.
+    const after = document.createRange();
+    after.setStartAfter(marker);
+    after.collapse(true);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(after);
+
+    syncInlineReminderMarkers(note, hostTextEdit.obj, body);
+    saveTextObjContent(note, hostTextEdit.obj, body);
+  }
+
+  // Gleicht die im Text vorhandenen Glocken-Symbole (nach jeder Bearbeitung UND
+  // beim erstmaligen Rendern aufgerufen) mit den echten Erinnerungs-Objekten ab:
+  // Farbe/Titel folgen dem tatsächlichen Stand (siehe sentAt), ein Klick öffnet
+  // das Bearbeiten-Fenster. Wurde ein Symbol aus dem Text gelöscht (z. B. beim
+  // Löschen der ganzen Zeile), verschwindet die zugehörige Erinnerung ebenfalls
+  // aus note.objects, statt unsichtbar im Hintergrund bestehen zu bleiben und
+  // trotzdem irgendwann per Mail verschickt zu werden.
+  function syncInlineReminderMarkers(note, hostObj, body) {
+    const presentIds = new Set();
+    body.querySelectorAll('.inline-reminder-marker').forEach((marker) => {
+      const id = marker.dataset.reminderId;
+      const obj = note.objects.find((o) => o.id === id && o.type === 'reminder');
+      if (!obj) {
+        marker.remove();
+        return;
+      }
+      presentIds.add(id);
+      marker.classList.toggle('sent', !!obj.sentAt);
+      marker.title = obj.title || 'Erinnerung';
+      // Bewusst eine reine JS-Eigenschaft statt eines data-Attributs: ein
+      // Attribut würde mit ins gespeicherte HTML wandern und nach einem
+      // Neuladen fälschlich vorgaukeln, der (dann in Wirklichkeit fehlende)
+      // Klick-Handler sei schon gesetzt.
+      if (marker.reminderClickWired) return;
+      marker.reminderClickWired = true;
+      marker.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openReminderPopover(note, obj, marker);
+      });
+    });
+    note.objects = note.objects.filter(
+      (o) => !(o.type === 'reminder' && o.inline && o.parentTextObjId === hostObj.id && !presentIds.has(o.id))
+    );
   }
 
   function buildReminderContent(note, obj, objEl) {
@@ -5070,20 +5196,58 @@
     el.credentialCancelBtn.addEventListener('click', closeCredentialPopover);
     el.credentialSaveBtn.addEventListener('click', saveCredentialPopover);
     // War gerade Text in einem Textobjekt markiert (siehe lastSelectionRange),
-    // landet er direkt im Erinnerungstext - genau der vom Nutzer gewünschte
-    // "Text markieren -> als Erinnerung übernehmen"-Weg. Wie die Formatierungs-
-    // Buttons (siehe wireRibbonBtn) muss dafür verhindert werden, dass der
-    // Klick selbst das Textfeld verlässt und die Auswahl damit vor dem
-    // Auslesen wieder löscht (siehe body-blur -> exitTextEdit()).
+    // Steht der Cursor gerade in einem Textobjekt (mit oder ohne markierten
+    // Text), wird die Erinnerung als kleines Glocken-Symbol direkt an dieser
+    // Stelle in den Text eingefügt (siehe insertInlineReminderMarker()) -
+    // vorbefüllt entweder mit dem markierten Text oder, ohne Markierung, mit
+    // dem Text der ganzen Zeile, in der der Cursor steht. Ohne aktives
+    // Textobjekt entsteht wie bisher eine frei auf der Fläche platzierte
+    // Erinnerungs-Karte. Wie die Formatierungs-Buttons (siehe wireRibbonBtn)
+    // muss dafür verhindert werden, dass der Klick selbst das Textfeld
+    // verlässt und die Cursor-Position damit vor dem Auslesen verliert
+    // (siehe body-blur -> exitTextEdit()).
     wireRibbonBtn(el.addReminderBtn, () => {
-      const prefillText = lastSelectionRange ? lastSelectionRange.toString().trim() : '';
-      openReminderPopover(currentNote(), null, el.addReminderBtn, prefillText);
+      const note = currentNote();
+      if (!note) return;
+      pendingInlineReminderRange = null;
+      pendingInlineReminderHost = null;
+      // currentFormatRange() liefert die markierte Textauswahl - oder, falls
+      // nur der Cursor steht (nichts markiert), die ganze aktuelle Zeile als
+      // Range (dieselbe Logik wie bei Schriftart/-größe ohne Auswahl).
+      const formatRange = activeTextEdit ? currentFormatRange() : null;
+      if (formatRange) {
+        pendingInlineReminderRange = formatRange.cloneRange();
+        pendingInlineReminderHost = activeTextEdit;
+        openReminderPopover(note, null, el.addReminderBtn, formatRange.toString().trim());
+        return;
+      }
+      openReminderPopover(note, null, el.addReminderBtn, '');
     });
     el.reminderPopoverBackdrop.addEventListener('click', (e) => {
+      if (reminderPopoverJustOpened) return;
       if (e.target === el.reminderPopoverBackdrop) closeReminderPopover();
     });
     el.reminderCancelBtn.addEventListener('click', closeReminderPopover);
     el.reminderSaveBtn.addEventListener('click', saveReminderPopover);
+    el.reminderDeleteBtn.addEventListener('click', () => {
+      const note = currentNote();
+      if (!note || !editingReminderObj) return closeReminderPopover();
+      if (!confirm(`Erinnerung "${editingReminderObj.title || 'Ohne Titel'}" löschen?`)) return;
+      const id = editingReminderObj.id;
+      const markerEl = el.canvasSurface.querySelector(`.inline-reminder-marker[data-reminder-id="${id}"]`);
+      if (markerEl) {
+        const hostObjEl = markerEl.closest('.canvas-object');
+        const hostBody = hostObjEl && hostObjEl.querySelector('.canvas-text-body');
+        const hostTextObj = hostObjEl && note.objects.find((o) => o.id === hostObjEl.dataset.id);
+        markerEl.remove();
+        if (hostBody && hostTextObj) saveTextObjContent(note, hostTextObj, hostBody);
+      }
+      note.objects = note.objects.filter((o) => o.id !== id);
+      note.updatedAt = Date.now();
+      schedulePersist();
+      renderCanvas(note);
+      closeReminderPopover();
+    });
     // Klick/Tipp auf die leere Fläche legt sofort freien Text an (wie in OneNote) –
     // ABER erst, wenn feststeht, dass es wirklich ein Tipp war (kurz, ohne Bewegung,
     // nur ein Finger). Sonst wäre auf Touch-Geräten jedes Wischen zum Scrollen oder

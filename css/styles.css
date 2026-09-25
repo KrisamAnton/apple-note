@@ -2323,6 +2323,18 @@ button.popover-item {
   background: var(--accent);
 }
 
+.popover-btn-danger {
+  background: transparent;
+  border-color: var(--danger);
+  color: var(--danger);
+  margin-right: auto;
+}
+
+.popover-btn-danger:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
 /* ---------- Zugangsdaten-Karte (auf der Fläche) ---------- */
 
 .credential-card {
@@ -2453,6 +2465,29 @@ textarea.popover-text-input {
 
 .canvas-object[data-type="reminder"].expanded .reminder-card-text {
   display: block;
+}
+
+/* ---------- Inline-Erinnerungs-Marker (direkt im Text) ---------- */
+
+.inline-reminder-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  vertical-align: -3px;
+  margin: 0 2px;
+  cursor: pointer;
+  color: var(--danger);
+}
+
+.inline-reminder-marker.sent {
+  color: #34c759;
+}
+
+.inline-reminder-marker .icon {
+  width: 100%;
+  height: 100%;
 }
 
 /* ---------- Responsive: iPad Portrait / kleinere Screens ---------- */
