@@ -8,7 +8,7 @@
   const MAX_OBJ_DIM = 20000;
   let SURFACE_W = BASE_SURFACE_W;
   let SURFACE_H = BASE_SURFACE_H;
-  const MIN_SIZES = { text: [140, 60], image: [60, 60], pdf: [60, 60], credential: [200, 70] };
+  const MIN_SIZES = { text: [140, 60], image: [60, 60], pdf: [60, 60], credential: [200, 70], reminder: [200, 70] };
   // Muss zum Linien-Hintergrund (.canvas-surface[data-bg="lines"]) passen: Zeilenabstand
   // 28px, die sichtbare Linie liegt am unteren Rand jedes 28px-Bandes (bei 27px).
   const LINE_PITCH = 28;
@@ -35,6 +35,7 @@
     rename: '<svg viewBox="0 0 20 20"><path d="M13.6 2.4a1.9 1.9 0 0 1 2.7 2.7L7.4 14 4 15l1-3.4 8.6-9.2z" fill="currentColor"/></svg>',
     key: '<svg viewBox="0 0 20 20"><path d="M8 2a4.5 4.5 0 0 0-4.24 6h-.01L1 10.75V15h1.5v-1.5H4V12h1.5v-1.5h1.28A4.5 4.5 0 1 0 8 2zm3.3 4.5a1.3 1.3 0 1 1 0-2.6 1.3 1.3 0 0 1 0 2.6z" fill="currentColor"/></svg>',
     restore: '<svg viewBox="0 0 20 20"><path d="M4 10a6 6 0 1 0 1.9-4.36" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4.2 3.8v3.6h3.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    bell: '<svg viewBox="0 0 20 20"><path d="M10 2a1 1 0 0 1 1 1v.6a5.5 5.5 0 0 1 4 5.3v2.9l1.3 2.1c.3.5-.05 1.1-.6 1.1H12a2 2 0 0 1-4 0H4.3c-.55 0-.9-.6-.6-1.1L5 11.8V8.9a5.5 5.5 0 0 1 4-5.3V3a1 1 0 0 1 1-1z" fill="currentColor"/></svg>',
   };
 
   const MARKER_COLORS = [
@@ -459,6 +460,14 @@
     credentialAddFieldBtn: document.getElementById('credentialAddFieldBtn'),
     credentialCancelBtn: document.getElementById('credentialCancelBtn'),
     credentialSaveBtn: document.getElementById('credentialSaveBtn'),
+    addReminderBtn: document.getElementById('addReminderBtn'),
+    reminderPopoverBackdrop: document.getElementById('reminderPopoverBackdrop'),
+    reminderPopover: document.getElementById('reminderPopover'),
+    reminderTitleInput: document.getElementById('reminderTitleInput'),
+    reminderDateInput: document.getElementById('reminderDateInput'),
+    reminderTextInput: document.getElementById('reminderTextInput'),
+    reminderCancelBtn: document.getElementById('reminderCancelBtn'),
+    reminderSaveBtn: document.getElementById('reminderSaveBtn'),
     fileFileInput: document.getElementById('fileFileInput'),
     backgroundBtn: document.getElementById('backgroundBtn'),
     backgroundPopoverBackdrop: document.getElementById('backgroundPopoverBackdrop'),
@@ -520,7 +529,11 @@
       .filter((o) => o.type === 'credential')
       .map((o) => `${o.title || ''} ${(o.fields || []).map((f) => `${f.label} ${f.value}`).join(' ')}`)
       .join(' ');
-    return `${note.title || ''} ${objectText} ${credentialText}`;
+    const reminderText = note.objects
+      .filter((o) => o.type === 'reminder')
+      .map((o) => `${o.title || ''} ${o.text || ''}`)
+      .join(' ');
+    return `${note.title || ''} ${objectText} ${credentialText} ${reminderText}`;
   }
 
   // Baut aus einer flachen Notizliste (z. B. eines Ordners) eine Tiefensuche-Reihenfolge
@@ -1392,6 +1405,9 @@
     if (obj.type === 'credential') {
       mainToolbar.appendChild(makeToolbarBtn(ICONS.rename, false, () => openCredentialPopover(note, obj, mainToolbar), 'Bearbeiten'));
     }
+    if (obj.type === 'reminder') {
+      mainToolbar.appendChild(makeToolbarBtn(ICONS.rename, false, () => openReminderPopover(note, obj, mainToolbar), 'Bearbeiten'));
+    }
     mainToolbar.appendChild(makeToolbarBtn(ICONS.trash, true, () => deleteObject(note, obj.id), 'Löschen'));
     objEl.appendChild(mainToolbar);
 
@@ -1401,6 +1417,7 @@
     else if (obj.type === 'audio') buildAudioContent(note, obj, objEl);
     else if (obj.type === 'file') buildFileContent(note, obj, objEl);
     else if (obj.type === 'credential') buildCredentialContent(note, obj, objEl);
+    else if (obj.type === 'reminder') buildReminderContent(note, obj, objEl);
 
     // Größe ändern nur noch über die rechte Kante (Breite) und die untere
     // Kante (Höhe) - wie bei einem normalen Fenster, kein zusätzlicher runder
@@ -4640,6 +4657,141 @@
     closeCredentialPopover();
   }
 
+  // ---------- Erinnerungs-Popover (anlegen/bearbeiten) ----------
+
+  let editingReminderObj = null; // null = neue Erinnerung wird angelegt
+
+  // <input type="datetime-local"> erwartet/liefert "YYYY-MM-DDTHH:mm" in der
+  // lokalen Zeit des Geräts (nicht UTC) - dieselbe Umrechnung nutzen wir zum
+  // Anzeigen wie zum Einlesen, damit die angezeigte Uhrzeit immer der wirklich
+  // gemeinten entspricht.
+  function toDatetimeLocalValue(ms) {
+    if (!ms) return '';
+    const d = new Date(ms);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  function fromDatetimeLocalValue(value) {
+    if (!value) return null;
+    const ms = new Date(value).getTime();
+    return Number.isNaN(ms) ? null : ms;
+  }
+
+  function formatReminderDate(ms) {
+    if (!ms) return 'Kein Zeitpunkt festgelegt';
+    const d = new Date(ms);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}, ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  // prefillText kommt vom "Erinnerung hinzufügen"-Knopf, wenn dabei gerade Text
+  // in einem Textobjekt markiert war (siehe Wiring von addReminderBtn) - so
+  // landet markierter Text direkt im Erinnerungstext, ohne ihn erneut abtippen
+  // zu müssen.
+  function openReminderPopover(note, obj, anchorEl, prefillText) {
+    if (!note) return;
+    editingReminderObj = obj || null;
+    el.reminderTitleInput.value = obj ? obj.title || '' : '';
+    el.reminderDateInput.value = obj ? toDatetimeLocalValue(obj.remindAt) : '';
+    el.reminderTextInput.value = obj ? obj.text || '' : prefillText || '';
+
+    el.reminderPopoverBackdrop.hidden = false;
+    const btnRect = anchorEl.getBoundingClientRect();
+    const popoverWidth = 320;
+    const left = Math.min(Math.max(8, btnRect.left), window.innerWidth - popoverWidth - 8);
+    const top = Math.min(btnRect.bottom + 6, window.innerHeight - 340);
+    el.reminderPopover.style.left = `${Math.max(8, left)}px`;
+    el.reminderPopover.style.top = `${Math.max(8, top)}px`;
+    el.reminderTitleInput.focus();
+  }
+
+  function closeReminderPopover() {
+    el.reminderPopoverBackdrop.hidden = true;
+    editingReminderObj = null;
+  }
+
+  function saveReminderPopover() {
+    const note = currentNote();
+    if (!note) return closeReminderPopover();
+    const title = el.reminderTitleInput.value.trim();
+    if (!title) {
+      el.reminderTitleInput.focus();
+      return;
+    }
+    const remindAt = fromDatetimeLocalValue(el.reminderDateInput.value);
+    const text = el.reminderTextInput.value.trim();
+
+    if (editingReminderObj) {
+      editingReminderObj.title = title;
+      editingReminderObj.remindAt = remindAt;
+      editingReminderObj.text = text;
+      // Nach einer Änderung von Titel/Text/Zeitpunkt ist eine bereits
+      // verschickte Erinnerung nicht mehr aktuell - erneut fällig machen,
+      // statt stillschweigend nie wieder zu verschicken.
+      editingReminderObj.sentAt = null;
+    } else {
+      const { x, y } = nextPlacement(note, 240, 90);
+      const obj = {
+        id: uid(),
+        type: 'reminder',
+        x,
+        y,
+        w: 240,
+        h: 90,
+        z: 0,
+        title,
+        text,
+        remindAt,
+        sentAt: null,
+      };
+      bringToFront(note, obj);
+      note.objects.push(obj);
+    }
+    note.updatedAt = Date.now();
+    schedulePersist();
+    renderCanvas(note);
+    closeReminderPopover();
+  }
+
+  function buildReminderContent(note, obj, objEl) {
+    const card = document.createElement('div');
+    card.className = 'reminder-card';
+
+    const header = document.createElement('div');
+    header.className = 'reminder-card-header';
+    header.innerHTML = `<svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.bell}</svg>`;
+    const title = document.createElement('span');
+    title.className = 'reminder-card-title';
+    title.textContent = obj.title || 'Erinnerung';
+    header.appendChild(title);
+    card.appendChild(header);
+
+    const dateEl = document.createElement('div');
+    const isDue = obj.remindAt && !obj.sentAt && obj.remindAt <= Date.now();
+    dateEl.className = 'reminder-card-date' + (isDue ? ' reminder-due' : '');
+    dateEl.textContent = obj.sentAt
+      ? `Verschickt am ${formatReminderDate(obj.sentAt)}`
+      : formatReminderDate(obj.remindAt);
+    card.appendChild(dateEl);
+
+    const textEl = document.createElement('div');
+    textEl.className = 'reminder-card-text';
+    textEl.textContent = obj.text || '';
+    card.appendChild(textEl);
+
+    card.addEventListener('click', (e) => {
+      // Textmarkieren im aufgeklappten Erinnerungstext soll nicht gleichzeitig
+      // wieder zuklappen.
+      if (window.getSelection().toString()) return;
+      selectObject(note, obj, objEl);
+      objEl.classList.toggle('expanded');
+      e.stopPropagation();
+    });
+
+    objEl.appendChild(card);
+  }
+
   // ---------- Einstellungen (Papierkorb + E-Mail-Erinnerungen) ----------
 
   function fillSettingsForm(settings) {
@@ -4917,6 +5069,21 @@
     });
     el.credentialCancelBtn.addEventListener('click', closeCredentialPopover);
     el.credentialSaveBtn.addEventListener('click', saveCredentialPopover);
+    // War gerade Text in einem Textobjekt markiert (siehe lastSelectionRange),
+    // landet er direkt im Erinnerungstext - genau der vom Nutzer gewünschte
+    // "Text markieren -> als Erinnerung übernehmen"-Weg. Wie die Formatierungs-
+    // Buttons (siehe wireRibbonBtn) muss dafür verhindert werden, dass der
+    // Klick selbst das Textfeld verlässt und die Auswahl damit vor dem
+    // Auslesen wieder löscht (siehe body-blur -> exitTextEdit()).
+    wireRibbonBtn(el.addReminderBtn, () => {
+      const prefillText = lastSelectionRange ? lastSelectionRange.toString().trim() : '';
+      openReminderPopover(currentNote(), null, el.addReminderBtn, prefillText);
+    });
+    el.reminderPopoverBackdrop.addEventListener('click', (e) => {
+      if (e.target === el.reminderPopoverBackdrop) closeReminderPopover();
+    });
+    el.reminderCancelBtn.addEventListener('click', closeReminderPopover);
+    el.reminderSaveBtn.addEventListener('click', saveReminderPopover);
     // Klick/Tipp auf die leere Fläche legt sofort freien Text an (wie in OneNote) –
     // ABER erst, wenn feststeht, dass es wirklich ein Tipp war (kurz, ohne Bewegung,
     // nur ein Finger). Sonst wäre auf Touch-Geräten jedes Wischen zum Scrollen oder

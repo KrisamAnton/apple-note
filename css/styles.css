@@ -2389,6 +2389,72 @@ button.popover-item {
   user-select: text;
 }
 
+textarea.popover-text-input {
+  resize: vertical;
+  min-height: 64px;
+}
+
+/* ---------- Erinnerungs-Karte (auf der Fläche) ---------- */
+
+.reminder-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 8px 10px;
+  overflow: auto;
+  cursor: pointer;
+}
+
+.reminder-card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.reminder-card-header .icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--accent-strong);
+}
+
+.reminder-card-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reminder-card-date {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+.reminder-card-date.reminder-due {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.reminder-card-text {
+  display: none;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.canvas-object[data-type="reminder"].expanded .reminder-card-text {
+  display: block;
+}
+
 /* ---------- Responsive: iPad Portrait / kleinere Screens ---------- */
 
 @media (max-width: 1000px) {

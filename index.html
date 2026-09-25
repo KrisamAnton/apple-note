@@ -172,6 +172,9 @@
             <button class="toolbar-btn" id="addCredentialBtn" type="button" aria-label="Zugangsdaten hinzufügen" title="Zugangsdaten hinzufügen">
               <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M8 2a4.5 4.5 0 0 0-4.24 6h-.01L1 10.75V15h1.5v-1.5H4V12h1.5v-1.5h1.28A4.5 4.5 0 1 0 8 2zm3.3 4.5a1.3 1.3 0 1 1 0-2.6 1.3 1.3 0 0 1 0 2.6z"/></svg>
             </button>
+            <button class="toolbar-btn" id="addReminderBtn" type="button" aria-label="Erinnerung hinzufügen" title="Erinnerung hinzufügen (markierten Text als Erinnerungstext übernehmen)">
+              <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M10 2a1 1 0 0 1 1 1v.6a5.5 5.5 0 0 1 4 5.3v2.9l1.3 2.1c.3.5-.05 1.1-.6 1.1H12a2 2 0 0 1-4 0H4.3c-.55 0-.9-.6-.6-1.1L5 11.8V8.9a5.5 5.5 0 0 1 4-5.3V3a1 1 0 0 1 1-1z"/></svg>
+            </button>
           </div>
 
           <div class="ribbon-divider"></div>
@@ -276,6 +279,27 @@
       <div class="popover-form-actions">
         <button type="button" class="popover-btn popover-btn-secondary" id="credentialCancelBtn">Abbrechen</button>
         <button type="button" class="popover-btn popover-btn-primary" id="credentialSaveBtn">Speichern</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Erinnerung anlegen/bearbeiten -->
+  <div class="popover-backdrop" id="reminderPopoverBackdrop" hidden>
+    <div class="popover popover-form" id="reminderPopover">
+      <p class="popover-title">Erinnerung</p>
+      <input type="text" id="reminderTitleInput" class="popover-text-input" placeholder="Überschrift (z. B. Vertrag AKS läuft aus)" />
+      <label class="settings-field">
+        <span class="settings-field-label">Erinnerungsdatum und -uhrzeit</span>
+        <input type="datetime-local" id="reminderDateInput" class="popover-text-input" />
+      </label>
+      <label class="settings-field">
+        <span class="settings-field-label">Erinnerungstext</span>
+        <span class="settings-field-hint">Wird zum Termin per Mail geschickt - manuell eingeben oder vorher Text in der Notiz markieren und dann auf "Erinnerung hinzufügen" klicken.</span>
+        <textarea id="reminderTextInput" class="popover-text-input reminder-text-input" rows="4" placeholder="Erinnerungstext"></textarea>
+      </label>
+      <div class="popover-form-actions">
+        <button type="button" class="popover-btn popover-btn-secondary" id="reminderCancelBtn">Abbrechen</button>
+        <button type="button" class="popover-btn popover-btn-primary" id="reminderSaveBtn">Speichern</button>
       </div>
     </div>
   </div>
