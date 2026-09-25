@@ -377,6 +377,9 @@
     settingsPopoverBackdrop: document.getElementById('settingsPopoverBackdrop'),
     settingsPopover: document.getElementById('settingsPopover'),
     trashVisibleCheckbox: document.getElementById('trashVisibleCheckbox'),
+    openReminderSettingsBtn: document.getElementById('openReminderSettingsBtn'),
+    reminderSettingsModalBackdrop: document.getElementById('reminderSettingsModalBackdrop'),
+    reminderSettingsModal: document.getElementById('reminderSettingsModal'),
     reminderEmailInput: document.getElementById('reminderEmailInput'),
     smtpHostInput: document.getElementById('smtpHostInput'),
     smtpPortInput: document.getElementById('smtpPortInput'),
@@ -4653,13 +4656,28 @@
     el.smtpPasswordInput.placeholder = settings.smtpPasswordSet ? 'Gespeichertes Passwort beibehalten' : 'Passwort';
   }
 
-  async function openSettingsPopover() {
+  // Kleines Fenster beim Benutzernamen: nur Papierkorb-Haken + Einstieg ins
+  // Erinnerungs-Mail-Fenster. Dockt (anders als das Erinnerungs-Fenster) direkt
+  // am Auslöser-Knopf an, da es kurz genug ist, um dort keinen Platz zu rauben.
+  function openSettingsPopover() {
     el.trashVisibleCheckbox.checked = trashVisible;
-    el.settingsSaveStatus.textContent = '';
     el.settingsPopoverBackdrop.hidden = false;
     const rect = el.sidebarUserBtn.getBoundingClientRect();
     el.settingsPopover.style.left = `${rect.left}px`;
     el.settingsPopover.style.bottom = `${window.innerHeight - rect.top + 6}px`;
+  }
+
+  function closeSettingsPopover() {
+    el.settingsPopoverBackdrop.hidden = true;
+  }
+
+  // Erinnerungs-Mail: eigenes, mittig zentriertes Fenster (siehe .modal-backdrop
+  // im CSS) statt eines am Knopf angedockten Popovers - für das längere
+  // Formular passender, unabhängig davon, wo der Auslöser gerade sitzt.
+  async function openReminderSettingsModal() {
+    closeSettingsPopover();
+    el.settingsSaveStatus.textContent = '';
+    el.reminderSettingsModalBackdrop.hidden = false;
     try {
       const res = await fetch('/api/settings');
       if (!res.ok) throw new Error('Laden fehlgeschlagen');
@@ -4669,11 +4687,11 @@
     }
   }
 
-  function closeSettingsPopover() {
-    el.settingsPopoverBackdrop.hidden = true;
+  function closeReminderSettingsModal() {
+    el.reminderSettingsModalBackdrop.hidden = true;
   }
 
-  async function saveSettingsPopover() {
+  async function saveReminderSettings() {
     const payload = {
       reminderEmail: el.reminderEmailInput.value.trim(),
       smtpHost: el.smtpHostInput.value.trim(),
@@ -4826,8 +4844,12 @@
     el.settingsPopoverBackdrop.addEventListener('click', (e) => {
       if (e.target === el.settingsPopoverBackdrop) closeSettingsPopover();
     });
-    el.settingsCancelBtn.addEventListener('click', closeSettingsPopover);
-    el.settingsSaveBtn.addEventListener('click', saveSettingsPopover);
+    el.openReminderSettingsBtn.addEventListener('click', openReminderSettingsModal);
+    el.reminderSettingsModalBackdrop.addEventListener('click', (e) => {
+      if (e.target === el.reminderSettingsModalBackdrop) closeReminderSettingsModal();
+    });
+    el.settingsCancelBtn.addEventListener('click', closeReminderSettingsModal);
+    el.settingsSaveBtn.addEventListener('click', saveReminderSettings);
     el.trashVisibleCheckbox.addEventListener('change', () => {
       trashVisible = el.trashVisibleCheckbox.checked;
       renderFolders();

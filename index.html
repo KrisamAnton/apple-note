@@ -280,9 +280,9 @@
     </div>
   </div>
 
-  <!-- Einstellungen (Papierkorb + E-Mail-Erinnerungen) -->
+  <!-- Einstellungen (kleines Fenster beim Benutzernamen) -->
   <div class="popover-backdrop" id="settingsPopoverBackdrop" hidden>
-    <div class="popover popover-form settings-popover" id="settingsPopover">
+    <div class="popover settings-popover" id="settingsPopover">
       <p class="popover-title">Einstellungen</p>
 
       <label class="popover-checkbox-item">
@@ -290,9 +290,16 @@
         <span>Papierkorb anzeigen</span>
       </label>
 
-      <div class="settings-divider"></div>
+      <button type="button" class="popover-item" id="openReminderSettingsBtn">
+        <span>Erinnerungs-Mail</span>
+      </button>
+    </div>
+  </div>
 
-      <p class="settings-section-title">E-Mail-Erinnerungen</p>
+  <!-- E-Mail-Erinnerungen: eigenes, mittig zentriertes Fenster -->
+  <div class="modal-backdrop" id="reminderSettingsModalBackdrop" hidden>
+    <div class="modal" id="reminderSettingsModal" role="dialog" aria-modal="true">
+      <p class="modal-title">Erinnerungs-Mail</p>
 
       <label class="settings-field">
         <span class="settings-field-label">Erinnerungs-E-Mail-Adresse</span>
@@ -301,11 +308,11 @@
       </label>
 
       <p class="settings-section-title settings-section-title-sub">Versand-Konto (SMTP)</p>
-      <p class="settings-field-hint">Zugangsdaten des E-Mail-Kontos, über das versendet wird. Beispiel für Outlook/live.de/hotmail: Server smtp-mail.outlook.com, Port 587, Verschlüsselung STARTTLS.</p>
+      <p class="settings-field-hint">Zugangsdaten des E-Mail-Kontos, über das versendet wird. Beispiel für GMX: Server mail.gmx.net, Port 587, Verschlüsselung STARTTLS.</p>
 
       <label class="settings-field">
         <span class="settings-field-label">SMTP-Server</span>
-        <input type="text" class="popover-text-input" id="smtpHostInput" placeholder="z. B. smtp-mail.outlook.com" autocomplete="off" />
+        <input type="text" class="popover-text-input" id="smtpHostInput" placeholder="z. B. mail.gmx.net" autocomplete="off" />
       </label>
 
       <div class="settings-field-row">
