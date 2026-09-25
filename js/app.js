@@ -1626,7 +1626,6 @@
     const note = currentNote();
     const obj = note && getObj(note, dragState.objId);
     if (!note || !obj) return;
-    if (!dragState.moved) console.log('[PDF-Debug] onObjectDragMove (erste Bewegung)', { objId: obj.id });
     lastDragPointer = { clientX: e.clientX, clientY: e.clientY };
     const dx = e.clientX - dragState.startX;
     const dy = e.clientY - dragState.startY;
@@ -1656,7 +1655,6 @@
   }
 
   function onObjectDragEnd(e) {
-    console.log('[PDF-Debug] onObjectDragEnd', { hatDragState: !!dragState, moved: dragState && dragState.moved });
     if (!dragState) return;
     const note = currentNote();
     const obj = note && getObj(note, dragState.objId);
@@ -3189,6 +3187,15 @@
     let w = BASE_SURFACE_W;
     let h = BASE_SURFACE_H;
     for (const obj of note.objects) {
+      // Inline-Objekte (Erinnerungs-Glocke/PDF-Symbol direkt im Text, siehe
+      // renderCanvas()) haben absichtlich kein x/y/w/h - ohne diesen Filter
+      // ergibt "obj.x + obj.w" hier "undefined + undefined" = NaN, was über
+      // Math.max() SURFACE_W/H (und darüber jede spätere nextPlacement()-
+      // Berechnung in dieser Notiz) dauerhaft auf NaN "vergiftet" - neu
+      // eingefügte Objekte landeten dadurch an einer nicht mehr gültigen,
+      // unverschiebbaren Position.
+      if (obj.inline) continue;
+      if (!Number.isFinite(obj.x) || !Number.isFinite(obj.y) || !Number.isFinite(obj.w) || !Number.isFinite(obj.h)) continue;
       w = Math.max(w, obj.x + obj.w + 40);
       h = Math.max(h, obj.y + obj.h + 40);
     }
@@ -4070,15 +4077,6 @@
     }
     let lastTapAt = 0;
     objEl.addEventListener('pointerdown', (e) => {
-      // Vorübergehende Diagnose-Ausgabe für ein Verschieben-Problem bei
-      // frisch eingefügten PDFs, das sich bisher nicht reproduzieren ließ
-      // (siehe Git-Historie) - hilft beim nächsten Auftreten, den Fehler
-      // über die Browser-Konsole (F12) einzugrenzen. Kann nach Klärung
-      // wieder entfernt werden.
-      console.log('[PDF-Debug] pointerdown', {
-        objId: obj.id, x: obj.x, y: obj.y, w: obj.w, h: obj.h,
-        pointerType: e.pointerType, dragStateVorher: dragState,
-      });
       const now = Date.now();
       if (now - lastTapAt < 400) {
         lastTapAt = 0;
@@ -4087,10 +4085,6 @@
       }
       lastTapAt = now;
       startObjectDragUnlessTouch(e, note, obj, objEl);
-      console.log('[PDF-Debug] nach startObjectDragUnlessTouch', {
-        dragStateNachher: dragState,
-        hatPointerCapture: objEl.hasPointerCapture ? objEl.hasPointerCapture(e.pointerId) : 'unbekannt',
-      });
     });
   }
 
@@ -4291,10 +4285,6 @@
       updateSurfaceSize(note);
       schedulePersist();
       renderNoteList();
-      console.log('[PDF-Debug] PDF eingefügt', {
-        id: objData.id, x: objData.x, y: objData.y, w: objData.w, h: objData.h,
-        variant: objData.variant, imDomVorhanden: !!findObjEl(objData.id),
-      });
     } catch (err) {
       console.error('PDF konnte nicht eingefügt werden:', err);
       alert('Diese PDF-Datei konnte nicht eingefügt werden.');
