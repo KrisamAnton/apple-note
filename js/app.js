@@ -1347,6 +1347,23 @@
   // sie stattdessen nach unten unter das Objekt (siehe CSS ".toolbar-below").
   const TOOLBAR_FLIP_THRESHOLD = 44;
 
+  // Selbstheilung für (aus bisher ungeklärter Ursache) fehlerhaft gespeicherte
+  // Objekte ohne gültige Position/Größe (z. B. "x": null statt einer Zahl):
+  // "nullpx" ist kein gültiger CSS-Wert und wird vom Browser stillschweigend
+  // ignoriert - das Objekt landete dadurch an einer undefinierten Stelle und
+  // ließ sich nicht mehr zuverlässig verschieben/vergrößern. Repariert den
+  // Datensatz direkt beim Rendern, statt bei jedem Laden erneut zu stolpern.
+  function ensureValidObjRect(obj, note) {
+    if (!Number.isFinite(obj.w) || obj.w <= 0) obj.w = 240;
+    if (!Number.isFinite(obj.h) || obj.h <= 0) obj.h = 60;
+    if (!Number.isFinite(obj.x) || !Number.isFinite(obj.y)) {
+      const { x, y } = nextPlacement(note, obj.w, obj.h);
+      obj.x = x;
+      obj.y = y;
+      schedulePersist();
+    }
+  }
+
   function applyObjRect(objEl, obj) {
     objEl.style.left = `${obj.x}px`;
     objEl.style.top = `${obj.y}px`;
@@ -1392,6 +1409,7 @@
     objEl.dataset.id = obj.id;
     objEl.dataset.type = obj.type;
     if (obj.type === 'text') objEl.dataset.style = obj.style || 'boxed';
+    ensureValidObjRect(obj, note);
     applyObjRect(objEl, obj);
 
     // Die Werkzeugleiste ist jetzt als kompletter grauer Balken (wie eine
