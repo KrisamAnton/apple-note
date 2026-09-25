@@ -4271,7 +4271,7 @@
     span.contentEditable = 'false';
     span.dataset.fileData = fileData;
     const pages = pageCount > 1 ? `PDF · ${pageCount} Seiten` : 'PDF';
-    span.title = `${fileName || 'PDF'} (${pages})`;
+    span.title = `${fileName || 'PDF'} (${pages}) – Klick zum Öffnen, Doppelklick zum Umbenennen`;
     span.innerHTML =
       '<span class="inline-pdf-chip-icon"><svg viewBox="0 0 20 20" class="icon" aria-hidden="true">' +
       '<path d="M5 2h7l3 3v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zm6.5.6V6H15L11.5 2.6z"/></svg></span>' +
@@ -4374,7 +4374,7 @@
       nameEl.removeEventListener('keydown', onKeydown);
       const newName = nameEl.textContent.trim();
       nameEl.textContent = commit && newName ? newName : original;
-      chip.title = nameEl.textContent;
+      chip.title = `${nameEl.textContent} – Klick zum Öffnen, Doppelklick zum Umbenennen`;
 
       const body = chip.closest('.canvas-text-body');
       const objEl = chip.closest('.canvas-object');
@@ -4425,7 +4425,7 @@
         openTimer = setTimeout(() => {
           openTimer = null;
           if (chip.dataset.fileData) window.open(chip.dataset.fileData, '_blank');
-        }, 300);
+        }, 400);
       });
     });
   }
