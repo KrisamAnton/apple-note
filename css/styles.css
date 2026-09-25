@@ -2494,6 +2494,49 @@ textarea.popover-text-input {
   height: 100%;
 }
 
+/* ---------- Inline-PDF-Datei-Symbol (direkt im Text) ---------- */
+
+.inline-pdf-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  vertical-align: -6px;
+  margin: 0 2px;
+  padding: 2px 8px 2px 3px;
+  border-radius: 12px;
+  background: var(--hover-bg);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  max-width: 220px;
+}
+
+.inline-pdf-chip-icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: var(--danger);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.inline-pdf-chip-icon .icon {
+  width: 11px;
+  height: 11px;
+  fill: currentColor;
+}
+
+.inline-pdf-chip-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ---------- Responsive: iPad Portrait / kleinere Screens ---------- */
 
 @media (max-width: 1000px) {

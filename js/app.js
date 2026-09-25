@@ -428,6 +428,7 @@
     textStylePopover: document.getElementById('textStylePopover'),
     pdfModePopoverBackdrop: document.getElementById('pdfModePopoverBackdrop'),
     pdfModePopover: document.getElementById('pdfModePopover'),
+    pdfInlineFileModeBtn: document.getElementById('pdfInlineFileModeBtn'),
     folderColorPopoverBackdrop: document.getElementById('folderColorPopoverBackdrop'),
     folderColorPopover: document.getElementById('folderColorPopover'),
     folderColorGrid: document.getElementById('folderColorGrid'),
@@ -1822,6 +1823,7 @@
     body.contentEditable = 'false';
     body.innerHTML = obj.html || '';
     enhanceInlineImages(body);
+    enhanceInlinePdfChips(body);
     syncInlineReminderMarkers(note, obj, body);
     updateTextEmptyState(body);
     applyFreeLinesAlignment(note, obj, body);
@@ -1888,6 +1890,15 @@
           const marker = findReminderMarkerAtPoint(body, ev.clientX, ev.clientY);
           if (marker) {
             marker.click();
+            return;
+          }
+          // Dieselbe Überlagerung würde sonst auch jeden Klick auf ein
+          // eingebettetes PDF-Datei-Symbol abfangen (siehe
+          // insertInlinePdfChip()), statt es per eigenem Klick-Handler
+          // (enhanceInlinePdfChips()) direkt zu öffnen.
+          const pdfChip = findInlinePdfChipAtPoint(body, ev.clientX, ev.clientY);
+          if (pdfChip) {
+            pdfChip.click();
             return;
           }
           enterTextEdit(note, obj, objEl, body, overlay, startX, startY);
@@ -4069,10 +4080,19 @@
   }
 
   let pdfModeResolve = null;
+  // Nur gesetzt, während gerade eine PDF-Datei ausgewählt wird, während der
+  // Cursor in einem Textobjekt stand (siehe Wiring von addPdfBtn) - merkt
+  // sich, wo das Datei-Symbol beim Einfügen in den Text eingesetzt werden
+  // soll. Muss VOR dem Öffnen des nativen Dateiauswahl-Fensters erfasst
+  // werden, da dieses den Fokus (und damit die Cursor-Position) sofort
+  // verliert, sobald es sich öffnet.
+  let pendingInlinePdfRange = null;
+  let pendingInlinePdfHost = null;
 
   function askPdfInsertMode() {
     return new Promise((resolve) => {
       pdfModeResolve = resolve;
+      el.pdfInlineFileModeBtn.hidden = !pendingInlinePdfHost;
       el.pdfModePopoverBackdrop.hidden = false;
     });
   }
@@ -4154,6 +4174,18 @@
 
       const fileData = await uploadFile(file);
 
+      if (mode === 'inline-file') {
+        if (pendingInlinePdfRange && pendingInlinePdfHost) {
+          insertInlinePdfChip(note, pendingInlinePdfHost, pendingInlinePdfRange, {
+            fileName: file.name,
+            fileData,
+            pageCount: pdf.numPages,
+          });
+          renderNoteList();
+        }
+        return;
+      }
+
       let src = null;
       let w = 240;
       let h = 60;
@@ -4186,6 +4218,74 @@
       console.error('PDF konnte nicht eingefügt werden:', err);
       alert('Diese PDF-Datei konnte nicht eingefügt werden.');
     }
+  }
+
+  // Kleines Datei-Symbol direkt im Text (statt einer frei auf der Fläche
+  // platzierten Karte) - bewegt sich als ganz normaler Inline-Bestandteil des
+  // Textes mit, wenn sich darüber etwas ändert. Braucht (anders als z. B. die
+  // Erinnerungen) kein eigenes note.objects-Eintrag: die Datei-Adresse steckt
+  // direkt im gespeicherten HTML des Textobjekts, genau wie bei eingebetteten
+  // Bildern (siehe enhanceInlineImages()).
+  function buildInlinePdfChipEl({ fileName, fileData, pageCount }) {
+    const span = document.createElement('span');
+    span.className = 'inline-pdf-chip';
+    span.contentEditable = 'false';
+    span.dataset.fileData = fileData;
+    const pages = pageCount > 1 ? `PDF · ${pageCount} Seiten` : 'PDF';
+    span.title = `${fileName || 'PDF'} (${pages})`;
+    span.innerHTML =
+      '<span class="inline-pdf-chip-icon"><svg viewBox="0 0 20 20" class="icon" aria-hidden="true">' +
+      '<path d="M5 2h7l3 3v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zm6.5.6V6H15L11.5 2.6z"/></svg></span>' +
+      `<span class="inline-pdf-chip-name">${escapeHtml(fileName || 'PDF')}</span>`;
+    return span;
+  }
+
+  function insertInlinePdfChip(note, hostTextEdit, range, fileInfo) {
+    const { body } = hostTextEdit;
+    const chip = buildInlinePdfChipEl(fileInfo);
+    range.collapse(true);
+    range.insertNode(chip);
+
+    const after = document.createRange();
+    after.setStartAfter(chip);
+    after.collapse(true);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(after);
+
+    enhanceInlinePdfChips(body);
+    saveTextObjContent(note, hostTextEdit.obj, body);
+    // Ohne das bleibt die Box in ihrer alten (kleineren) Höhe stehen und der
+    // neu eingefügte Chip landet unsichtbar außerhalb des sichtbaren/
+    // scrollbaren Bereichs - normalerweise übernimmt das der 'input'-Handler,
+    // der hier aber nicht ausgelöst wird (die Einfügung passiert nicht über
+    // eine echte Tastatureingabe).
+    growFreeTextToFit(hostTextEdit.obj, hostTextEdit.objEl, body);
+    updateOverflowIndicators(hostTextEdit.objEl, body);
+  }
+
+  // Wie enhanceInlineImages(): rohes HTML (z. B. beim Laden einer Notiz)
+  // bringt keine Klick-Handler mit, die müssen nach jedem Aufbau neu gesetzt
+  // werden. Eine reine JS-Eigenschaft (nicht dataset/HTML-Attribut) verhindert
+  // ein doppeltes Anhängen, ohne mit ins gespeicherte HTML zu wandern.
+  function enhanceInlinePdfChips(body) {
+    body.querySelectorAll('.inline-pdf-chip').forEach((chip) => {
+      if (chip.pdfChipWired) return;
+      chip.pdfChipWired = true;
+      chip.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (chip.dataset.fileData) window.open(chip.dataset.fileData, '_blank');
+      });
+    });
+  }
+
+  function findInlinePdfChipAtPoint(body, x, y) {
+    const chips = body.querySelectorAll('.inline-pdf-chip');
+    for (const c of chips) {
+      const r = c.getBoundingClientRect();
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return c;
+    }
+    return null;
   }
 
   // Farbe/Kürzel für den generischen Datei-Chip, angelehnt an die Farben der
@@ -4843,6 +4943,13 @@
 
     syncInlineReminderMarkers(note, hostTextEdit.obj, body);
     saveTextObjContent(note, hostTextEdit.obj, body);
+    // Ohne das bleibt die Box in ihrer alten (kleineren) Höhe stehen und das
+    // neu eingefügte Symbol landet ggf. unsichtbar außerhalb des sichtbaren/
+    // scrollbaren Bereichs - normalerweise übernimmt das der 'input'-Handler,
+    // der hier aber nicht ausgelöst wird (die Einfügung passiert nicht über
+    // eine echte Tastatureingabe).
+    growFreeTextToFit(hostTextEdit.obj, hostTextEdit.objEl, body);
+    updateOverflowIndicators(hostTextEdit.objEl, body);
   }
 
   // Gleicht die im Text vorhandenen Glocken-Symbole (nach jeder Bearbeitung UND
@@ -5172,7 +5279,27 @@
       if (file) addImageObjectFromFile(file);
       el.imageFileInput.value = '';
     });
-    el.addPdfBtn.addEventListener('click', () => el.pdfFileInput.click());
+    // wireRibbonBtn (statt eines einfachen click-Listeners) verhindert, dass
+    // schon der Klick auf den Knopf selbst (per Fokuswechsel auf mousedown)
+    // das gerade bearbeitete Textfeld verlässt - sonst wäre activeTextEdit
+    // hier unten bereits wieder null, bevor die Cursor-Position ausgelesen
+    // werden kann.
+    wireRibbonBtn(el.addPdfBtn, () => {
+      // Muss VOR dem Öffnen des nativen Dateiauswahl-Fensters erfasst werden
+      // (siehe pendingInlinePdfRange) - das Fenster nimmt sofort den Fokus
+      // weg, damit wäre die Cursor-Position sonst schon verloren.
+      pendingInlinePdfRange = null;
+      pendingInlinePdfHost = null;
+      if (activeTextEdit) {
+        const sel = window.getSelection();
+        const liveRange = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
+        if (liveRange && activeTextEdit.body.contains(liveRange.commonAncestorContainer)) {
+          pendingInlinePdfRange = liveRange.cloneRange();
+          pendingInlinePdfHost = activeTextEdit;
+        }
+      }
+      el.pdfFileInput.click();
+    });
     el.pdfFileInput.addEventListener('change', () => {
       const file = el.pdfFileInput.files[0];
       if (file) addPdfObjectFromFile(file);
