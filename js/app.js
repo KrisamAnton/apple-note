@@ -36,6 +36,7 @@
     key: '<svg viewBox="0 0 20 20"><path d="M8 2a4.5 4.5 0 0 0-4.24 6h-.01L1 10.75V15h1.5v-1.5H4V12h1.5v-1.5h1.28A4.5 4.5 0 1 0 8 2zm3.3 4.5a1.3 1.3 0 1 1 0-2.6 1.3 1.3 0 0 1 0 2.6z" fill="currentColor"/></svg>',
     restore: '<svg viewBox="0 0 20 20"><path d="M4 10a6 6 0 1 0 1.9-4.36" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4.2 3.8v3.6h3.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     bell: '<svg viewBox="0 0 20 20"><path d="M10 2a1 1 0 0 1 1 1v.6a5.5 5.5 0 0 1 4 5.3v2.9l1.3 2.1c.3.5-.05 1.1-.6 1.1H12a2 2 0 0 1-4 0H4.3c-.55 0-.9-.6-.6-1.1L5 11.8V8.9a5.5 5.5 0 0 1 4-5.3V3a1 1 0 0 1 1-1z" fill="currentColor"/></svg>',
+    textCursor: '<svg viewBox="0 0 20 20"><path d="M8.5 3h3v1.6h-.5A1.4 1.4 0 0 0 9.6 6v8a1.4 1.4 0 0 0 1.4 1.4h.5V17h-3a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3z" fill="currentColor"/><rect x="3.5" y="3" width="3.5" height="1.6" fill="currentColor"/><rect x="3.5" y="15.4" width="3.5" height="1.6" fill="currentColor"/><rect x="13" y="3" width="3.5" height="1.6" fill="currentColor"/><rect x="13" y="15.4" width="3.5" height="1.6" fill="currentColor"/></svg>',
   };
 
   const MARKER_COLORS = [
@@ -1272,6 +1273,9 @@
   let dragState = null;
   let activeTextEdit = null; // { note, obj, objEl, body, overlay } – Formatierungs-Buttons sitzen global im Ribbon
   let lastSelectionRange = null;
+  // Überlebt (kurz) einen Blur - siehe exitTextEdit()/convertFloatingPdfToInline().
+  let lastTextEditContext = null;
+  let lastTextEditRange = null;
   let headingTargetNode = null;
   let inkStrokeState = null;
   let drawColor = '#1c1c1e';
@@ -1404,6 +1408,11 @@
     }
     if ((obj.type === 'pdf' && obj.variant === 'file') || obj.type === 'file') {
       mainToolbar.appendChild(makeToolbarBtn(ICONS.rename, false, () => startRenameFileAttachment(obj, objEl), 'Umbenennen'));
+    }
+    if (obj.type === 'pdf' && obj.fileData) {
+      mainToolbar.appendChild(
+        makeToolbarBtn(ICONS.textCursor, false, () => convertFloatingPdfToInline(note, obj, objEl), 'An der Cursor-Stelle im Text platzieren')
+      );
     }
     if (obj.type === 'audio') {
       mainToolbar.appendChild(makeToolbarBtn(ICONS.transcript, false, () => startTranscription(note, obj, objEl), 'In Text umwandeln'));
@@ -2557,6 +2566,18 @@
     for (const btn of selectionFormatBtns()) btn.disabled = true;
     for (const btn of editingOnlyFormatBtns()) btn.disabled = true;
     if (activeTextEdit && activeTextEdit.obj.id === obj.id) {
+      // Bewusst kurz "über den Blur hinweg" gemerkt (siehe
+      // convertFloatingPdfToInline()): um eine schon vorhandene PDF-Datei per
+      // Werkzeugleisten-Knopf an dieser Stelle einzufügen, muss man erst
+      // dorthin klicken, um das PDF-Objekt auszuwählen (dessen Werkzeugleiste
+      // sonst gar nicht sichtbar ist) - genau dieser Klick verlässt aber
+      // bereits das Textfeld. Ohne dieses "Nachleben" wäre die Cursor-Position
+      // in dem Moment schon unwiederbringlich verloren.
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0 && body.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+        lastTextEditRange = sel.getRangeAt(0).cloneRange();
+        lastTextEditContext = activeTextEdit;
+      }
       activeTextEdit = null;
       lastSelectionRange = null;
     }
@@ -4262,6 +4283,56 @@
     // eine echte Tastatureingabe).
     growFreeTextToFit(hostTextEdit.obj, hostTextEdit.objEl, body);
     updateOverflowIndicators(hostTextEdit.objEl, body);
+  }
+
+  // Wandelt eine bereits frei auf der Fläche platzierte PDF-Datei (Karte oder
+  // Datei-Symbol) in ein Inline-Symbol an der aktuellen Cursor-Stelle im Text
+  // um - für PDFs, die man erst im Nachhinein "aus dem Weg" direkt in den Text
+  // stellen möchte. Braucht dafür einen gerade aktiv bearbeiteten Text, in den
+  // eingefügt werden kann - ohne den lässt sich schließlich nicht wissen, WO
+  // im Text das Symbol landen soll.
+  function convertFloatingPdfToInline(note, obj, objEl) {
+    let hostTextEdit = activeTextEdit;
+    let range = null;
+    const sel = window.getSelection();
+    const liveRange = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
+    if (hostTextEdit && liveRange && hostTextEdit.body.contains(liveRange.commonAncestorContainer)) {
+      range = liveRange.cloneRange();
+    } else if (lastTextEditContext && lastTextEditRange && document.body.contains(lastTextEditContext.body)) {
+      // Das Auswählen des PDF-Objekts (nötig, damit seine Werkzeugleiste
+      // überhaupt sichtbar wird) hat den Text bereits verlassen - die zuletzt
+      // dort gemerkte Position wird stattdessen verwendet (siehe exitTextEdit()).
+      hostTextEdit = lastTextEditContext;
+      range = lastTextEditRange.cloneRange();
+    }
+    if (!hostTextEdit || !range) {
+      alert('Klicke zuerst in den Text an der gewünschten Stelle, dann noch einmal auf dieses Symbol.');
+      return;
+    }
+    insertInlinePdfChip(note, hostTextEdit, range, {
+      fileName: obj.fileName,
+      fileData: obj.fileData,
+      pageCount: obj.pageCount,
+    });
+    // Wie deleteObject(), aber bewusst ohne dessen "Objekt löschen?"-
+    // Sicherheitsabfrage - das Umwandeln ist ein einzelner, gewollter Klick,
+    // kein versehentliches Löschen.
+    for (const o of note.objects) {
+      if (o.parentId === obj.id) o.parentId = null;
+    }
+    for (const s of note.ink.strokes) {
+      if (s.parentId === obj.id) {
+        s.points = strokeAbsolutePoints(note, s);
+        s.parentId = null;
+      }
+    }
+    note.objects = note.objects.filter((o) => o.id !== obj.id);
+    if (selectedObjectId === obj.id) selectedObjectId = null;
+    objEl.remove();
+    note.updatedAt = Date.now();
+    schedulePersist();
+    updateSurfaceSize(note);
+    renderNoteList();
   }
 
   // Macht den angezeigten Namen eines eingebetteten PDF-Symbols direkt
