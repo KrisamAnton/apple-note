@@ -4264,17 +4264,79 @@
     updateOverflowIndicators(hostTextEdit.objEl, body);
   }
 
+  // Macht den angezeigten Namen eines eingebetteten PDF-Symbols direkt
+  // editierbar (Enter/Wegklicken übernimmt, Escape verwirft) - ändert nur den
+  // angezeigten Namen, nicht die Original-Datei auf dem Server. Analog zu
+  // startRenameFileAttachment() für frei platzierte PDF-/Datei-Anhänge, hier
+  // aber ohne note.objects-Eintrag: die Änderung landet direkt im
+  // gespeicherten HTML des Textobjekts.
+  function startRenameInlinePdfChip(chip) {
+    const nameEl = chip.querySelector('.inline-pdf-chip-name');
+    if (!nameEl) return;
+    const original = nameEl.textContent;
+    nameEl.contentEditable = 'true';
+    nameEl.spellcheck = false;
+    nameEl.focus();
+    document.execCommand('selectAll', false, null);
+
+    const finish = (commit) => {
+      nameEl.contentEditable = 'false';
+      nameEl.removeEventListener('blur', onBlur);
+      nameEl.removeEventListener('keydown', onKeydown);
+      const newName = nameEl.textContent.trim();
+      nameEl.textContent = commit && newName ? newName : original;
+      chip.title = nameEl.textContent;
+
+      const body = chip.closest('.canvas-text-body');
+      const objEl = chip.closest('.canvas-object');
+      const note = currentNote();
+      const textObj = note && objEl && note.objects.find((o) => o.id === objEl.dataset.id);
+      if (body && textObj) saveTextObjContent(note, textObj, body);
+    };
+    const onBlur = () => finish(true);
+    const onKeydown = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        nameEl.blur();
+      } else if (e.key === 'Escape') {
+        finish(false);
+      }
+    };
+    nameEl.addEventListener('blur', onBlur);
+    nameEl.addEventListener('keydown', onKeydown);
+  }
+
   // Wie enhanceInlineImages(): rohes HTML (z. B. beim Laden einer Notiz)
   // bringt keine Klick-Handler mit, die müssen nach jedem Aufbau neu gesetzt
   // werden. Eine reine JS-Eigenschaft (nicht dataset/HTML-Attribut) verhindert
   // ein doppeltes Anhängen, ohne mit ins gespeicherte HTML zu wandern.
+  //
+  // Einfacher Klick öffnet die Datei, Doppelklick benennt sie um. Kein
+  // natives "dblclick" möglich: ein Klick, der durch die Verschiebe-
+  // Überlagerung hindurch weitergereicht wird (siehe findInlinePdfChipAtPoint()
+  // in buildTextContent()), löst hier nur ein einzelnes "click" aus - der
+  // Browser bekommt die zwei echten Klicks nie direkt auf demselben Element zu
+  // sehen, um selbst ein "dblclick" daraus zu machen. Deshalb wie bei der
+  // Ordner-Umbenennung (siehe lastFolderTapAt/-Id) zeitbasiert selbst erkannt:
+  // öffnet mit kurzer Verzögerung, außer ein zweiter Klick trifft rechtzeitig
+  // ein - dann wird daraus das Umbenennen statt des Öffnens.
   function enhanceInlinePdfChips(body) {
     body.querySelectorAll('.inline-pdf-chip').forEach((chip) => {
       if (chip.pdfChipWired) return;
       chip.pdfChipWired = true;
+      let openTimer = null;
       chip.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (chip.dataset.fileData) window.open(chip.dataset.fileData, '_blank');
+        if (openTimer) {
+          clearTimeout(openTimer);
+          openTimer = null;
+          startRenameInlinePdfChip(chip);
+          return;
+        }
+        openTimer = setTimeout(() => {
+          openTimer = null;
+          if (chip.dataset.fileData) window.open(chip.dataset.fileData, '_blank');
+        }, 300);
       });
     });
   }
