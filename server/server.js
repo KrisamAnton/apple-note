@@ -10,6 +10,7 @@ const PROJECT_ROOT = path.join(__dirname, '..');
 const DATA_DIR = process.env.DATA_DIR || path.join(PROJECT_ROOT, 'data');
 const FILES_DIR = path.join(DATA_DIR, 'files');
 const STATE_FILE = path.join(DATA_DIR, 'state.json');
+const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 const PORT = process.env.PORT || 3000;
 
 fs.mkdirSync(FILES_DIR, { recursive: true });
@@ -68,6 +69,78 @@ app.put('/api/state', saveState);
 // Zusätzlich als POST erreichbar, weil navigator.sendBeacon() (fürs zuverlässige
 // Speichern beim Schließen der Seite) ausschließlich POST-Requests senden kann.
 app.post('/api/state', saveState);
+
+// ---------- Einstellungen (Papierkorb-Sichtbarkeit lebt nur im Frontend;
+// hier nur, was dauerhaft gespeichert werden muss: E-Mail-Erinnerungen) ----------
+
+const DEFAULT_SETTINGS = {
+  reminderEmail: '',
+  smtpHost: '',
+  smtpPort: null,
+  smtpSecure: 'starttls',
+  smtpUser: '',
+  smtpFromName: '',
+  smtpPassword: '',
+};
+
+async function readSettingsFile() {
+  try {
+    const raw = await fs.promises.readFile(SETTINGS_FILE, 'utf8');
+    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+  } catch (err) {
+    if (err.code === 'ENOENT') return { ...DEFAULT_SETTINGS };
+    throw err;
+  }
+}
+
+// Das SMTP-Passwort verlässt den Server nie Richtung Browser - sonst wäre es
+// z. B. über die Netzwerk-Ansicht der Browser-Werkzeuge einsehbar. Das
+// Frontend erfährt nur, ob überhaupt eines gespeichert ist (siehe
+// fillSettingsForm() in app.js), damit das Eingabefeld leer bleiben und trotzdem
+// "schon gesetzt" anzeigen kann.
+function sanitizeSettingsForClient(settings) {
+  const { smtpPassword, ...rest } = settings;
+  return { ...rest, smtpPasswordSet: !!smtpPassword };
+}
+
+app.get('/api/settings', async (req, res) => {
+  try {
+    res.json(sanitizeSettingsForClient(await readSettingsFile()));
+  } catch (err) {
+    console.error('Konnte Einstellungen nicht lesen:', err);
+    res.status(500).json({ error: 'Lesen fehlgeschlagen' });
+  }
+});
+
+app.put('/api/settings', async (req, res) => {
+  try {
+    const current = await readSettingsFile();
+    const body = req.body || {};
+    const next = {
+      ...current,
+      reminderEmail: typeof body.reminderEmail === 'string' ? body.reminderEmail : current.reminderEmail,
+      smtpHost: typeof body.smtpHost === 'string' ? body.smtpHost : current.smtpHost,
+      smtpPort: typeof body.smtpPort === 'number' ? body.smtpPort : (body.smtpPort === null ? null : current.smtpPort),
+      smtpSecure: typeof body.smtpSecure === 'string' ? body.smtpSecure : current.smtpSecure,
+      smtpUser: typeof body.smtpUser === 'string' ? body.smtpUser : current.smtpUser,
+      smtpFromName: typeof body.smtpFromName === 'string' ? body.smtpFromName : current.smtpFromName,
+    };
+    // Nur überschreiben, wenn tatsächlich ein neues Passwort mitgeschickt wurde
+    // (siehe saveSettingsPopover() in app.js) - ein leeres Feld soll das
+    // bestehende Passwort nicht löschen.
+    if (typeof body.smtpPassword === 'string' && body.smtpPassword) {
+      next.smtpPassword = body.smtpPassword;
+    }
+    const json = JSON.stringify(next, null, 2);
+    const tmpFile = `${SETTINGS_FILE}.${process.pid}.${Date.now()}.tmp`;
+    await fs.promises.writeFile(tmpFile, json);
+    await fs.promises.rename(tmpFile, SETTINGS_FILE);
+    res.json(sanitizeSettingsForClient(next));
+  } catch (err) {
+    console.error('Konnte Einstellungen nicht speichern:', err);
+    res.status(500).json({ error: 'Speichern fehlgeschlagen' });
+  }
+});
 
 const upload = multer({
   storage: multer.diskStorage({

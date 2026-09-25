@@ -280,13 +280,72 @@
     </div>
   </div>
 
-  <!-- Papierkorb ein-/ausblenden -->
-  <div class="popover-backdrop" id="trashTogglePopoverBackdrop" hidden>
-    <div class="popover" id="trashTogglePopover">
+  <!-- Einstellungen (Papierkorb + E-Mail-Erinnerungen) -->
+  <div class="popover-backdrop" id="settingsPopoverBackdrop" hidden>
+    <div class="popover popover-form settings-popover" id="settingsPopover">
+      <p class="popover-title">Einstellungen</p>
+
       <label class="popover-checkbox-item">
         <input type="checkbox" id="trashVisibleCheckbox" />
         <span>Papierkorb anzeigen</span>
       </label>
+
+      <div class="settings-divider"></div>
+
+      <p class="settings-section-title">E-Mail-Erinnerungen</p>
+
+      <label class="settings-field">
+        <span class="settings-field-label">Erinnerungs-E-Mail-Adresse</span>
+        <span class="settings-field-hint">An diese Adresse werden fällige Erinnerungen aus den Notizen geschickt.</span>
+        <input type="email" class="popover-text-input" id="reminderEmailInput" placeholder="name@beispiel.at" autocomplete="off" />
+      </label>
+
+      <p class="settings-section-title settings-section-title-sub">Versand-Konto (SMTP)</p>
+      <p class="settings-field-hint">Zugangsdaten des E-Mail-Kontos, über das versendet wird. Beispiel für Outlook/live.de/hotmail: Server smtp-mail.outlook.com, Port 587, Verschlüsselung STARTTLS.</p>
+
+      <label class="settings-field">
+        <span class="settings-field-label">SMTP-Server</span>
+        <input type="text" class="popover-text-input" id="smtpHostInput" placeholder="z. B. smtp-mail.outlook.com" autocomplete="off" />
+      </label>
+
+      <div class="settings-field-row">
+        <label class="settings-field">
+          <span class="settings-field-label">Port</span>
+          <input type="number" class="popover-text-input" id="smtpPortInput" placeholder="587" autocomplete="off" />
+        </label>
+        <label class="settings-field">
+          <span class="settings-field-label">Verschlüsselung</span>
+          <select class="popover-text-input" id="smtpSecureSelect">
+            <option value="starttls">STARTTLS (empfohlen)</option>
+            <option value="ssl">SSL/TLS</option>
+            <option value="none">Keine</option>
+          </select>
+        </label>
+      </div>
+
+      <label class="settings-field">
+        <span class="settings-field-label">Benutzername</span>
+        <span class="settings-field-hint">Meist deine volle E-Mail-Adresse.</span>
+        <input type="text" class="popover-text-input" id="smtpUserInput" placeholder="name@beispiel.at" autocomplete="off" />
+      </label>
+
+      <label class="settings-field">
+        <span class="settings-field-label">Passwort</span>
+        <span class="settings-field-hint">Ist dein Konto zusätzlich abgesichert (2-Faktor/2FA), brauchst du ein eigenes "App-Passwort" statt deines normalen Passworts. Leer lassen, um das gespeicherte Passwort zu behalten.</span>
+        <input type="password" class="popover-text-input" id="smtpPasswordInput" placeholder="Passwort" autocomplete="new-password" />
+      </label>
+
+      <label class="settings-field">
+        <span class="settings-field-label">Absendername (optional)</span>
+        <input type="text" class="popover-text-input" id="smtpFromNameInput" placeholder="z. B. KrisNote Erinnerungen" autocomplete="off" />
+      </label>
+
+      <p class="settings-save-status" id="settingsSaveStatus"></p>
+
+      <div class="popover-form-actions">
+        <button type="button" class="popover-btn popover-btn-secondary" id="settingsCancelBtn">Abbrechen</button>
+        <button type="button" class="popover-btn popover-btn-primary" id="settingsSaveBtn">Speichern</button>
+      </div>
     </div>
   </div>
 

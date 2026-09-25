@@ -374,9 +374,19 @@
     newFolderBtn: document.getElementById('newFolderBtn'),
     logoutBtn: document.getElementById('logoutBtn'),
     sidebarUserBtn: document.getElementById('sidebarUserBtn'),
-    trashTogglePopoverBackdrop: document.getElementById('trashTogglePopoverBackdrop'),
-    trashTogglePopover: document.getElementById('trashTogglePopover'),
+    settingsPopoverBackdrop: document.getElementById('settingsPopoverBackdrop'),
+    settingsPopover: document.getElementById('settingsPopover'),
     trashVisibleCheckbox: document.getElementById('trashVisibleCheckbox'),
+    reminderEmailInput: document.getElementById('reminderEmailInput'),
+    smtpHostInput: document.getElementById('smtpHostInput'),
+    smtpPortInput: document.getElementById('smtpPortInput'),
+    smtpSecureSelect: document.getElementById('smtpSecureSelect'),
+    smtpUserInput: document.getElementById('smtpUserInput'),
+    smtpPasswordInput: document.getElementById('smtpPasswordInput'),
+    smtpFromNameInput: document.getElementById('smtpFromNameInput'),
+    settingsSaveStatus: document.getElementById('settingsSaveStatus'),
+    settingsCancelBtn: document.getElementById('settingsCancelBtn'),
+    settingsSaveBtn: document.getElementById('settingsSaveBtn'),
     noteList: document.getElementById('noteList'),
     noteCount: document.getElementById('noteCount'),
     collapseAllBtn: document.getElementById('collapseAllBtn'),
@@ -4627,6 +4637,70 @@
     closeCredentialPopover();
   }
 
+  // ---------- Einstellungen (Papierkorb + E-Mail-Erinnerungen) ----------
+
+  function fillSettingsForm(settings) {
+    el.reminderEmailInput.value = settings.reminderEmail || '';
+    el.smtpHostInput.value = settings.smtpHost || '';
+    el.smtpPortInput.value = settings.smtpPort || '';
+    el.smtpSecureSelect.value = settings.smtpSecure || 'starttls';
+    el.smtpUserInput.value = settings.smtpUser || '';
+    el.smtpFromNameInput.value = settings.smtpFromName || '';
+    // Das Passwort wird aus Sicherheitsgründen nie vom Server zurückgeschickt -
+    // nur der Platzhalter verrät, ob schon eines gespeichert ist. Leer lassen
+    // beim Speichern behält das bestehende Passwort bei (siehe saveSettingsPopover()).
+    el.smtpPasswordInput.value = '';
+    el.smtpPasswordInput.placeholder = settings.smtpPasswordSet ? 'Gespeichertes Passwort beibehalten' : 'Passwort';
+  }
+
+  async function openSettingsPopover() {
+    el.trashVisibleCheckbox.checked = trashVisible;
+    el.settingsSaveStatus.textContent = '';
+    el.settingsPopoverBackdrop.hidden = false;
+    const rect = el.sidebarUserBtn.getBoundingClientRect();
+    el.settingsPopover.style.left = `${rect.left}px`;
+    el.settingsPopover.style.bottom = `${window.innerHeight - rect.top + 6}px`;
+    try {
+      const res = await fetch('/api/settings');
+      if (!res.ok) throw new Error('Laden fehlgeschlagen');
+      fillSettingsForm(await res.json());
+    } catch (err) {
+      el.settingsSaveStatus.textContent = 'Einstellungen konnten nicht geladen werden.';
+    }
+  }
+
+  function closeSettingsPopover() {
+    el.settingsPopoverBackdrop.hidden = true;
+  }
+
+  async function saveSettingsPopover() {
+    const payload = {
+      reminderEmail: el.reminderEmailInput.value.trim(),
+      smtpHost: el.smtpHostInput.value.trim(),
+      smtpPort: el.smtpPortInput.value.trim() ? Number(el.smtpPortInput.value.trim()) : null,
+      smtpSecure: el.smtpSecureSelect.value,
+      smtpUser: el.smtpUserInput.value.trim(),
+      smtpFromName: el.smtpFromNameInput.value.trim(),
+    };
+    // Nur mitschicken, wenn tatsächlich ein neues Passwort eingegeben wurde -
+    // sonst würde ein leeres Feld das gespeicherte Passwort löschen.
+    if (el.smtpPasswordInput.value) payload.smtpPassword = el.smtpPasswordInput.value;
+
+    el.settingsSaveStatus.textContent = 'Speichere …';
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error('Speichern fehlgeschlagen');
+      fillSettingsForm(await res.json());
+      el.settingsSaveStatus.textContent = 'Gespeichert.';
+    } catch (err) {
+      el.settingsSaveStatus.textContent = 'Fehler beim Speichern - bitte erneut versuchen.';
+    }
+  }
+
   // ---------- Responsive view state (mobile) ----------
 
   function goToView(view) {
@@ -4748,16 +4822,12 @@
     // Noch ohne echte Anmeldung (siehe README) - der Knopf lädt die Seite
     // vorerst nur neu, damit er sich nicht funktionslos anfühlt.
     el.logoutBtn.addEventListener('click', () => window.location.reload());
-    el.sidebarUserBtn.addEventListener('click', () => {
-      el.trashVisibleCheckbox.checked = trashVisible;
-      el.trashTogglePopoverBackdrop.hidden = false;
-      const rect = el.sidebarUserBtn.getBoundingClientRect();
-      el.trashTogglePopover.style.left = `${rect.left}px`;
-      el.trashTogglePopover.style.bottom = `${window.innerHeight - rect.top + 6}px`;
+    el.sidebarUserBtn.addEventListener('click', openSettingsPopover);
+    el.settingsPopoverBackdrop.addEventListener('click', (e) => {
+      if (e.target === el.settingsPopoverBackdrop) closeSettingsPopover();
     });
-    el.trashTogglePopoverBackdrop.addEventListener('click', (e) => {
-      if (e.target === el.trashTogglePopoverBackdrop) el.trashTogglePopoverBackdrop.hidden = true;
-    });
+    el.settingsCancelBtn.addEventListener('click', closeSettingsPopover);
+    el.settingsSaveBtn.addEventListener('click', saveSettingsPopover);
     el.trashVisibleCheckbox.addEventListener('change', () => {
       trashVisible = el.trashVisibleCheckbox.checked;
       renderFolders();
