@@ -46,22 +46,64 @@ app.get('/api/state', (req, res) => {
   });
 });
 
-function saveState(req, res) {
-  const json = JSON.stringify(req.body);
-  const tmpFile = `${STATE_FILE}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFile(tmpFile, json, (err) => {
-    if (err) {
-      console.error('Konnte Notizen nicht speichern:', err);
-      return res.status(500).json({ error: 'Speichern fehlgeschlagen' });
+// Der Browser hält seinen eigenen state.json-Stand nur im Arbeitsspeicher und
+// schickt ihn bei jeder Änderung komplett neu (kein laufender Abgleich mit
+// dem Server). Setzt der Erinnerungs-Hintergrund-Check währenddessen
+// unabhängig "sentAt" auf der Festplatte, würde ein Browser-Speichern kurz
+// danach (z. B. weil der Nutzer währenddessen irgendwo anders etwas
+// bearbeitet) diesen Stand mit seiner noch veralteten Kopie (sentAt fehlt
+// noch) wieder überschreiben - die Erinnerung würde eine Minute später vom
+// nächsten Check fälschlich für "noch offen" gehalten und ein zweites Mal
+// verschickt. Deshalb: ein bereits auf der Festplatte gesetztes "sentAt"
+// bleibt erhalten, wenn der eingehende Stand für dieselbe Erinnerung sonst
+// unverändert ist (Datum/Titel/Text gleich) - nur eine echte Bearbeitung
+// (siehe saveReminderPopover() im Frontend, das sentAt bewusst zurücksetzt)
+// darf es wieder löschen.
+function preserveReminderSentAt(incoming, existing) {
+  if (!existing || !Array.isArray(existing.notes) || !Array.isArray(incoming.notes)) return;
+  const existingNotesById = new Map(existing.notes.map((n) => [n.id, n]));
+  for (const note of incoming.notes) {
+    const existingNote = existingNotesById.get(note.id);
+    if (!existingNote || !Array.isArray(existingNote.objects) || !Array.isArray(note.objects)) continue;
+    const existingObjsById = new Map(existingNote.objects.map((o) => [o.id, o]));
+    for (const obj of note.objects) {
+      if (obj.type !== 'reminder' || obj.sentAt) continue;
+      const existingObj = existingObjsById.get(obj.id);
+      if (!existingObj || !existingObj.sentAt) continue;
+      const unchanged =
+        existingObj.remindAt === obj.remindAt &&
+        existingObj.title === obj.title &&
+        existingObj.text === obj.text;
+      if (unchanged) obj.sentAt = existingObj.sentAt;
     }
-    // Atomares Umbenennen: verhindert eine kaputte/halb geschriebene state.json,
-    // falls der Server genau während des Schreibens abstürzt oder neu startet.
-    fs.rename(tmpFile, STATE_FILE, (renameErr) => {
-      if (renameErr) {
-        console.error('Konnte Notizen nicht speichern:', renameErr);
+  }
+}
+
+function saveState(req, res) {
+  fs.readFile(STATE_FILE, 'utf8', (readErr, raw) => {
+    if (!readErr) {
+      try {
+        preserveReminderSentAt(req.body, JSON.parse(raw));
+      } catch (e) {
+        // Beschädigte/alte state.json - ohne Abgleich einfach normal weiterspeichern.
+      }
+    }
+    const json = JSON.stringify(req.body);
+    const tmpFile = `${STATE_FILE}.${process.pid}.${Date.now()}.tmp`;
+    fs.writeFile(tmpFile, json, (err) => {
+      if (err) {
+        console.error('Konnte Notizen nicht speichern:', err);
         return res.status(500).json({ error: 'Speichern fehlgeschlagen' });
       }
-      res.json({ ok: true });
+      // Atomares Umbenennen: verhindert eine kaputte/halb geschriebene state.json,
+      // falls der Server genau während des Schreibens abstürzt oder neu startet.
+      fs.rename(tmpFile, STATE_FILE, (renameErr) => {
+        if (renameErr) {
+          console.error('Konnte Notizen nicht speichern:', renameErr);
+          return res.status(500).json({ error: 'Speichern fehlgeschlagen' });
+        }
+        res.json({ ok: true });
+      });
     });
   });
 }
