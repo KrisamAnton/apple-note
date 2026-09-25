@@ -2477,9 +2477,9 @@ textarea.popover-text-input {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
-  vertical-align: -7px;
+  width: 18px;
+  height: 18px;
+  vertical-align: -3px;
   margin: 0 2px;
   cursor: pointer;
   color: var(--danger);
@@ -2497,6 +2497,7 @@ textarea.popover-text-input {
 /* ---------- Inline-PDF-Datei-Symbol (direkt im Text) ---------- */
 
 .inline-pdf-chip {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -2506,8 +2507,58 @@ textarea.popover-text-input {
   border-radius: 14px;
   background: var(--hover-bg);
   border: 1px solid var(--border);
-  cursor: pointer;
+  cursor: default;
   max-width: 260px;
+}
+
+/* Erscheint nur beim Überfahren mit der Maus, damit man die Datei auswählen
+   (öffnen/umbenennen) kann, statt dass ein einfacher Klick auf das Symbol
+   selbst schon die Datei öffnet. Die Klasse .inline-pdf-chip-hover wird
+   zusätzlich zum nativen :hover per JS gesetzt (siehe buildTextContent()) -
+   die Verschiebe-Überlagerung über dem Text blockiert natives :hover sonst,
+   solange man nicht gerade im Bearbeitungsmodus ist. */
+.inline-pdf-chip-toolbar {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  display: none;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 2px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+  box-shadow: var(--shadow-popover);
+  white-space: nowrap;
+  z-index: 5;
+}
+
+.inline-pdf-chip:hover .inline-pdf-chip-toolbar,
+.inline-pdf-chip.inline-pdf-chip-hover .inline-pdf-chip-toolbar {
+  display: flex;
+}
+
+.inline-pdf-chip-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.inline-pdf-chip-btn:hover {
+  background: var(--hover-bg);
+}
+
+.inline-pdf-chip-btn .icon {
+  width: 15px;
+  height: 15px;
 }
 
 .inline-pdf-chip-icon {

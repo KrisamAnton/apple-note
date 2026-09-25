@@ -1860,6 +1860,26 @@
     overlay.className = 'text-drag-overlay';
     objEl.appendChild(overlay);
 
+    // Die Überlagerung blockiert normalerweise jedes native CSS ":hover" auf
+    // darunterliegenden Elementen (sie liegt sichtbar/klickbar darüber) -
+    // ohne das würde die Werkzeugleiste eines PDF-Symbols beim Überfahren
+    // mit der Maus nie erscheinen, solange man nicht gerade im
+    // Bearbeitungsmodus ist. Deshalb wird der Hover-Zustand hier stattdessen
+    // manuell per Mausposition nachgebildet.
+    let hoveredPdfChip = null;
+    overlay.addEventListener('pointermove', (ev) => {
+      const chip = inlinePdfChipHoverAtPoint(body, ev.clientX, ev.clientY);
+      if (chip !== hoveredPdfChip) {
+        if (hoveredPdfChip) hoveredPdfChip.classList.remove('inline-pdf-chip-hover');
+        hoveredPdfChip = chip;
+        if (hoveredPdfChip) hoveredPdfChip.classList.add('inline-pdf-chip-hover');
+      }
+    });
+    overlay.addEventListener('pointerleave', () => {
+      if (hoveredPdfChip) hoveredPdfChip.classList.remove('inline-pdf-chip-hover');
+      hoveredPdfChip = null;
+    });
+
     if (obj.style !== 'free') {
       for (const edge of ['top', 'bottom', 'left', 'right']) {
         const indicator = document.createElement('div');
@@ -1919,13 +1939,16 @@
             marker.click();
             return;
           }
-          // Dieselbe Überlagerung würde sonst auch jeden Klick auf ein
-          // eingebettetes PDF-Datei-Symbol abfangen (siehe
-          // insertInlinePdfChip()), statt es per eigenem Klick-Handler
-          // (enhanceInlinePdfChips()) direkt zu öffnen.
-          const pdfChip = findInlinePdfChipAtPoint(body, ev.clientX, ev.clientY);
-          if (pdfChip) {
-            pdfChip.click();
+          // Dieselbe Überlagerung würde sonst auch jeden Klick auf einen
+          // Knopf der (beim Überfahren eingeblendeten) Werkzeugleiste eines
+          // PDF-Symbols abfangen (siehe buildInlinePdfChipEl()) - deren
+          // Knöpfe per eigenem Klick-Handler (enhanceInlinePdfChips())
+          // öffnen bzw. umbenennen. Ein Klick auf das Symbol selbst (nicht
+          // auf einen Werkzeugleisten-Knopf) tut bewusst nichts Besonderes
+          // mehr - er fällt unten normal in den Text-Bearbeitungsmodus.
+          const pdfBtn = findInlinePdfChipButtonAtPoint(body, ev.clientX, ev.clientY);
+          if (pdfBtn) {
+            pdfBtn.click();
             return;
           }
           enterTextEdit(note, obj, objEl, body, overlay, startX, startY);
@@ -4271,11 +4294,15 @@
     span.contentEditable = 'false';
     span.dataset.fileData = fileData;
     const pages = pageCount > 1 ? `PDF · ${pageCount} Seiten` : 'PDF';
-    span.title = `${fileName || 'PDF'} (${pages}) – Klick zum Öffnen, Doppelklick zum Umbenennen`;
+    span.title = `${fileName || 'PDF'} (${pages})`;
     span.innerHTML =
       '<span class="inline-pdf-chip-icon"><svg viewBox="0 0 20 20" class="icon" aria-hidden="true">' +
       '<path d="M5 2h7l3 3v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zm6.5.6V6H15L11.5 2.6z"/></svg></span>' +
-      `<span class="inline-pdf-chip-name">${escapeHtml(fileName || 'PDF')}</span>`;
+      `<span class="inline-pdf-chip-name">${escapeHtml(fileName || 'PDF')}</span>` +
+      '<span class="inline-pdf-chip-toolbar">' +
+      `<span class="inline-pdf-chip-btn" data-action="open" title="Datei öffnen"><svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.openFile}</svg></span>` +
+      `<span class="inline-pdf-chip-btn" data-action="rename" title="Umbenennen"><svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.rename}</svg></span>` +
+      '</span>';
     return span;
   }
 
@@ -4374,7 +4401,7 @@
       nameEl.removeEventListener('keydown', onKeydown);
       const newName = nameEl.textContent.trim();
       nameEl.textContent = commit && newName ? newName : original;
-      chip.title = `${nameEl.textContent} – Klick zum Öffnen, Doppelklick zum Umbenennen`;
+      chip.title = nameEl.textContent;
 
       const body = chip.closest('.canvas-text-body');
       const objEl = chip.closest('.canvas-object');
@@ -4400,33 +4427,31 @@
   // werden. Eine reine JS-Eigenschaft (nicht dataset/HTML-Attribut) verhindert
   // ein doppeltes Anhängen, ohne mit ins gespeicherte HTML zu wandern.
   //
-  // Einfacher Klick öffnet die Datei, Doppelklick benennt sie um. Kein
-  // natives "dblclick" möglich: ein Klick, der durch die Verschiebe-
-  // Überlagerung hindurch weitergereicht wird (siehe findInlinePdfChipAtPoint()
-  // in buildTextContent()), löst hier nur ein einzelnes "click" aus - der
-  // Browser bekommt die zwei echten Klicks nie direkt auf demselben Element zu
-  // sehen, um selbst ein "dblclick" daraus zu machen. Deshalb wie bei der
-  // Ordner-Umbenennung (siehe lastFolderTapAt/-Id) zeitbasiert selbst erkannt:
-  // öffnet mit kurzer Verzögerung, außer ein zweiter Klick trifft rechtzeitig
-  // ein - dann wird daraus das Umbenennen statt des Öffnens.
+  // Das Symbol selbst öffnet beim Klick nichts mehr (das war verwirrend, da
+  // man dann nicht mehr an den Dateinamen zum Umbenennen kam). Stattdessen
+  // erscheint beim Überfahren mit der Maus eine kleine Werkzeugleiste mit
+  // "Öffnen"- und "Umbenennen"-Knopf (siehe buildInlinePdfChipEl()) - die
+  // Sichtbarkeit dieser Leiste wird bei aktiver Verschiebe-Überlagerung per
+  // JS gesteuert (siehe updateInlinePdfChipHover() in buildTextContent()),
+  // da die Überlagerung natives CSS :hover sonst blockieren würde.
   function enhanceInlinePdfChips(body) {
     body.querySelectorAll('.inline-pdf-chip').forEach((chip) => {
       if (chip.pdfChipWired) return;
       chip.pdfChipWired = true;
-      let openTimer = null;
-      chip.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (openTimer) {
-          clearTimeout(openTimer);
-          openTimer = null;
-          startRenameInlinePdfChip(chip);
-          return;
-        }
-        openTimer = setTimeout(() => {
-          openTimer = null;
+      const openBtn = chip.querySelector('.inline-pdf-chip-btn[data-action="open"]');
+      const renameBtn = chip.querySelector('.inline-pdf-chip-btn[data-action="rename"]');
+      if (openBtn) {
+        openBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
           if (chip.dataset.fileData) window.open(chip.dataset.fileData, '_blank');
-        }, 400);
-      });
+        });
+      }
+      if (renameBtn) {
+        renameBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          startRenameInlinePdfChip(chip);
+        });
+      }
     });
   }
 
@@ -4435,6 +4460,42 @@
     for (const c of chips) {
       const r = c.getBoundingClientRect();
       if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return c;
+    }
+    return null;
+  }
+
+  // Wie findInlinePdfChipAtPoint(), aber für die Knöpfe der (nur bei
+  // Maus-Überfahren sichtbaren) Werkzeugleiste eines Symbols - deren Fläche
+  // liegt außerhalb des eigentlichen Symbol-Rechtecks (schwebt darüber),
+  // wird also von findInlinePdfChipAtPoint() nicht erfasst. Beschränkt sich
+  // bewusst auf gerade als "überfahren" markierte Symbole, deren Leiste
+  // also tatsächlich eingeblendet ist.
+  function findInlinePdfChipButtonAtPoint(body, x, y) {
+    const chips = body.querySelectorAll('.inline-pdf-chip.inline-pdf-chip-hover');
+    for (const chip of chips) {
+      const btns = chip.querySelectorAll('.inline-pdf-chip-btn');
+      for (const b of btns) {
+        const r = b.getBoundingClientRect();
+        if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return b;
+      }
+    }
+    return null;
+  }
+
+  // Liefert das PDF-Symbol, über dem sich x/y gerade befindet - zählt auch
+  // die eigene (schwebende) Werkzeugleiste mit, sobald das Symbol schon als
+  // "überfahren" markiert ist, damit die Leiste beim Hinüberfahren der Maus
+  // vom Symbol zu ihren Knöpfen nicht sofort wieder verschwindet.
+  function inlinePdfChipHoverAtPoint(body, x, y) {
+    const chips = body.querySelectorAll('.inline-pdf-chip');
+    for (const chip of chips) {
+      const r = chip.getBoundingClientRect();
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return chip;
+      if (chip.classList.contains('inline-pdf-chip-hover')) {
+        const toolbar = chip.querySelector('.inline-pdf-chip-toolbar');
+        const tr = toolbar && toolbar.getBoundingClientRect();
+        if (tr && x >= tr.left && x <= tr.right && y >= tr.top && y <= tr.bottom) return chip;
+      }
     }
     return null;
   }
