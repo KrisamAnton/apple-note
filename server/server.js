@@ -5,6 +5,7 @@ const os = require('os');
 const { spawn } = require('child_process');
 const express = require('express');
 const multer = require('multer');
+const nodemailer = require('nodemailer');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const DATA_DIR = process.env.DATA_DIR || path.join(PROJECT_ROOT, 'data');
@@ -302,6 +303,108 @@ app.use(
     setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
   })
 );
+
+// ---------- E-Mail-Erinnerungen (fällige Erinnerungs-Objekte verschicken) ----------
+//
+// Läuft unabhängig von einer offenen Browser-Sitzung im Hintergrund, da eine
+// Erinnerung oft Jahre in der Zukunft liegt und niemand die App bis dahin
+// durchgehend offen lassen kann/soll.
+
+function buildSmtpTransportOptions(settings) {
+  const opts = {
+    host: settings.smtpHost,
+    port: settings.smtpPort || 587,
+    auth: { user: settings.smtpUser, pass: settings.smtpPassword },
+  };
+  if (settings.smtpSecure === 'ssl') {
+    opts.secure = true;
+  } else if (settings.smtpSecure === 'starttls') {
+    opts.secure = false;
+    opts.requireTLS = true;
+  } else {
+    opts.secure = false;
+  }
+  return opts;
+}
+
+async function sendReminderEmail(settings, note, obj) {
+  const transporter = nodemailer.createTransport(buildSmtpTransportOptions(settings));
+  const fromName = settings.smtpFromName || 'KrisNote';
+  const noteTitle = note.title || 'Ohne Titel';
+  await transporter.sendMail({
+    from: `"${fromName}" <${settings.smtpUser}>`,
+    to: settings.reminderEmail,
+    subject: `Erinnerung: ${obj.title || 'Ohne Titel'}`,
+    text: `${obj.text || ''}\n\n---\nAus der Notiz "${noteTitle}" in KrisNote.`,
+  });
+}
+
+let reminderCheckRunning = false;
+
+// Kein Zusammenspiel mit /api/state über eine gemeinsame Warteschlange -
+// bei einem theoretischen Zusammentreffen (Browser speichert im exakt selben
+// Moment wie dieser Hintergrund-Check) könnte ein "sentAt" einmal verloren
+// gehen und die Erinnerung beim nächsten Durchlauf ein zweites Mal verschickt
+// werden. Für eine einzelne, meist nicht durchgehend geöffnete App ist dieses
+// seltene Risiko bewusst in Kauf genommen worden, statt dafür eine eigene
+// Sperr-/Warteschlangen-Logik zu bauen.
+async function checkAndSendDueReminders() {
+  if (reminderCheckRunning) return;
+  reminderCheckRunning = true;
+  try {
+    const settings = await readSettingsFile();
+    if (!settings.reminderEmail || !settings.smtpHost || !settings.smtpUser || !settings.smtpPassword) {
+      return;
+    }
+
+    let state;
+    try {
+      state = JSON.parse(await fs.promises.readFile(STATE_FILE, 'utf8'));
+    } catch (err) {
+      return; // noch keine state.json (frisch installierter Server) - nichts zu tun
+    }
+    if (!state || !Array.isArray(state.notes)) return;
+
+    const now = Date.now();
+    const due = [];
+    for (const note of state.notes) {
+      for (const obj of note.objects || []) {
+        if (obj.type === 'reminder' && obj.remindAt && !obj.sentAt && obj.remindAt <= now) {
+          due.push({ note, obj });
+        }
+      }
+    }
+    if (due.length === 0) return;
+
+    let anySent = false;
+    for (const { note, obj } of due) {
+      try {
+        await sendReminderEmail(settings, note, obj);
+        obj.sentAt = Date.now();
+        anySent = true;
+        console.log(`Erinnerung "${obj.title}" an ${settings.reminderEmail} verschickt.`);
+      } catch (err) {
+        console.error(`Erinnerung "${obj.title}" konnte nicht verschickt werden:`, err.message);
+        // sentAt bleibt leer - der nächste Durchlauf versucht es automatisch erneut.
+      }
+    }
+
+    if (anySent) {
+      const json = JSON.stringify(state);
+      const tmpFile = `${STATE_FILE}.${process.pid}.${Date.now()}.tmp`;
+      await fs.promises.writeFile(tmpFile, json);
+      await fs.promises.rename(tmpFile, STATE_FILE);
+    }
+  } catch (err) {
+    console.error('Fehler bei der Erinnerungs-Prüfung:', err);
+  } finally {
+    reminderCheckRunning = false;
+  }
+}
+
+const REMINDER_CHECK_INTERVAL_MS = 60 * 1000;
+setInterval(checkAndSendDueReminders, REMINDER_CHECK_INTERVAL_MS);
+checkAndSendDueReminders();
 
 app.listen(PORT, () => {
   console.log(`KrisNote-Server läuft auf Port ${PORT}`);
