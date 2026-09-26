@@ -1051,13 +1051,6 @@ textarea {
   touch-action: manipulation;
 }
 
-/* Sanftes Zurückfedern des eigenen Zwei-Finger-Vorschau-Zooms (siehe
-   Zwei-Finger-Touch-Wiring in app.js) beim Loslassen. Nur während dieser
-   kurzen Animation aktiv, sonst würde jede Zoomstufen-Änderung während des
-   Kneifens selbst spürbar verzögert wirken. */
-.canvas-surface.workspace-zoom-animated {
-  transition: transform 200ms ease;
-}
 
 .canvas-surface[data-bg="dots"] {
   background-image: radial-gradient(var(--border-strong) 1px, transparent 1px);

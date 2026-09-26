@@ -1271,6 +1271,14 @@
 
   let selectedObjectId = null;
   let dragState = null;
+  // Eigener Zwei-Finger-Zoom der ganzen Fläche (siehe Touch-Wiring weiter
+  // unten) - bleibt bewusst über das Loslassen der Finger hinaus bestehen.
+  // JEDE Umrechnung von Zeiger-/Finger-Koordinaten (clientX/clientY) in
+  // Flächen-lokale Koordinaten (obj.x/y, Tinte, Textmarkierung, ...) muss
+  // deshalb durch diesen Wert geteilt werden - sonst würde z. B. jedes
+  // Verschieben eines Objekts bei laufendem Zoom um den falschen Betrag
+  // ausschlagen.
+  let workspaceZoom = 1;
   let activeTextEdit = null; // { note, obj, objEl, body, overlay } – Formatierungs-Buttons sitzen global im Ribbon
   let lastSelectionRange = null;
   // Überlebt (kurz) einen Blur - siehe exitTextEdit()/convertFloatingPdfToInline().
@@ -1291,8 +1299,12 @@
   }
 
   function nextPlacement(note, w, h) {
-    const scrollLeft = el.canvasWorkspace.scrollLeft;
-    const scrollTop = el.canvasWorkspace.scrollTop;
+    // scrollLeft/-Top sind Pixel des äußeren (nicht gezoomten) Arbeitsbereichs
+    // über dem VISUELL skalierten Inhalt - durch workspaceZoom teilen, um die
+    // zur sichtbaren Bildschirmstelle passende Flächen-lokale Koordinate
+    // (wie obj.x/y) zu erhalten.
+    const scrollLeft = el.canvasWorkspace.scrollLeft / workspaceZoom;
+    const scrollTop = el.canvasWorkspace.scrollTop / workspaceZoom;
     const offset = (note.objects.length % 6) * 24;
     return {
       x: clamp(scrollLeft + 30 + offset, 0, Math.max(0, SURFACE_W - w)),
@@ -1627,8 +1639,11 @@
     const obj = note && getObj(note, dragState.objId);
     if (!note || !obj) return;
     lastDragPointer = { clientX: e.clientX, clientY: e.clientY };
-    const dx = e.clientX - dragState.startX;
-    const dy = e.clientY - dragState.startY;
+    // Durch workspaceZoom teilen: e.clientX/Y sind Bildschirm-Pixel, obj.x/y
+    // dagegen Flächen-lokale (unskalierte) Koordinaten - ohne das würde ein
+    // Verschieben bei laufendem Zoom um den falschen Betrag ausschlagen.
+    const dx = (e.clientX - dragState.startX) / workspaceZoom;
+    const dy = (e.clientY - dragState.startY) / workspaceZoom;
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragState.moved = true;
     obj.x = clamp(dragState.startObjX + dx, -obj.w + 40, MAX_OBJ_DIM - 40);
     obj.y = clamp(dragState.startObjY + dy, 0, MAX_OBJ_DIM - 40);
@@ -1743,8 +1758,10 @@
     if (!note || !obj) return;
     lastDragPointer = { clientX: e.clientX, clientY: e.clientY };
     const [minW, minH] = MIN_SIZES[obj.type] || [60, 60];
-    const dx = e.clientX - dragState.startX;
-    const dy = e.clientY - dragState.startY;
+    // Siehe onObjectDragMove(): durch workspaceZoom teilen, um bei laufendem
+    // Zoom in Flächen-lokalen (nicht Bildschirm-)Pixeln zu rechnen.
+    const dx = (e.clientX - dragState.startX) / workspaceZoom;
+    const dy = (e.clientY - dragState.startY) / workspaceZoom;
     if (dragState.axis !== 'y') obj.w = clamp(dragState.startW + dx, minW, MAX_OBJ_DIM - obj.x);
     if (dragState.axis !== 'x') obj.h = clamp(dragState.startH + dy, minH, MAX_OBJ_DIM - obj.y);
     const objEl = findObjEl(obj.id);
@@ -2230,10 +2247,13 @@
       e.preventDefault();
       e.stopPropagation();
       const startX = e.clientX;
-      const startWidth = img.getBoundingClientRect().width;
+      // getBoundingClientRect() liefert bei laufendem Flächen-Zoom die
+      // sichtbare (bereits skalierte) Breite - durch workspaceZoom teilen,
+      // um wie img.style.width in Flächen-lokalen Pixeln zu rechnen.
+      const startWidth = img.getBoundingClientRect().width / workspaceZoom;
       const onMove = (ev) => {
         const maxWidth = Math.max(40, body.clientWidth - 8);
-        img.style.width = `${clamp(startWidth + (ev.clientX - startX), 40, maxWidth)}px`;
+        img.style.width = `${clamp(startWidth + (ev.clientX - startX) / workspaceZoom, 40, maxWidth)}px`;
       };
       const onUp = () => {
         window.removeEventListener('pointermove', onMove);
@@ -3275,7 +3295,10 @@
     e.preventDefault();
     const rect = el.canvasSurface.getBoundingClientRect();
     const widthPx = widthForPointer(e.pointerType, e.pressure, drawIsEraser);
-    const point = { x: e.clientX - rect.left, y: e.clientY - rect.top, width: widthPx };
+    // rect ist bei laufendem Flächen-Zoom bereits die sichtbare (skalierte)
+    // Fläche - durch workspaceZoom teilen, um in Flächen-lokalen (mit
+    // obj.x/y vergleichbaren) Koordinaten zu speichern.
+    const point = { x: (e.clientX - rect.left) / workspaceZoom, y: (e.clientY - rect.top) / workspaceZoom, width: widthPx };
     const stroke = { id: uid(), color: drawColor, eraser: drawIsEraser, parentId: null, points: [point] };
     note.ink.strokes.push(stroke);
     inkStrokeState = { note };
@@ -3296,7 +3319,7 @@
     const rect = el.canvasSurface.getBoundingClientRect();
     const widthPx = widthForPointer(e.pointerType, e.pressure, drawIsEraser);
     const stroke = note.ink.strokes[note.ink.strokes.length - 1];
-    stroke.points.push({ x: e.clientX - rect.left, y: e.clientY - rect.top, width: widthPx });
+    stroke.points.push({ x: (e.clientX - rect.left) / workspaceZoom, y: (e.clientY - rect.top) / workspaceZoom, width: widthPx });
     redrawInk(note);
   }
 
@@ -3436,7 +3459,7 @@
     e.preventDefault();
     clearStrokeSelection();
     const rect = el.canvasSurface.getBoundingClientRect();
-    lassoPoints = [{ x: e.clientX - rect.left, y: e.clientY - rect.top }];
+    lassoPoints = [{ x: (e.clientX - rect.left) / workspaceZoom, y: (e.clientY - rect.top) / workspaceZoom }];
     try {
       el.inkLayer.setPointerCapture(e.pointerId);
     } catch (err) {
@@ -3451,7 +3474,7 @@
   function onLassoMove(e) {
     if (!lassoPoints) return;
     const rect = el.canvasSurface.getBoundingClientRect();
-    lassoPoints.push({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+    lassoPoints.push({ x: (e.clientX - rect.left) / workspaceZoom, y: (e.clientY - rect.top) / workspaceZoom });
     redrawInk(currentNote());
   }
 
@@ -3660,8 +3683,10 @@
     }
 
     function onMove(ev) {
-      const dx = ev.clientX - startX;
-      const dy = ev.clientY - startY;
+      // Siehe onObjectDragMove(): durch workspaceZoom teilen, sonst würde
+      // die Auswahl bei laufendem Zoom um den falschen Betrag verschoben.
+      const dx = (ev.clientX - startX) / workspaceZoom;
+      const dy = (ev.clientY - startY) / workspaceZoom;
       for (const { stroke, points } of snapshot) {
         stroke.points = points.map((p) => ({ ...p, x: p.x + dx, y: p.y + dy }));
       }
@@ -3706,8 +3731,9 @@
     const boxEl = document.getElementById('strokeSelectionBox');
 
     function onMove(ev) {
-      const dx = ev.clientX - startX;
-      const dy = ev.clientY - startY;
+      // Siehe onObjectDragMove(): durch workspaceZoom teilen.
+      const dx = (ev.clientX - startX) / workspaceZoom;
+      const dy = (ev.clientY - startY) / workspaceZoom;
       const newW = Math.max(20, startBox.w + dx);
       const newH = Math.max(20, startBox.h + dy);
       const sx = newW / startBox.w;
@@ -5633,7 +5659,7 @@
         return;
       }
       const rect = el.canvasSurface.getBoundingClientRect();
-      const point = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      const point = { x: (e.clientX - rect.left) / workspaceZoom, y: (e.clientY - rect.top) / workspaceZoom };
       const pointerId = e.pointerId;
       const startX = e.clientX;
       const startY = e.clientY;
@@ -5680,19 +5706,24 @@
 
     // Als installierte App vom Homescreen (Standalone-Modus) unterdrückt das
     // Handy-Betriebssystem den nativen Zwei-Finger-Zoom von Webseiten meist
-    // komplett - man kommt dann zwar rein (System-Vergrößerung), aber nicht
-    // mehr zoomt man nicht mehr zurück, um mehr von der Seite zu sehen.
-    // Deshalb hier ein eigener, rein visueller "Vorschau-Zoom": zwei Finger
-    // auf der Fläche verkleinern/vergrößern die Ansicht um den Punkt zwischen
-    // den Fingern, federt beim Loslassen aber wieder auf die normale Größe
-    // zurück - zum Betrachten/Überblick verschaffen, nicht zum Bearbeiten.
-    // Bewusst KEINE dauerhafte Zoomstufe: jede Ziehen-/Zeichnen-/Größenändern-
-    // Berechnung im Rest der App rechnet in den echten (unskalierten) Fläche-
-    // Koordinaten - eine bleibende Zoomstufe müsste an jeder dieser Stellen
-    // erst berücksichtigt werden, um nicht zu einem falschen Faktor daneben
-    // zu ziehen/zeichnen.
+    // komplett - man kommt dann zwar per System-Funktion rein, aber nicht
+    // mehr gezielt zurück, um mehr von der Seite zu sehen. Deshalb hier ein
+    // eigener Zwei-Finger-Zoom der ganzen Fläche, der (anders als eine reine
+    // Vorschau) auch nach dem Loslassen bestehen bleibt.
+    //
+    // Verwendet bewusst die (nicht ganz standardisierte, aber in allen
+    // gängigen mobilen Browsern unterstützte) CSS-Eigenschaft "zoom" statt
+    // "transform: scale()": "zoom" verändert - anders als transform - auch
+    // die Layout-Größe des Elements, wodurch der umgebende scrollbare
+    // Bereich (canvasWorkspace) automatisch die richtige, zur Zoomstufe
+    // passende Scroll-Reichweite bekommt, ohne dass man das von Hand
+    // nachrechnen müsste.
+    //
+    // Jede andere Stelle im Code, die Finger-/Mausposition in Flächen-lokale
+    // Koordinaten umrechnet (Verschieben, Größe ändern, Zeichnen, Text-Tipp-
+    // Erkennung, ...), teilt dafür durch workspaceZoom - siehe die
+    // jeweiligen Kommentare dort.
     let workspacePinch = null;
-    let workspaceZoom = 1;
     const touchDist = (t0, t1) => Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
 
     el.canvasWorkspace.addEventListener('touchstart', (e) => {
@@ -5701,11 +5732,12 @@
       const rect = el.canvasWorkspace.getBoundingClientRect();
       const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
       const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-      const originXPercent = ((midX - rect.left + el.canvasWorkspace.scrollLeft) / el.canvasSurface.offsetWidth) * 100;
-      const originYPercent = ((midY - rect.top + el.canvasWorkspace.scrollTop) / el.canvasSurface.offsetHeight) * 100;
-      el.canvasSurface.classList.remove('workspace-zoom-animated');
-      el.canvasSurface.style.transformOrigin = `${originXPercent}% ${originYPercent}%`;
-      workspacePinch = { startDist: touchDist(e.touches[0], e.touches[1]), startZoom: workspaceZoom };
+      // Punkt auf der (noch unskalierten) Fläche, der gerade unter der
+      // Fingermitte liegt - bleibt während des ganzen Zoomvorgangs an
+      // derselben Bildschirmstelle stehen (siehe touchmove).
+      const localX = (el.canvasWorkspace.scrollLeft + (midX - rect.left)) / workspaceZoom;
+      const localY = (el.canvasWorkspace.scrollTop + (midY - rect.top)) / workspaceZoom;
+      workspacePinch = { startDist: touchDist(e.touches[0], e.touches[1]), startZoom: workspaceZoom, localX, localY };
     }, { passive: false });
 
     el.canvasWorkspace.addEventListener('touchmove', (e) => {
@@ -5713,17 +5745,24 @@
       e.preventDefault();
       const dist = touchDist(e.touches[0], e.touches[1]);
       workspaceZoom = clamp(workspacePinch.startZoom * (dist / workspacePinch.startDist), 0.4, 2.5);
-      el.canvasSurface.style.transform = workspaceZoom === 1 ? '' : `scale(${workspaceZoom})`;
+      el.canvasSurface.style.zoom = workspaceZoom;
+      const rect = el.canvasWorkspace.getBoundingClientRect();
+      const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      // Begrenzen wie beim Rand-Auto-Scroll (siehe startAutoScroll()) - ohne
+      // das könnte der berechnete Ziel-Scroll außerhalb des gültigen
+      // Bereichs liegen (z. B. negativ), während der Browser ihn dann
+      // stillschweigend auf 0 kappt. Der Anker-Punkt bliebe dadurch nicht
+      // wirklich unter den Fingern stehen, und Objekte nahe dem Rand könnten
+      // sich scheinbar unter die feste Kopfzeile verschieben.
+      const maxScrollLeft = Math.max(0, el.canvasWorkspace.scrollWidth - el.canvasWorkspace.clientWidth);
+      const maxScrollTop = Math.max(0, el.canvasWorkspace.scrollHeight - el.canvasWorkspace.clientHeight);
+      el.canvasWorkspace.scrollLeft = clamp(workspacePinch.localX * workspaceZoom - (midX - rect.left), 0, maxScrollLeft);
+      el.canvasWorkspace.scrollTop = clamp(workspacePinch.localY * workspaceZoom - (midY - rect.top), 0, maxScrollTop);
     }, { passive: false });
 
     const endWorkspacePinch = () => {
-      if (!workspacePinch) return;
       workspacePinch = null;
-      if (workspaceZoom === 1) return;
-      workspaceZoom = 1;
-      el.canvasSurface.classList.add('workspace-zoom-animated');
-      el.canvasSurface.style.transform = '';
-      setTimeout(() => el.canvasSurface.classList.remove('workspace-zoom-animated'), 220);
     };
     el.canvasWorkspace.addEventListener('touchend', (e) => {
       if (e.touches.length < 2) endWorkspacePinch();
@@ -5748,7 +5787,7 @@
       if (files.length === 0) return;
       e.preventDefault();
       const rect = el.canvasSurface.getBoundingClientRect();
-      const point = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      const point = { x: (e.clientX - rect.left) / workspaceZoom, y: (e.clientY - rect.top) / workspaceZoom };
       const pdfFile = files.find((f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
       if (pdfFile) {
         addPdfObjectFromFile(pdfFile, point);
