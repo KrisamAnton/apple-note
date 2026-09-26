@@ -400,6 +400,15 @@
     editorEmpty: document.getElementById('editorEmpty'),
     editor: document.getElementById('editor'),
     titleInput: document.getElementById('titleInput'),
+    noteBackBtn: document.getElementById('noteBackBtn'),
+    addNoteLinkBtn: document.getElementById('addNoteLinkBtn'),
+    noteLinkPickerBackdrop: document.getElementById('noteLinkPickerBackdrop'),
+    noteLinkPickerPopover: document.getElementById('noteLinkPickerPopover'),
+    noteLinkPickerBackBtn: document.getElementById('noteLinkPickerBackBtn'),
+    noteLinkPickerTitle: document.getElementById('noteLinkPickerTitle'),
+    noteLinkPickerList: document.getElementById('noteLinkPickerList'),
+    noteLinkPickerCancelBtn: document.getElementById('noteLinkPickerCancelBtn'),
+    noteLinkPickerConfirmBtn: document.getElementById('noteLinkPickerConfirmBtn'),
     moveNoteBtn: document.getElementById('moveNoteBtn'),
     popoverBackdrop: document.getElementById('popoverBackdrop'),
     movePopover: document.getElementById('movePopover'),
@@ -864,6 +873,7 @@
     // Lebt nur im Arbeitsspeicher (nicht gespeichert), ein echtes Neuladen
     // startet also bewusst wieder ganz ohne Auswahl.
     if (selectedNoteId) lastSelectedNoteIdByFolder.set(selectedFolderId, selectedNoteId);
+    noteBackStack = [];
     selectedFolderId = folderId;
     const rememberedId = lastSelectedNoteIdByFolder.get(folderId) || null;
     const note = findNote(rememberedId);
@@ -1133,12 +1143,42 @@
 
   // ---------- Rendering: Editor ----------
 
-  function selectNote(id) {
+  // Merkt sich die Notiz(en), von der man über einen internen Link (siehe
+  // navigateToNoteViaLink()) hergekommen ist - lässt mehrere Links
+  // hintereinander verfolgen und über den Zurück-Knopf schrittweise wieder
+  // zurückgehen. Wird bei jeder NICHT über einen Link erfolgten Auswahl
+  // (normaler Klick in der Notizliste, Suche, neue Notiz, ...) geleert, sonst
+  // bliebe der Zurück-Knopf nach normalem Navigieren fälschlich sichtbar.
+  let noteBackStack = [];
+
+  function selectNote(id, opts) {
+    if (!opts || !opts.keepBackStack) noteBackStack = [];
     selectedNoteId = id;
     lastSelectedNoteIdByFolder.set(selectedFolderId, id);
     goToView('editor');
     renderNoteList();
     renderEditor();
+  }
+
+  // Über einen internen Link (siehe addNoteLinkBtn) angeklickte Verlinkung -
+  // merkt sich die aktuelle Notiz/den aktuellen Ordner auf dem Rückweg-Stapel
+  // und springt dann zur verlinkten Notiz.
+  function navigateToNoteViaLink(targetNoteId) {
+    const target = state.notes.find((n) => n.id === targetNoteId);
+    if (!target) {
+      alert('Diese verlinkte Notiz gibt es nicht mehr.');
+      return;
+    }
+    noteBackStack.push({ noteId: selectedNoteId, folderId: selectedFolderId });
+    selectedFolderId = target.trashedAt ? TRASH_FOLDER_ID : target.folderId || null;
+    selectNote(targetNoteId, { keepBackStack: true });
+  }
+
+  function goBackFromNoteLink() {
+    const prev = noteBackStack.pop();
+    if (!prev) return;
+    selectedFolderId = prev.folderId;
+    selectNote(prev.noteId, { keepBackStack: true });
   }
 
   function renderEditor() {
@@ -1152,6 +1192,7 @@
     el.editor.hidden = false;
     el.titleInput.value = note.title;
     autoGrow(el.titleInput);
+    el.noteBackBtn.hidden = noteBackStack.length === 0;
     renderCanvas(note);
   }
 
@@ -1179,6 +1220,7 @@
     if (parent) collapsedNoteIds.delete(parent.id);
     schedulePersist();
     selectedNoteId = note.id;
+    noteBackStack = [];
     goToView('editor');
     renderFolders();
     renderNoteList();
@@ -1950,6 +1992,14 @@
             window.open(link.href, '_blank', 'noopener,noreferrer');
             return;
           }
+          // Ein interner KrisNote-Link (siehe findInternalLinkAtPoint()) soll
+          // per Klick zur verlinkten Notiz springen statt in den
+          // Bearbeitungsmodus zu wechseln.
+          const internalLink = findInternalLinkAtPoint(body, ev.clientX, ev.clientY);
+          if (internalLink) {
+            navigateToNoteViaLink(internalLink.dataset.noteId);
+            return;
+          }
           // Dieselbe Überlagerung würde sonst auch jeden Klick auf ein
           // Erinnerungs-Symbol abfangen, statt ihn (per eigenem Klick-Handler,
           // siehe syncInlineReminderMarkers()) zum Bearbeiten-Fenster
@@ -2665,6 +2715,17 @@
   // damit auch die eigentlichen <a>-Elemente darunter verdeckt.
   function findLinkAtPoint(body, x, y) {
     const links = body.querySelectorAll('a.note-link');
+    for (const a of links) {
+      const r = a.getBoundingClientRect();
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return a;
+    }
+    return null;
+  }
+
+  // Wie findLinkAtPoint(), aber für Links zu einer anderen KrisNote-Notiz
+  // (siehe addNoteLinkBtn/navigateToNoteViaLink()).
+  function findInternalLinkAtPoint(body, x, y) {
+    const links = body.querySelectorAll('a.note-internal-link');
     for (const a of links) {
       const r = a.getBoundingClientRect();
       if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return a;
@@ -4250,6 +4311,12 @@
   let pendingInlinePdfRange = null;
   let pendingInlinePdfHost = null;
 
+  // Wie pendingInlinePdfRange/-Host, aber für den internen-Link-Picker (siehe
+  // addNoteLinkBtn/openNoteLinkPicker()) - merkt sich die markierte Textstelle,
+  // die beim Bestätigen im Picker in einen Link verwandelt wird.
+  let pendingNoteLinkRange = null;
+  let pendingNoteLinkHost = null;
+
   function askPdfInsertMode() {
     return new Promise((resolve) => {
       pdfModeResolve = resolve;
@@ -5076,6 +5143,112 @@
     el.popoverBackdrop.hidden = true;
   }
 
+  // ---------- Interner-Link-Picker (siehe addNoteLinkBtn) ----------
+  // Durchklick-Pfad: [] = Ordner-Ebene, sonst eine Kette aus {type, id, name} -
+  // endet der Pfad auf einem Ordner, werden dessen Hauptseiten gezeigt; endet
+  // er auf einer Notiz, deren Unterseiten. Das jeweils letzte Notiz-Element im
+  // Pfad IST das aktuell als Link-Ziel ausgewählte Element (siehe
+  // currentNoteLinkTarget()) - ein Klick auf eine Notiz wählt sie also aus UND
+  // taucht zugleich eine Ebene tiefer, damit man bei Bedarf noch eine
+  // Unterseite als genaueres Ziel wählen kann, wie vom Nutzer beschrieben.
+  let noteLinkPickerPath = [];
+
+  function currentNoteLinkTarget() {
+    const last = noteLinkPickerPath[noteLinkPickerPath.length - 1];
+    return last && last.type === 'note' ? last.id : null;
+  }
+
+  function renderNoteLinkPicker() {
+    el.noteLinkPickerList.innerHTML = '';
+    el.noteLinkPickerBackBtn.hidden = noteLinkPickerPath.length === 0;
+    el.noteLinkPickerTitle.textContent =
+      noteLinkPickerPath.length === 0 ? 'Ordner wählen' : noteLinkPickerPath.map((p) => p.name).join(' › ');
+
+    const last = noteLinkPickerPath[noteLinkPickerPath.length - 1];
+    let items;
+    let emptyText;
+    if (!last) {
+      // "Alle Notizen" (ordnerlose Hauptseiten, folderId === null) wie im
+      // Verschieben-Popover (siehe openMovePopover()) immer mit anbieten -
+      // sonst wären Notizen ohne Ordner im Picker gar nicht erreichbar.
+      items = [
+        { type: 'folder', id: null, name: 'Alle Notizen' },
+        ...state.folders.filter((f) => !f.trashedAt).map((f) => ({ type: 'folder', id: f.id, name: f.name })),
+      ];
+      emptyText = 'Keine Ordner vorhanden';
+    } else if (last.type === 'folder') {
+      items = state.notes
+        .filter((n) => !n.trashedAt && n.folderId === last.id && !n.parentNoteId)
+        .map((n) => ({ type: 'note', id: n.id, name: n.title || 'Ohne Titel' }));
+      emptyText = 'Keine Notizen in diesem Ordner vorhanden';
+    } else {
+      items = state.notes
+        .filter((n) => !n.trashedAt && n.parentNoteId === last.id)
+        .map((n) => ({ type: 'note', id: n.id, name: n.title || 'Ohne Titel' }));
+      emptyText = 'Keine Unterseiten vorhanden';
+    }
+
+    if (items.length === 0) {
+      const hint = document.createElement('div');
+      hint.className = 'popover-hint';
+      hint.textContent = emptyText;
+      el.noteLinkPickerList.appendChild(hint);
+    }
+
+    const selectedId = currentNoteLinkTarget();
+    for (const item of items) {
+      const row = document.createElement('div');
+      row.className = 'popover-item' + (item.type === 'note' && item.id === selectedId ? ' current' : '');
+      const icon = item.type === 'folder' ? (item.id === null ? ICONS.allNotes : ICONS.folder) : ICONS.allNotes;
+      row.innerHTML =
+        `<span class="folder-icon">${icon}</span>` +
+        `<span>${escapeHtml(item.name)}</span>` +
+        `<span class="popover-item-chevron">${ICONS.chevron}</span>`;
+      row.addEventListener('click', () => {
+        noteLinkPickerPath.push(item);
+        renderNoteLinkPicker();
+      });
+      el.noteLinkPickerList.appendChild(row);
+    }
+
+    el.noteLinkPickerConfirmBtn.disabled = !selectedId;
+  }
+
+  function openNoteLinkPicker() {
+    noteLinkPickerPath = [];
+    renderNoteLinkPicker();
+    el.noteLinkPickerBackdrop.hidden = false;
+    const btnRect = el.addNoteLinkBtn.getBoundingClientRect();
+    const popoverWidth = 320;
+    const left = Math.min(Math.max(8, btnRect.left), window.innerWidth - popoverWidth - 8);
+    const top = Math.min(btnRect.bottom + 6, window.innerHeight - 260);
+    el.noteLinkPickerPopover.style.left = `${Math.max(8, left)}px`;
+    el.noteLinkPickerPopover.style.top = `${Math.max(8, top)}px`;
+  }
+
+  function closeNoteLinkPicker() {
+    el.noteLinkPickerBackdrop.hidden = true;
+    pendingNoteLinkRange = null;
+    pendingNoteLinkHost = null;
+  }
+
+  function applyNoteLinkToSelection() {
+    const targetId = currentNoteLinkTarget();
+    if (!targetId || !pendingNoteLinkRange || !pendingNoteLinkHost) return;
+    const a = document.createElement('a');
+    a.className = 'note-internal-link';
+    a.dataset.noteId = targetId;
+    const frag = pendingNoteLinkRange.extractContents();
+    a.appendChild(frag);
+    pendingNoteLinkRange.insertNode(a);
+    const { note, obj, objEl, body } = pendingNoteLinkHost;
+    saveTextObjContent(note, obj, body);
+    updateTextEmptyState(body);
+    growFreeTextToFit(obj, objEl, body);
+    updateOverflowIndicators(objEl, body);
+    closeNoteLinkPicker();
+  }
+
   // ---------- Hintergrund-Popover ----------
 
   function openBackgroundPopover() {
@@ -5821,6 +5994,37 @@
       renderCanvas(note);
       closeReminderPopover();
     });
+    // Verlinkung auf eine andere KrisNote-Notiz: nur mit markiertem Text
+    // möglich (der markierte Text wird selbst zum Link) - wie bei
+    // addReminderBtn muss die Auswahl per wireRibbonBtn VOR dem Fokuswechsel
+    // auf den Knopf gesichert werden.
+    wireRibbonBtn(el.addNoteLinkBtn, () => {
+      pendingNoteLinkRange = null;
+      pendingNoteLinkHost = null;
+      if (activeTextEdit) {
+        const sel = window.getSelection();
+        const liveRange = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
+        if (liveRange && !liveRange.collapsed && activeTextEdit.body.contains(liveRange.commonAncestorContainer)) {
+          pendingNoteLinkRange = liveRange.cloneRange();
+          pendingNoteLinkHost = activeTextEdit;
+        }
+      }
+      if (!pendingNoteLinkRange) {
+        alert('Bitte zuerst den Text markieren, der zum Link werden soll.');
+        return;
+      }
+      openNoteLinkPicker();
+    });
+    el.noteLinkPickerBackdrop.addEventListener('click', (e) => {
+      if (e.target === el.noteLinkPickerBackdrop) closeNoteLinkPicker();
+    });
+    el.noteLinkPickerBackBtn.addEventListener('click', () => {
+      noteLinkPickerPath.pop();
+      renderNoteLinkPicker();
+    });
+    el.noteLinkPickerCancelBtn.addEventListener('click', closeNoteLinkPicker);
+    el.noteLinkPickerConfirmBtn.addEventListener('click', applyNoteLinkToSelection);
+    el.noteBackBtn.addEventListener('click', goBackFromNoteLink);
     // Klick/Tipp auf die leere Fläche legt sofort freien Text an (wie in OneNote) –
     // ABER erst, wenn feststeht, dass es wirklich ein Tipp war (kurz, ohne Bewegung,
     // nur ein Finger). Sonst wäre auf Touch-Geräten jedes Wischen zum Scrollen oder

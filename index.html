@@ -175,6 +175,9 @@
             <button class="toolbar-btn" id="addReminderBtn" type="button" aria-label="Erinnerung hinzufügen" title="Erinnerung hinzufügen (markierten Text als Erinnerungstext übernehmen)">
               <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M10 2a1 1 0 0 1 1 1v.6a5.5 5.5 0 0 1 4 5.3v2.9l1.3 2.1c.3.5-.05 1.1-.6 1.1H12a2 2 0 0 1-4 0H4.3c-.55 0-.9-.6-.6-1.1L5 11.8V8.9a5.5 5.5 0 0 1 4-5.3V3a1 1 0 0 1 1-1z"/></svg>
             </button>
+            <button class="toolbar-btn" id="addNoteLinkBtn" type="button" aria-label="Link zu einer anderen Notiz" title="Markierten Text mit einer anderen Notiz verlinken">
+              <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><rect x="9" y="3" width="8" height="10" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M2 14 8 8M8 8H4.5M8 8v3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
           </div>
 
           <div class="ribbon-divider"></div>
@@ -190,7 +193,13 @@
         </div>
 
         <div class="editor-body">
-          <textarea id="titleInput" class="title-input" placeholder="Titel" rows="1"></textarea>
+          <div class="editor-title-row">
+            <button type="button" class="note-back-btn" id="noteBackBtn" hidden title="Zurück zur vorherigen Notiz">
+              <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M12 4 6 10l6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span>Zurück</span>
+            </button>
+            <textarea id="titleInput" class="title-input" placeholder="Titel" rows="1"></textarea>
+          </div>
 
           <div class="canvas-workspace" id="canvasWorkspace">
             <div class="draw-toolbar" id="drawToolbar" hidden>
@@ -265,6 +274,23 @@
           <span class="popover-item-title">Freier Text</span>
           <span class="popover-item-desc">Text ohne sichtbaren Rahmen, liegt direkt auf der Fläche – ideal zum Beschriften auf linierten Seiten.</span>
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Interner Link: Notiz auswählen -->
+  <div class="popover-backdrop" id="noteLinkPickerBackdrop" hidden>
+    <div class="popover popover-wide" id="noteLinkPickerPopover">
+      <div class="popover-title-row">
+        <button type="button" class="popover-back-btn" id="noteLinkPickerBackBtn" hidden aria-label="Eine Ebene zurück">
+          <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M12 4 6 10l6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <p class="popover-title" id="noteLinkPickerTitle">Ordner wählen</p>
+      </div>
+      <div class="popover-list" id="noteLinkPickerList"></div>
+      <div class="popover-form-actions">
+        <button type="button" class="popover-btn popover-btn-secondary" id="noteLinkPickerCancelBtn">Abbrechen</button>
+        <button type="button" class="popover-btn popover-btn-primary" id="noteLinkPickerConfirmBtn" disabled>Link setzen</button>
       </div>
     </div>
   </div>

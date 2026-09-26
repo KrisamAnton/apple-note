@@ -1029,6 +1029,56 @@ textarea {
   color: var(--text-tertiary);
 }
 
+/* Umschließt die Überschrift und (falls vorhanden) den Zurück-Knopf einer
+   über einen internen Link erreichten Notiz - hält die Überschrift dabei
+   weiterhin mittig ausgerichtet, wie zuvor .title-input allein. */
+.editor-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 760px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.editor-title-row .title-input {
+  max-width: none;
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Nur sichtbar, wenn man gerade über einen internen Link auf dieser Notiz
+   gelandet ist (siehe navigateToNoteViaLink() in app.js) - bewusst auffällig
+   (rot, mindestens so groß wie die Überschrift), damit man sofort erkennt,
+   wie man zur ursprünglichen Notiz zurückkommt. */
+.note-back-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  margin-top: 10px;
+  height: 40px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 20px;
+  background: var(--danger);
+  color: #fff;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.note-back-btn:hover {
+  filter: brightness(1.08);
+}
+
+.note-back-btn .icon {
+  width: 20px;
+  height: 20px;
+}
+
 /* ---------- Freie Zeichenfläche ---------- */
 
 .canvas-workspace {
@@ -1457,6 +1507,16 @@ textarea {
 
 .note-link {
   color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Link zu einer anderen KrisNote-Notiz (siehe addNoteLinkBtn/
+   navigateToNoteViaLink() in app.js) - bewusst eine andere Farbe als
+   .note-link (externer Internet-Link), damit man beide auf einen Blick
+   unterscheiden kann. */
+.note-internal-link {
+  color: #af52de;
   text-decoration: underline;
   cursor: pointer;
 }
@@ -2026,6 +2086,63 @@ button.popover-item {
 .popover-wide {
   min-width: 280px;
   max-width: 320px;
+}
+
+/* Titelzeile mit optionalem "eine Ebene zurück"-Pfeil, z. B. beim
+   Durchklicken im Notiz-Auswahlfenster für interne Links (siehe
+   renderNoteLinkPicker() in app.js). */
+.popover-title-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.popover-back-btn {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  margin-left: 4px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.popover-back-btn:hover {
+  background: var(--hover-bg);
+}
+
+.popover-back-btn .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.popover-title-row .popover-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.popover-item-chevron {
+  flex: none;
+  margin-left: auto;
+  width: 14px;
+  height: 14px;
+  color: var(--text-tertiary);
+}
+
+.popover-hint {
+  padding: 14px 10px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-tertiary);
+  text-align: center;
 }
 
 /* Schlichte, kompakte Liste (Schriftart/-größe) statt großer Kacheln - wie
