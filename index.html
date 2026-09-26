@@ -148,46 +148,46 @@
           <div class="ribbon-divider"></div>
 
           <div class="ribbon-group">
-            <button class="toolbar-btn" id="addTextBtn" type="button" aria-label="Text hinzufügen" title="Text hinzufügen">
-              <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M3 3h14v2.2h-6v11.8H9V5.2H3V3z"/></svg>
+            <button class="toolbar-btn" id="addTextBtn" type="button" aria-label="Text hinzufügen" data-tooltip="Text hinzufügen">
+              <span class="icon icon-emoji" aria-hidden="true">📝</span>
             </button>
-            <button class="toolbar-btn" id="drawModeBtn" type="button" aria-label="Zeichnen" title="Zeichnen (Stift-Modus)">
-              <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M13.6 2.4a1.9 1.9 0 0 1 2.7 2.7L7.4 14 4 15l1-3.4 8.6-9.2zM3 17.5h14V19H3v-1.5z"/></svg>
+            <button class="toolbar-btn" id="drawModeBtn" type="button" aria-label="Zeichnen" data-tooltip="Zeichnen (Stift-Modus)">
+              <span class="icon icon-emoji" aria-hidden="true">✏️</span>
             </button>
-            <button class="toolbar-btn" id="addImageBtn" type="button" aria-label="Bild hinzufügen" title="Bild hinzufügen">
-              <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M3 4h14a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm1 10h12l-3.8-5-2.7 3.5L7.5 10 4 14zm2-6a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/></svg>
+            <button class="toolbar-btn" id="addImageBtn" type="button" aria-label="Bild hinzufügen" data-tooltip="Bild hinzufügen">
+              <span class="icon icon-emoji" aria-hidden="true">🖼️</span>
             </button>
             <input type="file" id="imageFileInput" accept="image/*" hidden />
-            <button class="toolbar-btn" id="addPdfBtn" type="button" aria-label="PDF hinzufügen" title="PDF hinzufügen">
-              <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M5 2h7l3 3v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zm6.5.6V6H15L11.5 2.6zM6.2 9.5h1.6c.9 0 1.5.5 1.5 1.4 0 .9-.6 1.4-1.5 1.4h-.7v1.6H6.2V9.5zm1 .9v1h.5c.3 0 .5-.2.5-.5s-.2-.5-.5-.5h-.5zm2.7-.9h1.4c1.2 0 1.9.7 1.9 2.2 0 1.5-.7 2.2-1.9 2.2H9.9V9.5zm1 .9v2.6h.3c.6 0 1-.4 1-1.3s-.4-1.3-1-1.3h-.3zm3-.9h2.3v.9h-1.3v.7h1.2v.9h-1.2v1.6h-1V9.5z"/></svg>
+            <button class="toolbar-btn" id="addPdfBtn" type="button" aria-label="PDF hinzufügen" data-tooltip="PDF hinzufügen" data-tooltip-hint="Kann direkt in den Text eingefügt oder als eigene Datei auf der Fläche abgelegt werden">
+              <span class="icon icon-emoji" aria-hidden="true">📄</span>
             </button>
             <input type="file" id="pdfFileInput" accept="application/pdf" hidden />
-            <button class="toolbar-btn" id="addAudioBtn" type="button" aria-label="Sprachnotiz aufnehmen" title="Sprachnotiz aufnehmen">
-              <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M10 2.5a2.5 2.5 0 0 0-2.5 2.5v4a2.5 2.5 0 0 0 5 0V5A2.5 2.5 0 0 0 10 2.5z"/><path d="M5.5 9v.5a4.5 4.5 0 0 0 9 0V9H16v.5a6 6 0 0 1-5.25 5.95V17.5h-1.5v-2.05A6 6 0 0 1 4 9.5V9h1.5z"/></svg>
+            <button class="toolbar-btn" id="addAudioBtn" type="button" aria-label="Sprachnotiz aufnehmen" data-tooltip="Sprachnotiz aufnehmen">
+              <span class="icon icon-emoji" aria-hidden="true">🎤</span>
             </button>
-            <button class="toolbar-btn" id="addFileBtn" type="button" aria-label="Datei anhängen" title="Datei anhängen (Word, Excel, ...)">
-              <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M13.5 2.6a2.3 2.3 0 0 1 3.3 3.3l-8.1 8.1a3.5 3.5 0 0 1-5-5l7.4-7.4 1.1 1.1-7.4 7.4a1.9 1.9 0 0 0 2.7 2.7l8.1-8.1a0.8 0.8 0 0 0-1.1-1.1L6.9 11.1l-1.1-1.1 7.7-7.4z"/></svg>
+            <button class="toolbar-btn" id="addFileBtn" type="button" aria-label="Datei anhängen" data-tooltip="Datei anhängen (Word, Excel, ...)">
+              <span class="icon icon-emoji" aria-hidden="true">📎</span>
             </button>
             <input type="file" id="fileFileInput" hidden />
-            <button class="toolbar-btn" id="addCredentialBtn" type="button" aria-label="Zugangsdaten hinzufügen" title="Zugangsdaten hinzufügen">
-              <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M8 2a4.5 4.5 0 0 0-4.24 6h-.01L1 10.75V15h1.5v-1.5H4V12h1.5v-1.5h1.28A4.5 4.5 0 1 0 8 2zm3.3 4.5a1.3 1.3 0 1 1 0-2.6 1.3 1.3 0 0 1 0 2.6z"/></svg>
+            <button class="toolbar-btn" id="addCredentialBtn" type="button" aria-label="Zugangsdaten hinzufügen" data-tooltip="Zugangsdaten hinzufügen" data-tooltip-hint="Speichert z. B. Benutzername und Passwort übersichtlich in einer eigenen Karte">
+              <span class="icon icon-emoji" aria-hidden="true">🔐</span>
             </button>
-            <button class="toolbar-btn" id="addReminderBtn" type="button" aria-label="Erinnerung hinzufügen" title="Erinnerung hinzufügen (markierten Text als Erinnerungstext übernehmen)">
-              <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M10 2a1 1 0 0 1 1 1v.6a5.5 5.5 0 0 1 4 5.3v2.9l1.3 2.1c.3.5-.05 1.1-.6 1.1H12a2 2 0 0 1-4 0H4.3c-.55 0-.9-.6-.6-1.1L5 11.8V8.9a5.5 5.5 0 0 1 4-5.3V3a1 1 0 0 1 1-1z"/></svg>
+            <button class="toolbar-btn" id="addReminderBtn" type="button" aria-label="Erinnerung hinzufügen" data-tooltip="Erinnerung hinzufügen" data-tooltip-hint="Markierten Text (oder die aktuelle Zeile) als Erinnerung übernehmen - erscheint als kleines Glockensymbol direkt im Text">
+              <span class="icon icon-emoji" aria-hidden="true">⏰</span>
             </button>
-            <button class="toolbar-btn" id="addNoteLinkBtn" type="button" aria-label="Link zu einer anderen Notiz" title="Markierten Text mit einer anderen Notiz verlinken">
-              <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><rect x="9" y="3" width="8" height="10" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M2 14 8 8M8 8H4.5M8 8v3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <button class="toolbar-btn" id="addNoteLinkBtn" type="button" aria-label="Link zu einer anderen Notiz" data-tooltip="Link zu einer anderen Notiz" data-tooltip-hint="Markierten Text mit einer anderen Notiz verknüpfen - ein Klick darauf springt dorthin, ein roter Zurück-Knopf führt wieder hierher">
+              <span class="icon icon-emoji" aria-hidden="true">🔗</span>
             </button>
           </div>
 
           <div class="ribbon-divider"></div>
 
           <div class="ribbon-group">
-            <button class="toolbar-btn" id="backgroundBtn" type="button" aria-label="Hintergrund" title="Hintergrund der Fläche">
-              <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M4 3h12a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm1.2 3.2h.1m3.5 0h.1m3.5 0h.1M5.2 9.7h.1m3.5 0h.1m3.5 0h.1M5.2 13.2h.1m3.5 0h.1m3.5 0h.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg>
+            <button class="toolbar-btn" id="backgroundBtn" type="button" aria-label="Hintergrund" data-tooltip="Hintergrund der Fläche">
+              <span class="icon icon-emoji" aria-hidden="true">📋</span>
             </button>
-            <button class="toolbar-btn" id="moveNoteBtn" type="button" aria-label="Notiz verschieben" title="In Ordner verschieben">
-              <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M2 5.5C2 4.67 2.67 4 3.5 4h4.13c.36 0 .7.14.96.4l1.2 1.2c.26.26.6.4.96.4H16.5c.83 0 1.5.67 1.5 1.5v7.6c0 .83-.67 1.5-1.5 1.5h-13C2.67 16.6 2 15.93 2 15.1V5.5z"/></svg>
+            <button class="toolbar-btn" id="moveNoteBtn" type="button" aria-label="Notiz verschieben" data-tooltip="In Ordner verschieben">
+              <span class="icon icon-emoji" aria-hidden="true">📁</span>
             </button>
           </div>
         </div>
@@ -479,6 +479,10 @@
       <div class="popover-list" id="fontFamilyList"></div>
     </div>
   </div>
+
+  <!-- Schneller Info-Text für die Einfügen-Werkzeuge (siehe data-tooltip/
+       data-tooltip-hint an den jeweiligen Buttons + wireIconTooltips()) -->
+  <div class="icon-tooltip" id="iconTooltip" role="tooltip"></div>
 
   <script src="js/app.js"></script>
   <script>

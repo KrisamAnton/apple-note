@@ -401,6 +401,7 @@
     editor: document.getElementById('editor'),
     titleInput: document.getElementById('titleInput'),
     noteBackBtn: document.getElementById('noteBackBtn'),
+    iconTooltip: document.getElementById('iconTooltip'),
     addNoteLinkBtn: document.getElementById('addNoteLinkBtn'),
     noteLinkPickerBackdrop: document.getElementById('noteLinkPickerBackdrop'),
     noteLinkPickerPopover: document.getElementById('noteLinkPickerPopover'),
@@ -1433,6 +1434,53 @@
   function wireRibbonBtn(btn, onClick) {
     btn.addEventListener('pointerdown', (e) => e.preventDefault());
     btn.addEventListener('click', onClick);
+  }
+
+  // Eigener Info-Text für die Einfügen-Werkzeuge (data-tooltip/-hint an den
+  // Buttons in index.html) statt des nativen title-Attributs - dessen
+  // Verzögerung ist browserseitig fest vorgegeben und lässt sich nicht
+  // verkürzen, außerdem passt dort keine zweizeilige Zusatzerklärung hinein.
+  function wireIconTooltips() {
+    const SHOW_DELAY = 220;
+    let showTimer = null;
+    const hide = () => {
+      clearTimeout(showTimer);
+      el.iconTooltip.classList.remove('visible');
+    };
+    document.querySelectorAll('[data-tooltip]').forEach((btn) => {
+      btn.addEventListener('mouseenter', () => {
+        clearTimeout(showTimer);
+        showTimer = setTimeout(() => {
+          // Bei schnellem Drüberwischen über mehrere Knöpfe kann die
+          // verzögerte Anzeige erst auslösen, wenn die Maus längst auf einem
+          // anderen Knopf steht (oder ihn schon wieder verlassen hat) -
+          // ohne diese Prüfung erschiene der Tooltip dann am falschen Knopf.
+          if (!btn.matches(':hover')) return;
+          const title = btn.dataset.tooltip;
+          const hint = btn.dataset.tooltipHint;
+          el.iconTooltip.innerHTML =
+            `<div class="icon-tooltip-title">${escapeHtml(title)}</div>` +
+            (hint ? `<div class="icon-tooltip-hint">${escapeHtml(hint)}</div>` : '');
+          el.iconTooltip.classList.add('visible');
+          // Erst NACH dem Einblenden messen, sonst wäre die Größe (für die
+          // Zentrierung) noch die vom vorherigen (oder leeren) Inhalt.
+          const btnRect = btn.getBoundingClientRect();
+          const tipRect = el.iconTooltip.getBoundingClientRect();
+          const left = Math.min(
+            Math.max(8, btnRect.left + btnRect.width / 2 - tipRect.width / 2),
+            window.innerWidth - tipRect.width - 8
+          );
+          el.iconTooltip.style.left = `${Math.round(left)}px`;
+          el.iconTooltip.style.top = `${Math.round(btnRect.bottom + 8)}px`;
+        }, SHOW_DELAY);
+      });
+      btn.addEventListener('mouseleave', hide);
+      btn.addEventListener('click', hide);
+    });
+    // Erfasst per Capture-Phase auch das Scrollen der (horizontal
+    // überlaufenden) Ribbon-Leiste selbst - sonst bliebe der Tooltip an der
+    // alten Stelle stehen, während der zugehörige Knopf wegscrollt.
+    window.addEventListener('scroll', hide, true);
   }
 
   function makeToolbarBtn(icon, danger, onClick, label) {
@@ -5835,6 +5883,7 @@
   async function init() {
     setupBackButtons();
     initColumnResizers();
+    wireIconTooltips();
     goToView(isMobileLayout() ? 'folders' : 'notes');
 
     state = await loadState();

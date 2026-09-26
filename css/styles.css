@@ -940,6 +940,14 @@ textarea {
   height: 18px;
 }
 
+.toolbar-btn .icon-emoji {
+  width: auto;
+  height: auto;
+  font-size: 19px;
+  line-height: 1;
+  font-style: normal;
+}
+
 .toolbar-btn:hover {
   background: var(--hover-bg);
 }
@@ -960,6 +968,42 @@ textarea {
 .toolbar-btn.active {
   background: var(--selection-bg);
   color: var(--accent-strong);
+}
+
+/* Eigener, schnell erscheinender Info-Text für die Einfügen-Werkzeuge (siehe
+   data-tooltip/data-tooltip-hint + wireIconTooltips() in app.js) - ersetzt
+   das native title-Attribut, dessen Verzögerung sich nicht verkürzen lässt
+   und das keine zweizeilige Erklärung erlaubt. */
+.icon-tooltip {
+  position: fixed;
+  z-index: 4000;
+  max-width: 240px;
+  padding: 6px 10px;
+  border-radius: 7px;
+  background: #262626;
+  color: #fff;
+  font-size: 12.5px;
+  line-height: 1.4;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 0.08s ease, transform 0.08s ease;
+}
+
+.icon-tooltip.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.icon-tooltip-title {
+  font-weight: 600;
+}
+
+.icon-tooltip-hint {
+  margin-top: 3px;
+  color: rgba(255, 255, 255, 0.75);
+  font-weight: 400;
 }
 
 /* Schriftart-/Schriftgrößen-Feld im klassischen Dropdown-Stil (wie in Word/
