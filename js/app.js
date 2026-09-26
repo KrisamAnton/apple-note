@@ -1889,7 +1889,10 @@
       if (chip !== hoveredPdfChip) {
         if (hoveredPdfChip) hoveredPdfChip.classList.remove('inline-pdf-chip-hover');
         hoveredPdfChip = chip;
-        if (hoveredPdfChip) hoveredPdfChip.classList.add('inline-pdf-chip-hover');
+        if (hoveredPdfChip) {
+          hoveredPdfChip.classList.add('inline-pdf-chip-hover');
+          positionInlinePdfChipToolbar(hoveredPdfChip);
+        }
       }
     });
     overlay.addEventListener('pointerleave', () => {
@@ -1985,13 +1988,57 @@
     body.addEventListener('input', () => {
       stripInheritedHeadingOnFreshLine(body);
       syncInlineReminderMarkers(note, obj, body);
+      // Frisch per Einfügen (Strg+V) reinkopierte PDF-Symbole (siehe
+      // sanitizePastedHtml()) haben noch keine Klick-Handler - sonst blieben
+      // sie nach dem Einfügen funktionslos, bis die Notiz neu geladen wird.
+      enhanceInlinePdfChips(body);
       saveTextObjContent(note, obj, body);
       updateTextEmptyState(body);
       growFreeTextToFit(obj, objEl, body);
       updateOverflowIndicators(objEl, body);
     });
     body.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') body.blur();
+      if (e.key === 'Escape') {
+        body.blur();
+        return;
+      }
+      // Ein im Text eingefügtes PDF-Symbol ist (contentEditable="false") ein
+      // einzelner, atomarer Nachbarknoten statt in den Fließtext eingewoben -
+      // ein einziger Entf-/Rücktaste-Druck direkt daneben nimmt es sonst ohne
+      // jede Rückfrage mit, obwohl man nur den umliegenden Text meinte.
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        const range = sel.getRangeAt(0);
+        if (!body.contains(range.commonAncestorContainer)) return;
+        const chip = sel.isCollapsed
+          ? findAdjacentInlinePdfChip(range, e.key === 'Delete')
+          : findInlinePdfChipInRange(range, body);
+        if (!chip) return;
+        e.preventDefault();
+        confirmDeleteInlinePdfChip(chip, () => {
+          if (sel.isCollapsed) chip.remove();
+          else range.deleteContents();
+        });
+      }
+    });
+    body.addEventListener('copy', (e) => {
+      // Natives Kopieren serialisiert einen contentEditable="false"-Bereich
+      // (unser PDF-Symbol) fürs Clipboard unzuverlässig - in Tests fehlten
+      // dabei sogar Symbol-Rahmen, Icon und Werkzeugleiste, nur der reine
+      // Dateiname kam an. Wird ein PDF-Symbol mitkopiert, baut deshalb ein
+      // echter DOM-Klon der Auswahl (statt der browsereigenen Aufbereitung)
+      // die Zwischenablage - der Rest der Auswahl (umliegender Text) bleibt
+      // dabei ganz normal erhalten.
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+      const range = sel.getRangeAt(0);
+      if (!findInlinePdfChipInRange(range, body)) return;
+      const container = document.createElement('div');
+      container.appendChild(range.cloneContents());
+      e.preventDefault();
+      e.clipboardData.setData('text/html', container.innerHTML);
+      e.clipboardData.setData('text/plain', container.textContent);
     });
     body.addEventListener('paste', (e) => {
       const clipboardData = e.clipboardData || window.clipboardData;
@@ -2026,11 +2073,13 @@
         insertPlainTextAtCaret(text);
       }
       // insertPlainTextAtCaret/insertSanitizedHtmlAtCaret fügen direkt per Range-API
-      // ein und lösen damit KEIN "input"-Ereignis aus - ohne die folgenden drei
-      // Aufrufe (die sonst der input-Handler übernimmt) würde der eingefügte Text
-      // weder gespeichert noch die Box darauf in der Höhe angepasst, sodass
-      // eingefügter mehrzeiliger Text abgeschnitten aussah und beim nächsten
-      // Neuladen sogar ganz verloren ging.
+      // ein und lösen damit KEIN "input"-Ereignis aus - ohne die folgenden Aufrufe
+      // (die sonst der input-Handler übernimmt) würde der eingefügte Text weder
+      // gespeichert noch die Box darauf in der Höhe angepasst, sodass eingefügter
+      // mehrzeiliger Text abgeschnitten aussah und beim nächsten Neuladen sogar
+      // ganz verloren ging. Ein mitkopiertes PDF-Symbol (siehe cleanPastedNode())
+      // bekäme ohne enhanceInlinePdfChips() ebenfalls keine Klick-Handler.
+      enhanceInlinePdfChips(body);
       saveTextObjContent(note, obj, body);
       updateTextEmptyState(body);
       growObjWidthToFit(obj, objEl, body);
@@ -2370,6 +2419,21 @@
         continue;
       }
       if (node.nodeType !== Node.ELEMENT_NODE) continue;
+      // Ein selbst erzeugtes, im Text eingefügtes PDF-Symbol (siehe
+      // buildInlinePdfChipEl()) soll beim Kopieren/Einfügen funktionsfähig
+      // bleiben - die generische Bereinigung darunter entfernt sonst jedes
+      // Attribut außer style/href und würde damit Klasse, Datei-Adresse und
+      // Werkzeugleiste des Symbols zerstören. Nur echte, mit uploadFile()
+      // erzeugte Server-Datei-Adressen (/files/...) werden akzeptiert - eine
+      // eingeschleuste Zwischenablage (z. B. von einer fremden Webseite)
+      // könnte sonst eine beliebige (auch böswillige) Adresse unter dem
+      // "Öffnen"-Knopf unterschieben.
+      if (node.classList.contains('inline-pdf-chip')) {
+        if (/^\/files\//.test(node.getAttribute('data-file-data') || '')) continue;
+        const name = node.querySelector('.inline-pdf-chip-name');
+        node.replaceWith(document.createTextNode(name ? name.textContent : ''));
+        continue;
+      }
       cleanPastedNode(node); // erst die Kinder bereinigen
       const tag = node.tagName;
       if (PASTE_DROP_TAGS.has(tag)) {
@@ -4337,6 +4401,7 @@
       '<span class="inline-pdf-chip-toolbar">' +
       `<span class="inline-pdf-chip-btn" data-action="open" title="Datei öffnen"><svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.openFile}</svg></span>` +
       `<span class="inline-pdf-chip-btn" data-action="rename" title="Umbenennen"><svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.rename}</svg></span>` +
+      `<span class="inline-pdf-chip-btn inline-pdf-chip-btn-danger" data-action="delete" title="Löschen"><svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.trash}</svg></span>` +
       '</span>';
     return span;
   }
@@ -4469,24 +4534,80 @@
   // Sichtbarkeit dieser Leiste wird bei aktiver Verschiebe-Überlagerung per
   // JS gesteuert (siehe updateInlinePdfChipHover() in buildTextContent()),
   // da die Überlagerung natives CSS :hover sonst blockieren würde.
+  // Positioniert die (CSS: position:fixed) Werkzeugleiste eines PDF-Symbols
+  // an dessen Bildschirmposition - üblicherweise knapp darüber, außer das
+  // würde sie über den oberen Rand des UMGEBENDEN OBJEKTS hinausschieben
+  // (z. B. Symbol ganz oben in einer nur einzeiligen Textbox), dann knapp
+  // darunter. Wichtig: die Grenze ist der obere Rand des Objekts (nicht der
+  // Bildschirmrand) - ein echter Mausklick kann die Leiste nämlich nur dort
+  // erreichen, wo die Verschiebe-Überlagerung des Objekts (siehe
+  // buildTextContent()) den Klick überhaupt noch abfangen und weiterreichen
+  // kann; außerhalb des Objekts liegt nur die leere Fläche dahinter, ein
+  // Klick dort würde also ins Leere gehen, obwohl "position:fixed" die
+  // Leiste selbst dort trotzdem sichtbar rendern würde.
+  function positionInlinePdfChipToolbar(chip) {
+    const toolbar = chip.querySelector('.inline-pdf-chip-toolbar');
+    const objEl = chip.closest('.canvas-object');
+    if (!toolbar || !objEl) return;
+    const chipRect = chip.getBoundingClientRect();
+    const objRect = objEl.getBoundingClientRect();
+    const TOOLBAR_HEIGHT = 34;
+    // Wählt die Richtung mit mehr Platz (statt fest "oben, außer es passt
+    // nicht") - bei einer sehr niedrigen Textbox reicht sonst z. B. weder
+    // oben noch unten wirklich, aber "oben" kann trotzdem die deutlich
+    // bessere (weniger schlechte) Wahl sein. Am Ende zusätzlich auf die
+    // Objekt-Grenzen geklemmt, damit die Leiste nie über das Objekt hinaus-
+    // ragt, selbst wenn dafür objektiv nicht genug Platz vorhanden ist.
+    const spaceAbove = chipRect.top - objRect.top;
+    const spaceBelow = objRect.bottom - chipRect.bottom;
+    const top = spaceAbove >= spaceBelow
+      ? Math.max(objRect.top, chipRect.top - TOOLBAR_HEIGHT)
+      : Math.min(objRect.bottom - TOOLBAR_HEIGHT, chipRect.bottom + 2);
+    toolbar.style.left = `${Math.round(chipRect.left)}px`;
+    toolbar.style.top = `${Math.round(top)}px`;
+  }
+
   function enhanceInlinePdfChips(body) {
     body.querySelectorAll('.inline-pdf-chip').forEach((chip) => {
       if (chip.pdfChipWired) return;
       chip.pdfChipWired = true;
+      // Im Bearbeitungsmodus (contentEditable) blockiert nichts das native
+      // CSS-":hover" - die (fest positionierte) Werkzeugleiste muss trotzdem
+      // per JS an die richtige Bildschirmstelle gesetzt werden, sonst NUR im
+      // Nicht-Bearbeitungsmodus über die Verschiebe-Überlagerung (siehe
+      // pointermove-Wiring in buildTextContent()).
+      chip.addEventListener('pointerenter', () => positionInlinePdfChipToolbar(chip));
       // Bereits vorher eingefügte Symbole (gespeichert, bevor es die
-      // Werkzeugleiste gab) haben die Knöpfe noch nicht im HTML - ohne sie
-      // wären solche älteren Symbole nie mehr zu öffnen oder umzubenennen.
-      // Fehlt die Leiste, wird sie hier nachträglich ergänzt.
-      if (!chip.querySelector('.inline-pdf-chip-toolbar')) {
-        const toolbar = document.createElement('span');
+      // Werkzeugleiste bzw. den Löschen-Knopf gab) haben einzelne Knöpfe noch
+      // nicht im HTML - ohne sie wären solche älteren Symbole nie mehr zu
+      // öffnen/umzubenennen/löschen. Fehlende Teile werden hier ergänzt.
+      let toolbar = chip.querySelector('.inline-pdf-chip-toolbar');
+      if (!toolbar) {
+        toolbar = document.createElement('span');
         toolbar.className = 'inline-pdf-chip-toolbar';
-        toolbar.innerHTML =
-          `<span class="inline-pdf-chip-btn" data-action="open" title="Datei öffnen"><svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.openFile}</svg></span>` +
-          `<span class="inline-pdf-chip-btn" data-action="rename" title="Umbenennen"><svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.rename}</svg></span>`;
         chip.appendChild(toolbar);
+      }
+      if (!toolbar.querySelector('[data-action="open"]')) {
+        toolbar.insertAdjacentHTML(
+          'beforeend',
+          `<span class="inline-pdf-chip-btn" data-action="open" title="Datei öffnen"><svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.openFile}</svg></span>`
+        );
+      }
+      if (!toolbar.querySelector('[data-action="rename"]')) {
+        toolbar.insertAdjacentHTML(
+          'beforeend',
+          `<span class="inline-pdf-chip-btn" data-action="rename" title="Umbenennen"><svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.rename}</svg></span>`
+        );
+      }
+      if (!toolbar.querySelector('[data-action="delete"]')) {
+        toolbar.insertAdjacentHTML(
+          'beforeend',
+          `<span class="inline-pdf-chip-btn inline-pdf-chip-btn-danger" data-action="delete" title="Löschen"><svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.trash}</svg></span>`
+        );
       }
       const openBtn = chip.querySelector('.inline-pdf-chip-btn[data-action="open"]');
       const renameBtn = chip.querySelector('.inline-pdf-chip-btn[data-action="rename"]');
+      const deleteBtn = chip.querySelector('.inline-pdf-chip-btn[data-action="delete"]');
       if (openBtn) {
         openBtn.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -4499,7 +4620,64 @@
           startRenameInlinePdfChip(chip);
         });
       }
+      if (deleteBtn) {
+        deleteBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          confirmDeleteInlinePdfChip(chip, () => chip.remove());
+        });
+      }
     });
+  }
+
+  // Gemeinsame Sicherheitsabfrage vorm Entfernen eines im Text eingefügten
+  // PDF-Symbols - egal ob über den Löschen-Knopf der Werkzeugleiste oder über
+  // die Entf-/Rücktaste (siehe buildTextContent()) ausgelöst. removeFn führt
+  // die eigentliche Entfernung erst nach Bestätigung aus (chip.remove() für
+  // einen einzelnen Klick auf den Knopf, range.deleteContents() falls über
+  // Tastatur eine größere Auswahl inklusive des Symbols gelöscht wird).
+  function confirmDeleteInlinePdfChip(chip, removeFn) {
+    const name = chip.querySelector('.inline-pdf-chip-name')?.textContent || 'PDF';
+    if (!confirm(`"${name}" aus dem Text löschen?`)) return false;
+    const body = chip.closest('.canvas-text-body');
+    const objEl = chip.closest('.canvas-object');
+    const note = currentNote();
+    const obj = note && objEl && note.objects.find((o) => o.id === objEl.dataset.id);
+    removeFn();
+    if (body && note && obj) {
+      syncInlineReminderMarkers(note, obj, body);
+      saveTextObjContent(note, obj, body);
+      updateTextEmptyState(body);
+      growFreeTextToFit(obj, objEl, body);
+      updateOverflowIndicators(objEl, body);
+    }
+    return true;
+  }
+
+  // Ermittelt, ob ein Entf-/Rücktaste-Druck bei eingeklappter Textmarke
+  // (also ohne Auswahl, nur ein Cursor) ein direkt daneben liegendes
+  // PDF-Symbol treffen würde - siehe Kommentar am keydown-Wiring in
+  // buildTextContent().
+  function findAdjacentInlinePdfChip(range, forward) {
+    const isChip = (n) => n && n.nodeType === Node.ELEMENT_NODE && n.classList.contains('inline-pdf-chip');
+    const container = range.startContainer;
+    const offset = range.startOffset;
+    if (container.nodeType === Node.TEXT_NODE) {
+      if (forward) return offset === container.nodeValue.length && isChip(container.nextSibling) ? container.nextSibling : null;
+      return offset === 0 && isChip(container.previousSibling) ? container.previousSibling : null;
+    }
+    const node = forward ? container.childNodes[offset] : container.childNodes[offset - 1];
+    return isChip(node) ? node : null;
+  }
+
+  // Wie findAdjacentInlinePdfChip(), aber für eine echte (nicht
+  // eingeklappte) Auswahl - trifft zu, sobald irgendwo innerhalb der
+  // Auswahl ein PDF-Symbol liegt (z. B. Symbol + umliegender Text markiert).
+  function findInlinePdfChipInRange(range, body) {
+    const chips = body.querySelectorAll('.inline-pdf-chip');
+    for (const chip of chips) {
+      if (range.intersectsNode(chip)) return chip;
+    }
+    return null;
   }
 
   function findInlinePdfChipAtPoint(body, x, y) {

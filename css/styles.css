@@ -2498,7 +2498,6 @@ textarea.popover-text-input {
 /* ---------- Inline-PDF-Datei-Symbol (direkt im Text) ---------- */
 
 .inline-pdf-chip {
-  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -2513,26 +2512,29 @@ textarea.popover-text-input {
 }
 
 /* Erscheint nur beim Überfahren mit der Maus, damit man die Datei auswählen
-   (öffnen/umbenennen) kann, statt dass ein einfacher Klick auf das Symbol
-   selbst schon die Datei öffnet. Die Klasse .inline-pdf-chip-hover wird
-   zusätzlich zum nativen :hover per JS gesetzt (siehe buildTextContent()) -
-   die Verschiebe-Überlagerung über dem Text blockiert natives :hover sonst,
-   solange man nicht gerade im Bearbeitungsmodus ist. */
+   (öffnen/umbenennen/löschen) kann, statt dass ein einfacher Klick auf das
+   Symbol selbst schon die Datei öffnet. Die Klasse .inline-pdf-chip-hover
+   wird zusätzlich zum nativen :hover per JS gesetzt (siehe
+   buildTextContent()) - die Verschiebe-Überlagerung über dem Text blockiert
+   natives :hover sonst, solange man nicht gerade im Bearbeitungsmodus ist.
+   position:fixed (statt absolute relativ zum Symbol) mit per JS berechneten
+   left/top (siehe positionInlinePdfChipToolbar()) - eine an der Textbox
+   relativ positionierte Leiste würde vom eigenen overflow:hidden der Box
+   abgeschnitten, sobald das Symbol nah am oberen ODER unteren Rand einer
+   (oft nur einzeiligen) Textbox sitzt. Fixiert an den Bildschirm statt an
+   die Textbox gebunden, entgeht sie dieser Beschränkung komplett. */
 .inline-pdf-chip-toolbar {
-  position: absolute;
-  bottom: 100%;
-  left: 0;
+  position: fixed;
   display: none;
   align-items: center;
   gap: 2px;
-  margin-bottom: 2px;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 3px;
   box-shadow: var(--shadow-popover);
   white-space: nowrap;
-  z-index: 5;
+  z-index: 2000;
 }
 
 .inline-pdf-chip:hover .inline-pdf-chip-toolbar,
@@ -2560,6 +2562,10 @@ textarea.popover-text-input {
 .inline-pdf-chip-btn .icon {
   width: 15px;
   height: 15px;
+}
+
+.inline-pdf-chip-btn-danger {
+  color: var(--danger);
 }
 
 .inline-pdf-chip-icon {
