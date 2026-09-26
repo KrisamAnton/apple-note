@@ -5678,6 +5678,58 @@
       document.addEventListener('pointerdown', onOtherPointerDown, true);
     });
 
+    // Als installierte App vom Homescreen (Standalone-Modus) unterdrückt das
+    // Handy-Betriebssystem den nativen Zwei-Finger-Zoom von Webseiten meist
+    // komplett - man kommt dann zwar rein (System-Vergrößerung), aber nicht
+    // mehr zoomt man nicht mehr zurück, um mehr von der Seite zu sehen.
+    // Deshalb hier ein eigener, rein visueller "Vorschau-Zoom": zwei Finger
+    // auf der Fläche verkleinern/vergrößern die Ansicht um den Punkt zwischen
+    // den Fingern, federt beim Loslassen aber wieder auf die normale Größe
+    // zurück - zum Betrachten/Überblick verschaffen, nicht zum Bearbeiten.
+    // Bewusst KEINE dauerhafte Zoomstufe: jede Ziehen-/Zeichnen-/Größenändern-
+    // Berechnung im Rest der App rechnet in den echten (unskalierten) Fläche-
+    // Koordinaten - eine bleibende Zoomstufe müsste an jeder dieser Stellen
+    // erst berücksichtigt werden, um nicht zu einem falschen Faktor daneben
+    // zu ziehen/zeichnen.
+    let workspacePinch = null;
+    let workspaceZoom = 1;
+    const touchDist = (t0, t1) => Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+
+    el.canvasWorkspace.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 2 || dragState || inkStrokeState || drawModeActive) return;
+      e.preventDefault();
+      const rect = el.canvasWorkspace.getBoundingClientRect();
+      const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      const originXPercent = ((midX - rect.left + el.canvasWorkspace.scrollLeft) / el.canvasSurface.offsetWidth) * 100;
+      const originYPercent = ((midY - rect.top + el.canvasWorkspace.scrollTop) / el.canvasSurface.offsetHeight) * 100;
+      el.canvasSurface.classList.remove('workspace-zoom-animated');
+      el.canvasSurface.style.transformOrigin = `${originXPercent}% ${originYPercent}%`;
+      workspacePinch = { startDist: touchDist(e.touches[0], e.touches[1]), startZoom: workspaceZoom };
+    }, { passive: false });
+
+    el.canvasWorkspace.addEventListener('touchmove', (e) => {
+      if (!workspacePinch || e.touches.length !== 2) return;
+      e.preventDefault();
+      const dist = touchDist(e.touches[0], e.touches[1]);
+      workspaceZoom = clamp(workspacePinch.startZoom * (dist / workspacePinch.startDist), 0.4, 2.5);
+      el.canvasSurface.style.transform = workspaceZoom === 1 ? '' : `scale(${workspaceZoom})`;
+    }, { passive: false });
+
+    const endWorkspacePinch = () => {
+      if (!workspacePinch) return;
+      workspacePinch = null;
+      if (workspaceZoom === 1) return;
+      workspaceZoom = 1;
+      el.canvasSurface.classList.add('workspace-zoom-animated');
+      el.canvasSurface.style.transform = '';
+      setTimeout(() => el.canvasSurface.classList.remove('workspace-zoom-animated'), 220);
+    };
+    el.canvasWorkspace.addEventListener('touchend', (e) => {
+      if (e.touches.length < 2) endWorkspacePinch();
+    });
+    el.canvasWorkspace.addEventListener('touchcancel', endWorkspacePinch);
+
     // Dateien lassen sich direkt aus dem Dateisystem auf die Fläche ziehen -
     // PDFs und Bilder bekommen ihre spezielle Darstellung, alles andere
     // (Word, Excel, ...) landet als einfacher Datei-Anhang.
