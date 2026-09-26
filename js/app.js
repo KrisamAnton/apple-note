@@ -2035,6 +2035,27 @@
     });
 
     body.addEventListener('blur', () => exitTextEdit(obj, body, overlay));
+    // Im Bearbeitungsmodus liegt kein Overlay mehr über dem Text (siehe
+    // findInternalLinkAtPoint()) - ein Klick auf einen internen Link würde
+    // ohne diesen Handler nur den Cursor an die Klickstelle setzen, statt
+    // (wie außerhalb des Bearbeitungsmodus) zur verlinkten Notiz zu springen.
+    // sel.isCollapsed grenzt einen echten Klick von einer Textmarkierung ab,
+    // die zufällig über den Link hinweg gezogen wurde.
+    body.addEventListener('click', (e) => {
+      const link = e.target.closest && e.target.closest('a.note-internal-link');
+      if (!link || !body.contains(link)) return;
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed) return;
+      e.preventDefault();
+      // Erst das Textfeld regulär verlassen (speichert seinen Inhalt noch für
+      // DIESE Notiz ab) - sonst würde renderEditor() beim Sprung zur
+      // Zielnotiz das noch fokussierte, alte Textfeld aus dem DOM entfernen
+      // und den dadurch ausgelösten Blur erst bearbeiten, nachdem
+      // selectedNoteId schon auf die Zielnotiz zeigt (saveTextObjContent
+      // würde dann fälschlich deren updatedAt anstoßen).
+      body.blur();
+      navigateToNoteViaLink(link.dataset.noteId);
+    });
     body.addEventListener('input', () => {
       stripInheritedHeadingOnFreshLine(body);
       syncInlineReminderMarkers(note, obj, body);
