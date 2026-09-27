@@ -235,8 +235,7 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
   Hell-/Dunkelmodus des restlichen Programms - mit eigenem Logo oben links
   (bleibt beim Scrollen der Ordnerliste an fester Stelle), daneben "Alle
   Notizen" samt Anzahl als eigene, immer sichtbare Kachel (nicht Teil der
-  scrollenden Ordnerliste), und Name/„Abmelden"-Knopf unten (aktuell nur
-  optisch, KrisNote hat noch keine echte Anmeldung)
+  scrollenden Ordnerliste), und Name/„Abmelden"-Knopf unten
 - Beim (Neu-)Laden der Seite ist bewusst keine Notiz vorausgewählt - man
   landet in einer Willkommens-Ansicht (eigene Grafik) statt zufällig in
   der zuletzt bearbeiteten Notiz zu stehen
@@ -266,10 +265,13 @@ Alle Notizen, Ordner, Bilder und PDFs werden auf einem eigenen kleinen
   selbst (Texte, Positionen) bleiben eine kleine JSON-Datei. Auch
   viele große PDFs (z. B. 100 Stück à 30 MB) sind kein Problem, solange
   auf dem Server genug Festplattenplatz vorhanden ist.
-- Es gibt weiterhin **kein Login/Benutzerkonto** – jeder, der die
-  Adresse des Servers erreicht, sieht denselben Datenstand. Das ist für
-  eine Einzelperson/Familie im eigenen Netzwerk unkritisch, sollte aber
-  nicht ohne Zugriffsschutz öffentlich ins Internet gestellt werden.
+- **Login erforderlich**: Ohne gültige Anmeldung ist weder die App noch
+  die API erreichbar (Umleitung zu `login.html`). Benutzer werden per
+  Kommandozeile angelegt (siehe „Benutzer anlegen" unten) - es gibt
+  bewusst keine offene Registrierung über den Browser.
+  Aktuell (Zwischenschritt) sehen noch alle angemeldeten Personen
+  denselben, gemeinsamen Datenstand - getrennte, private Notizbereiche
+  pro Person sind als nächster Ausbauschritt geplant.
 - Fällt die Verbindung zum Server aus, erscheint beim Speichern eine
   deutliche Warnung, damit nie unbemerkt eine Änderung verloren geht.
 
@@ -311,9 +313,9 @@ App selbst als auch die API (`/api/state`, `/api/upload`) aus.
 
 ## Self-Hosting (z. B. auf einem eigenen Server/Proxmox)
 
-Der Server ist bewusst einfach gehalten (keine Datenbank, kein
-Login) und lässt sich auf jedem Rechner mit Node.js betreiben, der
-dauerhaft erreichbar ist:
+Der Server ist bewusst einfach gehalten (keine Datenbank) und lässt
+sich auf jedem Rechner mit Node.js betreiben, der dauerhaft erreichbar
+ist:
 
 ```bash
 git clone <dieses Repository>
@@ -321,6 +323,22 @@ cd apple-note/server
 npm install
 PORT=3000 npm start
 ```
+
+### Benutzer anlegen
+
+Ohne mindestens einen Benutzer ist die App nicht erreichbar (nur die
+Anmeldeseite selbst). Benutzer werden per Kommandozeile angelegt oder
+aktualisiert (überschreibt bei bestehendem Benutzernamen nur das
+Passwort/den Anzeigenamen):
+
+```bash
+node server/create-user.js <benutzername> <passwort> [Anzeigename]
+```
+
+Passwörter werden gesalzen und gehasht (`crypto.scrypt`) in
+`data/users.json` abgelegt, nie im Klartext. Die Sitzung nach dem
+Anmelden ist 30 Tage gültig (Cookie) und lebt nur im Arbeitsspeicher
+des Servers - ein Neustart meldet alle wieder ab.
 
 Für den Dauerbetrieb empfiehlt sich ein Prozess-Manager wie `pm2` oder
 ein systemd-Service, damit der Server nach einem Neustart automatisch

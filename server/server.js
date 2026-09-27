@@ -6,13 +6,26 @@ const { spawn } = require('child_process');
 const express = require('express');
 const multer = require('multer');
 const nodemailer = require('nodemailer');
+const {
+  SESSION_COOKIE_NAME,
+  SESSION_MAX_AGE_MS,
+  makeUserStore,
+  verifyPassword,
+  createSession,
+  getSession,
+  destroySession,
+  parseCookies,
+} = require('./auth');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const DATA_DIR = process.env.DATA_DIR || path.join(PROJECT_ROOT, 'data');
 const FILES_DIR = path.join(DATA_DIR, 'files');
 const STATE_FILE = path.join(DATA_DIR, 'state.json');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const PORT = process.env.PORT || 3000;
+
+const userStore = makeUserStore(USERS_FILE);
 
 fs.mkdirSync(FILES_DIR, { recursive: true });
 
@@ -27,9 +40,61 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use('/files', express.static(FILES_DIR, { maxAge: '1y', immutable: true }));
-
 app.use(express.json({ limit: '25mb' }));
+
+// ---------- Anmeldung ----------
+//
+// login.html und der Login-Endpunkt selbst müssen ohne Anmeldung erreichbar
+// bleiben (sonst könnte sich niemand mehr anmelden) - alles andere (Fläche,
+// API, hochgeladene Dateien) verlangt ab hier eine gültige Sitzung.
+const PUBLIC_PATHS = new Set(['/login.html', '/api/login']);
+
+app.use((req, res, next) => {
+  if (PUBLIC_PATHS.has(req.path)) return next();
+  const cookies = parseCookies(req);
+  const session = getSession(cookies[SESSION_COOKIE_NAME]);
+  if (session) {
+    req.username = session.username;
+    return next();
+  }
+  if (req.path.startsWith('/api/') || req.path.startsWith('/files/')) {
+    return res.status(401).json({ error: 'Nicht angemeldet' });
+  }
+  res.redirect('/login.html');
+});
+
+app.post('/api/login', (req, res) => {
+  const { username, password } = req.body || {};
+  if (typeof username !== 'string' || typeof password !== 'string' || !username || !password) {
+    return res.status(400).json({ error: 'Benutzername und Passwort erforderlich' });
+  }
+  const user = userStore.findUser(username);
+  if (!user || !verifyPassword(password, user.passwordSalt, user.passwordHash)) {
+    return res.status(401).json({ error: 'Benutzername oder Passwort falsch' });
+  }
+  const sid = createSession(user.username);
+  res.cookie(SESSION_COOKIE_NAME, sid, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: req.secure,
+    maxAge: SESSION_MAX_AGE_MS,
+    path: '/',
+  });
+  res.json({ ok: true, username: user.username, displayName: user.displayName });
+});
+
+app.post('/api/logout', (req, res) => {
+  const cookies = parseCookies(req);
+  destroySession(cookies[SESSION_COOKIE_NAME]);
+  res.clearCookie(SESSION_COOKIE_NAME, { path: '/' });
+  res.json({ ok: true });
+});
+
+app.get('/api/me', (req, res) => {
+  res.json({ username: req.username });
+});
+
+app.use('/files', express.static(FILES_DIR, { maxAge: '1y', immutable: true }));
 
 app.get('/api/state', (req, res) => {
   fs.readFile(STATE_FILE, 'utf8', (err, raw) => {

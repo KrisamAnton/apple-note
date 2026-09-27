@@ -241,6 +241,12 @@
   async function loadState() {
     try {
       const res = await fetch('/api/state');
+      if (res.status === 401) {
+        // Sitzung abgelaufen/ungültig - zur Anmeldung statt fälschlich eine
+        // leere App zu zeigen (siehe createDefaultState() weiter unten).
+        window.location.href = '/login.html';
+        return new Promise(() => {}); // App-Start hier bewusst nicht fortsetzen
+      }
       if (res.ok) {
         const parsed = await res.json();
         if (parsed && Array.isArray(parsed.notes) && Array.isArray(parsed.folders)) {
@@ -5957,9 +5963,15 @@
 
     el.newFolderBtn.addEventListener('click', createFolder);
     el.allNotesBtn.addEventListener('click', () => selectFolder(null));
-    // Noch ohne echte Anmeldung (siehe README) - der Knopf lädt die Seite
-    // vorerst nur neu, damit er sich nicht funktionslos anfühlt.
-    el.logoutBtn.addEventListener('click', () => window.location.reload());
+    el.logoutBtn.addEventListener('click', async () => {
+      try {
+        await fetch('/api/logout', { method: 'POST' });
+      } catch (err) {
+        // Weiterleitung passiert trotzdem - ohne gültige Sitzung verlangt die
+        // nächste Anfrage an die App ohnehin wieder die Anmeldung.
+      }
+      window.location.href = '/login.html';
+    });
     el.sidebarUserBtn.addEventListener('click', openSettingsPopover);
     el.settingsPopoverBackdrop.addEventListener('click', (e) => {
       if (e.target === el.settingsPopoverBackdrop) closeSettingsPopover();
