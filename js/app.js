@@ -6012,6 +6012,34 @@
     document.addEventListener('selectionchange', rememberActiveSelectionRange);
     goToView(isMobileLayout() ? 'folders' : 'notes');
 
+    // TEMPORÄRES DEBUGGING (wird nach der Diagnose wieder entfernt) - schreibt
+    // jede Änderung am Suchfeld-Wert nach localStorage statt nur in die
+    // Konsole, damit die Aufzeichnung auch einen Seitenwechsel (Abmelden/
+    // Anmelden) übersteht.
+    (function debugSearchField() {
+      const desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+      const log = (msg) => {
+        try {
+          const arr = JSON.parse(localStorage.getItem('kn_search_debug') || '[]');
+          arr.push(`${new Date().toISOString().slice(11, 23)} ${msg}`);
+          while (arr.length > 300) arr.shift();
+          localStorage.setItem('kn_search_debug', JSON.stringify(arr));
+        } catch (e) {
+          // egal - Diagnose darf die App nie zum Absturz bringen
+        }
+      };
+      log(`init() gestartet - Feldwert: ${JSON.stringify(el.searchInput.value)}`);
+      Object.defineProperty(el.searchInput, 'value', {
+        get() { return desc.get.call(this); },
+        set(v) { log(`value gesetzt auf ${JSON.stringify(v)}`); return desc.set.call(this, v); },
+      });
+      ['input', 'beforeinput', 'change', 'focus', 'blur'].forEach((evt) => {
+        el.searchInput.addEventListener(evt, (e) => {
+          log(`Event ${evt} isTrusted=${e.isTrusted} wert=${JSON.stringify(el.searchInput.value)}`);
+        });
+      });
+    })();
+
     // Manche Browser (v.a. Safari) füllen das Suchfeld trotz autocomplete="off"
     // beim Laden von sich aus mit einem früher auf diesem Gerät eingegebenen
     // Begriff - teils nicht sofort, sondern erst mit kurzer Verzögerung nach
