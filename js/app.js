@@ -6545,6 +6545,19 @@
       }
     });
 
+    // Manche Browser (v.a. Edge/Chrome) setzen ihren Autofill-Vorschlag nicht
+    // schon beim Laden der Seite ein, sondern erst wenn das Feld tatsächlich
+    // den Fokus bekommt - das würde die Prüfungen in init() verpassen. Weicht
+    // der Feldwert direkt nach dem Fokussieren von unserem zuletzt bekannten
+    // Suchbegriff ab, kann das nur von außen (nicht vom Benutzer) gekommen
+    // sein und wird sofort wieder entfernt.
+    el.searchInput.addEventListener('focus', () => {
+      if (el.searchInput.value !== searchQuery) el.searchInput.value = searchQuery;
+      setTimeout(() => {
+        if (el.searchInput.value !== searchQuery) el.searchInput.value = searchQuery;
+      }, 50);
+    });
+
     let searchDebounce = null;
     el.searchInput.addEventListener('input', () => {
       clearTimeout(searchDebounce);
