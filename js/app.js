@@ -609,6 +609,32 @@
     return ids;
   }
 
+  // Die oberste Hauptseite einer Notiz (sie selbst, falls sie schon eine
+  // Hauptseite ohne Elternteil ist).
+  function rootAncestorId(id) {
+    let current = findNote(id);
+    while (current && current.parentNoteId) {
+      const parent = findNote(current.parentNoteId);
+      if (!parent) break;
+      current = parent;
+    }
+    return current ? current.id : null;
+  }
+
+  // Alle Zeilen, die zur selben "Familie" wie die aktuell gewählte Notiz
+  // gehören (ihre Hauptseite + sämtliche Unterseiten, egal ob gerade
+  // ein-/ausgeklappt) - für die dezente graue Gruppen-Markierung in der
+  // Notizliste. Gibt null zurück, wenn es dafür (Hauptseite ohne
+  // Unterseiten) ohnehin nur eine einzige Zeile gäbe - dann reicht die
+  // normale Auswahl-Markierung völlig aus.
+  function selectionFamilyNoteIds() {
+    if (!selectedNoteId) return null;
+    const rootId = rootAncestorId(selectedNoteId);
+    if (!rootId) return null;
+    const family = [rootId, ...descendantNoteIds(rootId)];
+    return family.length > 1 ? new Set(family) : null;
+  }
+
   // ----- Notizen per Ziehen (lang drücken) manuell umsortieren/verschachteln -----
   // Wie in OneNote: lang drücken hebt eine Zeile "an" (kurzer Puls), danach folgt
   // sie dem Finger/der Maus nicht sichtbar mit, aber die Zeile unter dem Zeiger
@@ -1070,10 +1096,17 @@
     const isSearchMode = searchQuery.trim().length > 0;
     const isTrashView = selectedFolderId === TRASH_FOLDER_ID;
     updateCollapseAllButton(isSearchMode ? new Set() : collapsibleNoteIds(notes));
+    // Während der Suche (flache, nach Relevanz sortierte Liste) ergibt eine
+    // Hierarchie-Markierung keinen Sinn - nur in der normalen Baum-Ansicht.
+    const familyIds = isSearchMode ? null : selectionFamilyNoteIds();
 
     for (const { note, depth, hasChildren } of rows) {
       const item = document.createElement('div');
-      item.className = 'note-item' + (depth > 0 ? ' note-item-sub' : '') + (note.id === selectedNoteId ? ' active' : '');
+      const isActive = note.id === selectedNoteId;
+      item.className = 'note-item'
+        + (depth > 0 ? ' note-item-sub' : '')
+        + (isActive ? ' active' : '')
+        + (!isActive && familyIds && familyIds.has(note.id) ? ' note-item-family' : '');
       item.style.paddingLeft = `${10 + depth * 16}px`;
       item.dataset.noteId = note.id;
 
