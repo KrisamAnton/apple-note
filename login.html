@@ -17,9 +17,11 @@
        anders als die feste Kartenposition auseinander. Deshalb wieder fest
        mittig zentriert (funktioniert bei jeder Fenstergröße gleich gut) - der
        Verlauf ist dafür deutlich heller/kräftiger als im ersten Versuch, damit
-       möglichst viel vom Original-Bild sichtbar bleibt. */
+       möglichst viel vom Original-Bild sichtbar bleibt. Die helle Zone reicht
+       bewusst weiter nach unten, damit das Buch mit dem "K" und dem Stift auch
+       hinter der (jetzt tiefer sitzenden) Anmeldekarte noch gut sichtbar bleibt. */
     background:
-      linear-gradient(180deg, rgba(18, 10, 36, 0) 0%, rgba(18, 10, 36, 0.05) 28%, rgba(16, 9, 32, 0.68) 44%, rgba(14, 8, 28, 0.93) 56%, #100822 68%),
+      linear-gradient(180deg, rgba(18, 10, 36, 0) 0%, rgba(18, 10, 36, 0.05) 38%, rgba(16, 9, 32, 0.68) 56%, rgba(14, 8, 28, 0.93) 68%, #100822 80%),
       url('icons/login-background.webp') center top / cover no-repeat;
     background-color: #120a24;
     display: flex;
@@ -31,6 +33,7 @@
   .login-card {
     width: 100%;
     max-width: 360px;
+    margin-top: 12vh;
     background: rgba(20, 11, 40, 0.82);
     backdrop-filter: blur(22px) saturate(150%);
     -webkit-backdrop-filter: blur(22px) saturate(150%);
@@ -43,10 +46,11 @@
 
   .login-title {
     text-align: center;
-    font-size: 27px;
-    font-weight: 800;
+    font-size: 34px;
+    font-weight: 900;
     margin: 0;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.03em;
+    text-shadow: 0 2px 18px rgba(124, 58, 255, 0.45);
   }
   .login-title .accent {
     background: linear-gradient(90deg, #b794ff, #7c5cff);
@@ -156,6 +160,45 @@
     padding-top: 16px;
     border-top: 1px solid rgba(255, 255, 255, 0.15);
   }
+
+  .login-links {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 16px;
+    font-size: 12.5px;
+  }
+  .login-links a {
+    color: rgba(255, 255, 255, 0.68);
+    text-decoration: none;
+  }
+  .login-links a:hover { color: #fff; text-decoration: underline; }
+  .login-links .sep { color: rgba(255, 255, 255, 0.3); }
+
+  .login-note {
+    display: none;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.75);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-top: 14px;
+    text-align: center;
+  }
+
+  #changePwView { display: none; }
+  .login-back {
+    display: block;
+    text-align: center;
+    font-size: 12.5px;
+    color: rgba(255, 255, 255, 0.68);
+    text-decoration: none;
+    margin-top: 14px;
+  }
+  .login-back:hover { color: #fff; text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -194,7 +237,59 @@
       </svg>
     </button>
 
+    <div class="login-links">
+      <a href="#" id="showChangePwLink">Passwort ändern</a>
+      <span class="sep">·</span>
+      <a href="#" id="showRegisterInfoLink">Neuen Benutzer anlegen</a>
+    </div>
+    <p class="login-note" id="registerNote">Aus Sicherheitsgründen können neue Zugänge nur vom Administrator angelegt werden. Bitte wende dich an Anton.</p>
+
     <p class="login-tagline">Ein Ort für alles, was wichtig ist. 💜</p>
+  </form>
+
+  <form class="login-card" id="changePwView" autocomplete="on">
+    <p class="login-title">Kris<span class="accent">Note</span></p>
+    <p class="login-subtitle">Passwort ändern</p>
+
+    <p class="login-error" id="changePwError"></p>
+
+    <div class="login-field">
+      <svg class="field-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <circle cx="10" cy="6.5" r="3.2" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M3.5 17c0-3.3 2.9-5.5 6.5-5.5s6.5 2.2 6.5 5.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <input type="text" id="pwUsername" placeholder="Benutzername" autocomplete="username" required />
+    </div>
+
+    <div class="login-field">
+      <svg class="field-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <rect x="4.5" y="8.5" width="11" height="8" rx="2" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M6.5 8.5V6a3.5 3.5 0 0 1 7 0v2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <input type="password" id="pwCurrent" placeholder="Aktuelles Passwort" autocomplete="current-password" required />
+    </div>
+
+    <div class="login-field">
+      <svg class="field-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <rect x="4.5" y="8.5" width="11" height="8" rx="2" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M6.5 8.5V6a3.5 3.5 0 0 1 7 0v2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <input type="password" id="pwNew" placeholder="Neues Passwort (mind. 8 Zeichen)" autocomplete="new-password" required />
+    </div>
+
+    <div class="login-field">
+      <svg class="field-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <rect x="4.5" y="8.5" width="11" height="8" rx="2" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M6.5 8.5V6a3.5 3.5 0 0 1 7 0v2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <input type="password" id="pwNewRepeat" placeholder="Neues Passwort wiederholen" autocomplete="new-password" required />
+    </div>
+
+    <button type="submit" class="login-submit" id="changePwSubmit">
+      <span>Passwort ändern</span>
+    </button>
+
+    <a href="#" class="login-back" id="backToLoginLink">Zurück zum Login</a>
   </form>
 
   <script>
@@ -232,6 +327,75 @@
         errEl.textContent = 'Verbindung zum Server fehlgeschlagen.';
         errEl.style.display = 'block';
         submitBtn.disabled = false;
+      }
+    });
+
+    // "Neuen Benutzer anlegen": aus Sicherheitsgründen kein offenes
+    // Selbst-Registrierungsformular (jeder mit der Login-URL könnte sich
+    // sonst selbst Zugriff verschaffen) - stattdessen nur ein Hinweis.
+    const registerNote = document.getElementById('registerNote');
+    document.getElementById('showRegisterInfoLink').addEventListener('click', (e) => {
+      e.preventDefault();
+      registerNote.style.display = registerNote.style.display === 'block' ? 'none' : 'block';
+    });
+
+    // Umschalten zwischen Login- und Passwort-ändern-Ansicht.
+    const changePwView = document.getElementById('changePwView');
+    document.getElementById('showChangePwLink').addEventListener('click', (e) => {
+      e.preventDefault();
+      form.style.display = 'none';
+      changePwView.style.display = 'block';
+      document.getElementById('pwUsername').focus();
+    });
+    document.getElementById('backToLoginLink').addEventListener('click', (e) => {
+      e.preventDefault();
+      changePwView.style.display = 'none';
+      form.style.display = 'block';
+    });
+
+    const changePwErrEl = document.getElementById('changePwError');
+    const changePwSubmitBtn = document.getElementById('changePwSubmit');
+    changePwView.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      changePwErrEl.style.display = 'none';
+      const newPw = document.getElementById('pwNew').value;
+      const newPwRepeat = document.getElementById('pwNewRepeat').value;
+      if (newPw !== newPwRepeat) {
+        changePwErrEl.textContent = 'Die neuen Passwörter stimmen nicht überein.';
+        changePwErrEl.style.display = 'block';
+        return;
+      }
+      changePwSubmitBtn.disabled = true;
+      try {
+        const res = await fetch('/api/change-password-public', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: document.getElementById('pwUsername').value,
+            currentPassword: document.getElementById('pwCurrent').value,
+            newPassword: newPw,
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          changePwErrEl.textContent = data.error || 'Passwort ändern fehlgeschlagen.';
+          changePwErrEl.style.display = 'block';
+          changePwSubmitBtn.disabled = false;
+          return;
+        }
+        changePwView.style.display = 'none';
+        form.style.display = 'block';
+        errEl.textContent = 'Passwort geändert. Bitte melde dich mit dem neuen Passwort an.';
+        errEl.style.color = '#c9f7c9';
+        errEl.style.background = 'rgba(80, 255, 120, 0.12)';
+        errEl.style.borderColor = 'rgba(80, 255, 120, 0.3)';
+        errEl.style.display = 'block';
+        document.getElementById('username').value = document.getElementById('pwUsername').value;
+        changePwSubmitBtn.disabled = false;
+      } catch (err) {
+        changePwErrEl.textContent = 'Verbindung zum Server fehlgeschlagen.';
+        changePwErrEl.style.display = 'block';
+        changePwSubmitBtn.disabled = false;
       }
     });
   </script>

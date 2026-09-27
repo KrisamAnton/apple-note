@@ -48,7 +48,12 @@ app.use(express.json({ limit: '25mb' }));
 // Anmeldeseite müssen ohne Anmeldung erreichbar bleiben (sonst könnte sich
 // niemand mehr anmelden bzw. die Seite bliebe optisch leer) - alles andere
 // (Fläche, API, hochgeladene Dateien) verlangt ab hier eine gültige Sitzung.
-const PUBLIC_PATHS = new Set(['/login.html', '/api/login', '/icons/login-background.webp']);
+const PUBLIC_PATHS = new Set([
+  '/login.html',
+  '/api/login',
+  '/api/change-password-public',
+  '/icons/login-background.webp',
+]);
 
 app.use((req, res, next) => {
   if (PUBLIC_PATHS.has(req.path)) return next();
@@ -106,6 +111,29 @@ app.post('/api/change-password', (req, res) => {
   const user = userStore.findUser(req.username);
   if (!user || !verifyPassword(currentPassword, user.passwordSalt, user.passwordHash)) {
     return res.status(401).json({ error: 'Aktuelles Passwort ist falsch' });
+  }
+  userStore.updatePassword(user.username, newPassword);
+  res.json({ ok: true });
+});
+
+// Passwort-Änderung direkt von der Anmeldeseite aus (ohne bestehende Sitzung) -
+// sicher, weil das aktuelle Passwort selbst den Nachweis der Identität
+// erbringt (genau wie beim Login), nur eben ohne vorher eingeloggt zu sein.
+app.post('/api/change-password-public', (req, res) => {
+  const { username, currentPassword, newPassword } = req.body || {};
+  if (
+    typeof username !== 'string' || !username ||
+    typeof currentPassword !== 'string' || !currentPassword ||
+    typeof newPassword !== 'string' || !newPassword
+  ) {
+    return res.status(400).json({ error: 'Benutzername, aktuelles und neues Passwort erforderlich' });
+  }
+  if (newPassword.length < 8) {
+    return res.status(400).json({ error: 'Das neue Passwort muss mindestens 8 Zeichen lang sein' });
+  }
+  const user = userStore.findUser(username);
+  if (!user || !verifyPassword(currentPassword, user.passwordSalt, user.passwordHash)) {
+    return res.status(401).json({ error: 'Benutzername oder aktuelles Passwort falsch' });
   }
   userStore.updatePassword(user.username, newPassword);
   res.json({ ok: true });
