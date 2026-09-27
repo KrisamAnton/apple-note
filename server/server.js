@@ -19,15 +19,55 @@ const {
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const DATA_DIR = process.env.DATA_DIR || path.join(PROJECT_ROOT, 'data');
-const FILES_DIR = path.join(DATA_DIR, 'files');
-const STATE_FILE = path.join(DATA_DIR, 'state.json');
+// Alter, gemeinsamer Datenbestand aus der Zeit vor getrennten Benutzer-Konten
+// (Phase 1/2) - wird beim Start einmalig in den privaten Bereich des jeweiligen
+// Benutzers kopiert (siehe migrateLegacySharedData()), bleibt selbst aber
+// unangetastet als automatisches Backup liegen.
+const LEGACY_FILES_DIR = path.join(DATA_DIR, 'files');
+const LEGACY_STATE_FILE = path.join(DATA_DIR, 'state.json');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
+// Jeder Benutzer bekommt einen eigenen, privaten Bereich für seine Notizen und
+// hochgeladenen Dateien - komplett getrennt von allen anderen Benutzern.
+const USERS_DATA_DIR = path.join(DATA_DIR, 'users');
 const PORT = process.env.PORT || 3000;
 
 const userStore = makeUserStore(USERS_FILE);
 
-fs.mkdirSync(FILES_DIR, { recursive: true });
+function userDir(username) {
+  return path.join(USERS_DATA_DIR, username);
+}
+function userStateFile(username) {
+  return path.join(userDir(username), 'state.json');
+}
+function userFilesDir(username) {
+  return path.join(userDir(username), 'files');
+}
+
+// Einmalige, sichere Migration: bestehende Benutzer (aus der Zeit vor
+// getrennten Konten) bekommen beim ersten Start nach dem Update eine Kopie
+// des bisherigen gemeinsamen Datenbestands als ihren privaten Bereich - die
+// Originaldateien werden dabei nur gelesen, nie verschoben oder gelöscht.
+function migrateLegacySharedData() {
+  if (!fs.existsSync(LEGACY_STATE_FILE)) return;
+  for (const user of userStore.readUsers()) {
+    const targetState = userStateFile(user.username);
+    if (fs.existsSync(targetState)) continue; // hat schon einen eigenen Bereich
+    fs.mkdirSync(userDir(user.username), { recursive: true });
+    fs.copyFileSync(LEGACY_STATE_FILE, targetState);
+    if (fs.existsSync(LEGACY_FILES_DIR)) {
+      fs.mkdirSync(userFilesDir(user.username), { recursive: true });
+      for (const name of fs.readdirSync(LEGACY_FILES_DIR)) {
+        const src = path.join(LEGACY_FILES_DIR, name);
+        if (fs.statSync(src).isFile()) {
+          fs.copyFileSync(src, path.join(userFilesDir(user.username), name));
+        }
+      }
+    }
+    console.log(`Bisherige gemeinsame Notizen als privater Bereich für "${user.username}" übernommen.`);
+  }
+}
+migrateLegacySharedData();
 
 const app = express();
 
@@ -52,6 +92,7 @@ const PUBLIC_PATHS = new Set([
   '/login.html',
   '/api/login',
   '/api/change-password-public',
+  '/api/register',
   '/icons/login-background.webp',
 ]);
 
@@ -97,7 +138,8 @@ app.post('/api/logout', (req, res) => {
 });
 
 app.get('/api/me', (req, res) => {
-  res.json({ username: req.username });
+  const user = userStore.findUser(req.username);
+  res.json({ username: req.username, displayName: user ? user.displayName : req.username });
 });
 
 app.post('/api/change-password', (req, res) => {
@@ -139,10 +181,147 @@ app.post('/api/change-password-public', (req, res) => {
   res.json({ ok: true });
 });
 
-app.use('/files', express.static(FILES_DIR, { maxAge: '1y', immutable: true }));
+// ---------- Neuen Benutzer anlegen (öffentlich erreichbar - siehe login.html) ----------
+//
+// Jeder neue Benutzer bekommt einen eigenen, leeren Notizbereich - mit einer
+// Ausnahme: die Seite/Unterseiten "Erklärung KrisNote" (bzw. der gleichnamige
+// Ordner) werden vom ältesten bestehenden Benutzer, bei dem sie gefunden
+// werden, als einmalige Kopie mitgegeben, inklusive der darin verwendeten
+// Bilder/PDFs/Aufnahmen. Spätere Änderungen an der Erklärung wirken sich
+// nicht rückwirkend auf schon registrierte Benutzer aus (echte, unabhängige
+// Kopie, kein geteilter Inhalt).
+const USERNAME_PATTERN = /^[a-zA-Z0-9_.-]{3,30}$/;
+
+function collectReferencedFilenames(notes) {
+  const json = JSON.stringify(notes);
+  const matches = json.match(/\/files\/[A-Za-z0-9_.-]+/g) || [];
+  return [...new Set(matches.map((m) => path.basename(m)))];
+}
+
+function findErklaerungTemplate() {
+  const users = [...userStore.readUsers()].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  for (const user of users) {
+    const stateFile = userStateFile(user.username);
+    let parsed;
+    try {
+      parsed = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+    } catch (err) {
+      continue;
+    }
+    if (!parsed || !Array.isArray(parsed.notes)) continue;
+    const folders = Array.isArray(parsed.folders) ? parsed.folders : [];
+
+    // Fall A: eigener Ordner namens "Erklärung KrisNote".
+    const folder = folders.find((f) => f.name === 'Erklärung KrisNote');
+    if (folder) {
+      const notes = parsed.notes.filter((n) => n.folderId === folder.id);
+      if (notes.length) {
+        return { sourceUsername: user.username, folder: { ...folder }, notes: notes.map((n) => ({ ...n })) };
+      }
+    }
+
+    // Fall B: Hauptseite "Erklärung KrisNote" mit Unterseiten (parentNoteId-Kette).
+    const rootNote = parsed.notes.find((n) => !n.parentNoteId && n.title === 'Erklärung KrisNote');
+    if (rootNote) {
+      const collected = [rootNote];
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const n of parsed.notes) {
+          if (collected.some((c) => c.id === n.id)) continue;
+          if (n.parentNoteId && collected.some((c) => c.id === n.parentNoteId)) {
+            collected.push(n);
+            changed = true;
+          }
+        }
+      }
+      return { sourceUsername: user.username, folder: null, notes: collected.map((n) => ({ ...n })) };
+    }
+  }
+  return null;
+}
+
+function seedNewUserState(username) {
+  fs.mkdirSync(userDir(username), { recursive: true });
+  fs.mkdirSync(userFilesDir(username), { recursive: true });
+
+  const template = findErklaerungTemplate();
+  let state;
+  if (template) {
+    state = { folders: template.folder ? [template.folder] : [], notes: template.notes };
+    const sourceFilesDir = userFilesDir(template.sourceUsername);
+    for (const filename of collectReferencedFilenames(template.notes)) {
+      try {
+        fs.copyFileSync(path.join(sourceFilesDir, filename), path.join(userFilesDir(username), filename));
+      } catch (err) {
+        console.warn(`Datei "${filename}" der Erklärung konnte nicht für "${username}" übernommen werden:`, err.message);
+      }
+    }
+  } else {
+    // Noch keine Erklärung gefunden (z. B. ganz frische Installation) -
+    // normale Willkommens-Notiz als Rückfallebene.
+    const now = Date.now();
+    state = {
+      folders: [],
+      notes: [{
+        id: crypto.randomUUID(),
+        title: 'Willkommen bei KrisNote',
+        objects: [],
+        ink: { strokes: [] },
+        background: 'dots',
+        folderId: null,
+        parentNoteId: null,
+        order: 0,
+        createdAt: now,
+        updatedAt: now,
+      }],
+    };
+  }
+  fs.writeFileSync(userStateFile(username), JSON.stringify(state));
+}
+
+app.post('/api/register', (req, res) => {
+  const { username, password, displayName } = req.body || {};
+  if (typeof username !== 'string' || !USERNAME_PATTERN.test(username)) {
+    return res.status(400).json({
+      error: 'Benutzername muss 3-30 Zeichen lang sein (nur Buchstaben, Zahlen, "_", "-" und ".").',
+    });
+  }
+  if (typeof password !== 'string' || password.length < 8) {
+    return res.status(400).json({ error: 'Das Passwort muss mindestens 8 Zeichen lang sein' });
+  }
+  if (userStore.findUser(username)) {
+    return res.status(409).json({ error: 'Dieser Benutzername ist bereits vergeben' });
+  }
+  const user = userStore.upsertUser({ username, password, displayName });
+  seedNewUserState(user.username);
+
+  // Direkt anmelden, genau wie bei /api/login - nach dem Anlegen soll man
+  // sofort in der frisch eingerichteten App landen.
+  const sid = createSession(user.username);
+  res.cookie(SESSION_COOKIE_NAME, sid, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: req.secure,
+    maxAge: SESSION_MAX_AGE_MS,
+    path: '/',
+  });
+  res.json({ ok: true, username: user.username, displayName: user.displayName });
+});
+
+// Kein gemeinsamer express.static() mehr (der würde allen Benutzern denselben
+// Ordner zeigen) - jede Anfrage wird stattdessen aus dem privaten Dateiordner
+// des gerade angemeldeten Benutzers bedient (req.username kommt vom
+// Anmelde-Mittelsmann weiter oben, /files/* ist dort bewusst nicht öffentlich).
+app.get('/files/:filename', (req, res) => {
+  const filePath = path.join(userFilesDir(req.username), path.basename(req.params.filename));
+  res.sendFile(filePath, { maxAge: '1y', immutable: true }, (err) => {
+    if (err) res.status(404).end();
+  });
+});
 
 app.get('/api/state', (req, res) => {
-  fs.readFile(STATE_FILE, 'utf8', (err, raw) => {
+  fs.readFile(userStateFile(req.username), 'utf8', (err, raw) => {
     if (err) {
       if (err.code === 'ENOENT') return res.json(null);
       console.error('Konnte state.json nicht lesen:', err);
@@ -190,7 +369,9 @@ function preserveReminderSentAt(incoming, existing) {
 }
 
 function saveState(req, res) {
-  fs.readFile(STATE_FILE, 'utf8', (readErr, raw) => {
+  const stateFile = userStateFile(req.username);
+  fs.mkdirSync(path.dirname(stateFile), { recursive: true });
+  fs.readFile(stateFile, 'utf8', (readErr, raw) => {
     if (!readErr) {
       try {
         preserveReminderSentAt(req.body, JSON.parse(raw));
@@ -199,7 +380,7 @@ function saveState(req, res) {
       }
     }
     const json = JSON.stringify(req.body);
-    const tmpFile = `${STATE_FILE}.${process.pid}.${Date.now()}.tmp`;
+    const tmpFile = `${stateFile}.${process.pid}.${Date.now()}.tmp`;
     fs.writeFile(tmpFile, json, (err) => {
       if (err) {
         console.error('Konnte Notizen nicht speichern:', err);
@@ -207,7 +388,7 @@ function saveState(req, res) {
       }
       // Atomares Umbenennen: verhindert eine kaputte/halb geschriebene state.json,
       // falls der Server genau während des Schreibens abstürzt oder neu startet.
-      fs.rename(tmpFile, STATE_FILE, (renameErr) => {
+      fs.rename(tmpFile, stateFile, (renameErr) => {
         if (renameErr) {
           console.error('Konnte Notizen nicht speichern:', renameErr);
           return res.status(500).json({ error: 'Speichern fehlgeschlagen' });
@@ -297,7 +478,11 @@ app.put('/api/settings', async (req, res) => {
 
 const upload = multer({
   storage: multer.diskStorage({
-    destination: (req, file, cb) => cb(null, FILES_DIR),
+    destination: (req, file, cb) => {
+      const dir = userFilesDir(req.username);
+      fs.mkdirSync(dir, { recursive: true });
+      cb(null, dir);
+    },
     filename: (req, file, cb) => {
       const ext = path.extname(file.originalname).slice(0, 20);
       cb(null, `${crypto.randomUUID()}${ext}`);
@@ -335,7 +520,7 @@ app.post('/api/transcribe', (req, res) => {
   if (typeof url !== 'string' || !url.startsWith('/files/')) {
     return res.status(400).json({ error: 'Ungültige Audio-URL' });
   }
-  const filePath = path.join(FILES_DIR, path.basename(url));
+  const filePath = path.join(userFilesDir(req.username), path.basename(url));
   if (!fs.existsSync(filePath)) {
     return res.status(404).json({ error: 'Audiodatei nicht gefunden' });
   }
@@ -522,6 +707,52 @@ let reminderCheckRunning = false;
 // werden. Für eine einzelne, meist nicht durchgehend geöffnete App ist dieses
 // seltene Risiko bewusst in Kauf genommen worden, statt dafür eine eigene
 // Sperr-/Warteschlangen-Logik zu bauen.
+// Die Erinnerungs-E-Mail-Einstellungen sind (noch) global für den ganzen
+// Server, nicht pro Benutzer - deshalb wird bei fälligen Erinnerungen über
+// alle Benutzer-Konten hinweg geprüft, aber jeweils in deren eigener,
+// privater state.json nachgeschaut und gespeichert.
+async function checkAndSendDueRemindersForUser(username, settings) {
+  const stateFile = userStateFile(username);
+  let state;
+  try {
+    state = JSON.parse(await fs.promises.readFile(stateFile, 'utf8'));
+  } catch (err) {
+    return; // noch keine state.json für diesen Benutzer - nichts zu tun
+  }
+  if (!state || !Array.isArray(state.notes)) return;
+
+  const now = Date.now();
+  const due = [];
+  for (const note of state.notes) {
+    for (const obj of note.objects || []) {
+      if (obj.type === 'reminder' && obj.remindAt && !obj.sentAt && obj.remindAt <= now) {
+        due.push({ note, obj });
+      }
+    }
+  }
+  if (due.length === 0) return;
+
+  let anySent = false;
+  for (const { note, obj } of due) {
+    try {
+      await sendReminderEmail(settings, state, note, obj);
+      obj.sentAt = Date.now();
+      anySent = true;
+      console.log(`Erinnerung "${obj.title}" (${username}) an ${settings.reminderEmail} verschickt.`);
+    } catch (err) {
+      console.error(`Erinnerung "${obj.title}" (${username}) konnte nicht verschickt werden:`, err.message);
+      // sentAt bleibt leer - der nächste Durchlauf versucht es automatisch erneut.
+    }
+  }
+
+  if (anySent) {
+    const json = JSON.stringify(state);
+    const tmpFile = `${stateFile}.${process.pid}.${Date.now()}.tmp`;
+    await fs.promises.writeFile(tmpFile, json);
+    await fs.promises.rename(tmpFile, stateFile);
+  }
+}
+
 async function checkAndSendDueReminders() {
   if (reminderCheckRunning) return;
   reminderCheckRunning = true;
@@ -530,44 +761,8 @@ async function checkAndSendDueReminders() {
     if (!settings.reminderEmail || !settings.smtpHost || !settings.smtpUser || !settings.smtpPassword) {
       return;
     }
-
-    let state;
-    try {
-      state = JSON.parse(await fs.promises.readFile(STATE_FILE, 'utf8'));
-    } catch (err) {
-      return; // noch keine state.json (frisch installierter Server) - nichts zu tun
-    }
-    if (!state || !Array.isArray(state.notes)) return;
-
-    const now = Date.now();
-    const due = [];
-    for (const note of state.notes) {
-      for (const obj of note.objects || []) {
-        if (obj.type === 'reminder' && obj.remindAt && !obj.sentAt && obj.remindAt <= now) {
-          due.push({ note, obj });
-        }
-      }
-    }
-    if (due.length === 0) return;
-
-    let anySent = false;
-    for (const { note, obj } of due) {
-      try {
-        await sendReminderEmail(settings, state, note, obj);
-        obj.sentAt = Date.now();
-        anySent = true;
-        console.log(`Erinnerung "${obj.title}" an ${settings.reminderEmail} verschickt.`);
-      } catch (err) {
-        console.error(`Erinnerung "${obj.title}" konnte nicht verschickt werden:`, err.message);
-        // sentAt bleibt leer - der nächste Durchlauf versucht es automatisch erneut.
-      }
-    }
-
-    if (anySent) {
-      const json = JSON.stringify(state);
-      const tmpFile = `${STATE_FILE}.${process.pid}.${Date.now()}.tmp`;
-      await fs.promises.writeFile(tmpFile, json);
-      await fs.promises.rename(tmpFile, STATE_FILE);
+    for (const user of userStore.readUsers()) {
+      await checkAndSendDueRemindersForUser(user.username, settings);
     }
   } catch (err) {
     console.error('Fehler bei der Erinnerungs-Prüfung:', err);

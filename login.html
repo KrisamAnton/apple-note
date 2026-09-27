@@ -201,6 +201,9 @@
      sich dagegen genauso zuverlässig wie der allererste Seitenaufruf. */
   html.changepw-view #loginForm { display: none; }
   html.changepw-view #changePwView { display: block; }
+  #registerView { display: none; }
+  html.register-view #loginForm { display: none; }
+  html.register-view #registerView { display: block; }
   .login-back {
     display: block;
     text-align: center;
@@ -216,6 +219,8 @@
   // Ansicht steht (kein kurzes Aufblitzen der falschen Ansicht).
   if (location.hash === '#changepw') {
     document.documentElement.classList.add('changepw-view');
+  } else if (location.hash === '#register') {
+    document.documentElement.classList.add('register-view');
   }
 </script>
 </head>
@@ -258,9 +263,8 @@
     <div class="login-links">
       <a href="#" id="showChangePwLink">Passwort ändern</a>
       <span class="sep">·</span>
-      <a href="#" id="showRegisterInfoLink">Neuen Benutzer anlegen</a>
+      <a href="#" id="showRegisterLink">Neuen Benutzer anlegen</a>
     </div>
-    <p class="login-note" id="registerNote">Aus Sicherheitsgründen können neue Zugänge nur vom Administrator angelegt werden. Bitte wende dich an Anton.</p>
 
     <p class="login-tagline">Ein Ort für alles, was wichtig ist. 💜</p>
   </form>
@@ -304,6 +308,51 @@
     <a href="#" class="login-back" id="backToLoginLink">Zurück zum Login</a>
   </form>
 
+  <form class="login-card" id="registerView" autocomplete="off">
+    <p class="login-title">Kris<span class="accent">Note</span></p>
+    <p class="login-subtitle">Neuen Benutzer anlegen</p>
+
+    <p class="login-error" id="registerError"></p>
+
+    <div class="login-field">
+      <svg class="field-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <circle cx="10" cy="6.5" r="3.2" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M3.5 17c0-3.3 2.9-5.5 6.5-5.5s6.5 2.2 6.5 5.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <input type="text" id="regUsername" name="reg-username-nofill" placeholder="Benutzername" autocomplete="off" required />
+    </div>
+
+    <div class="login-field">
+      <svg class="field-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <circle cx="10" cy="6.5" r="3.2" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M3.5 17c0-3.3 2.9-5.5 6.5-5.5s6.5 2.2 6.5 5.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <input type="text" id="regDisplayName" name="reg-displayname-nofill" placeholder="Anzeigename (optional)" autocomplete="off" />
+    </div>
+
+    <div class="login-field">
+      <svg class="field-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <rect x="4.5" y="8.5" width="11" height="8" rx="2" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M6.5 8.5V6a3.5 3.5 0 0 1 7 0v2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <input type="password" id="regPassword" name="reg-password-nofill" placeholder="Passwort (mind. 8 Zeichen)" autocomplete="off" required />
+    </div>
+
+    <div class="login-field">
+      <svg class="field-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <rect x="4.5" y="8.5" width="11" height="8" rx="2" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M6.5 8.5V6a3.5 3.5 0 0 1 7 0v2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <input type="password" id="regPasswordRepeat" name="reg-password2-nofill" placeholder="Passwort wiederholen" autocomplete="off" required />
+    </div>
+
+    <button type="submit" class="login-submit" id="registerSubmit">
+      <span>Benutzer anlegen</span>
+    </button>
+
+    <a href="#" class="login-back" id="backToLoginFromRegisterLink">Zurück zum Login</a>
+  </form>
+
   <script>
     const form = document.getElementById('loginForm');
     const errEl = document.getElementById('loginError');
@@ -340,15 +389,6 @@
         errEl.style.display = 'block';
         submitBtn.disabled = false;
       }
-    });
-
-    // "Neuen Benutzer anlegen": aus Sicherheitsgründen kein offenes
-    // Selbst-Registrierungsformular (jeder mit der Login-URL könnte sich
-    // sonst selbst Zugriff verschaffen) - stattdessen nur ein Hinweis.
-    const registerNote = document.getElementById('registerNote');
-    document.getElementById('showRegisterInfoLink').addEventListener('click', (e) => {
-      e.preventDefault();
-      registerNote.style.display = registerNote.style.display === 'block' ? 'none' : 'block';
     });
 
     // Umschalten zwischen Login- und Passwort-ändern-Ansicht: bewusst über
@@ -432,6 +472,60 @@
         changePwErrEl.textContent = 'Verbindung zum Server fehlgeschlagen.';
         changePwErrEl.style.display = 'block';
         changePwSubmitBtn.disabled = false;
+      }
+    });
+
+    // Umschalten zwischen Login- und Registrieren-Ansicht - aus denselben
+    // Gründen wie oben über einen echten Seiten-Neuaufbau.
+    document.getElementById('showRegisterLink').addEventListener('click', (e) => {
+      e.preventDefault();
+      location.hash = 'register';
+      location.reload();
+    });
+    document.getElementById('backToLoginFromRegisterLink').addEventListener('click', (e) => {
+      e.preventDefault();
+      location.hash = '';
+      location.reload();
+    });
+
+    const registerView = document.getElementById('registerView');
+    const registerErrEl = document.getElementById('registerError');
+    const registerSubmitBtn = document.getElementById('registerSubmit');
+    registerView.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      registerErrEl.style.display = 'none';
+      const password = document.getElementById('regPassword').value;
+      const passwordRepeat = document.getElementById('regPasswordRepeat').value;
+      if (password !== passwordRepeat) {
+        registerErrEl.textContent = 'Die Passwörter stimmen nicht überein.';
+        registerErrEl.style.display = 'block';
+        return;
+      }
+      registerSubmitBtn.disabled = true;
+      try {
+        const res = await fetch('/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: document.getElementById('regUsername').value.trim(),
+            displayName: document.getElementById('regDisplayName').value.trim(),
+            password,
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          registerErrEl.textContent = data.error || 'Anlegen fehlgeschlagen.';
+          registerErrEl.style.display = 'block';
+          registerSubmitBtn.disabled = false;
+          return;
+        }
+        // /api/register meldet direkt an (wie /api/login) - sofort in die
+        // frisch eingerichtete App weiterleiten.
+        window.location.href = '/';
+      } catch (err) {
+        registerErrEl.textContent = 'Verbindung zum Server fehlgeschlagen.';
+        registerErrEl.style.display = 'block';
+        registerSubmitBtn.disabled = false;
       }
     });
   </script>

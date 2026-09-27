@@ -6013,6 +6013,19 @@
     goToView(isMobileLayout() ? 'folders' : 'notes');
 
     state = await loadState();
+    // Der Name unten in der Seitenleiste stand bisher fest im HTML ("Anton
+    // Krisam") - seit mehrere Benutzer-Konten möglich sind, muss hier der
+    // tatsächlich angemeldete Benutzer stehen.
+    try {
+      const meRes = await fetch('/api/me');
+      if (meRes.ok) {
+        const me = await meRes.json();
+        if (me.displayName) el.sidebarUserBtn.textContent = me.displayName;
+      }
+    } catch (e) {
+      // Name bleibt dann auf dem HTML-Platzhalter stehen - kein Grund, den
+      // Start der App deswegen zu blockieren.
+    }
     // Bei jedem frischen Laden der Seite (Neustart, anderes Gerät, zweiter
     // Tab) sollen alle Notizen mit Unterseiten zunächst zugeklappt sein.
     // collapsedNoteIds lebt nur im Arbeitsspeicher dieser Seite (nicht in den

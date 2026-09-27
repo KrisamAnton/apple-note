@@ -266,12 +266,17 @@ Alle Notizen, Ordner, Bilder und PDFs werden auf einem eigenen kleinen
   viele große PDFs (z. B. 100 Stück à 30 MB) sind kein Problem, solange
   auf dem Server genug Festplattenplatz vorhanden ist.
 - **Login erforderlich**: Ohne gültige Anmeldung ist weder die App noch
-  die API erreichbar (Umleitung zu `login.html`). Benutzer werden per
-  Kommandozeile angelegt (siehe „Benutzer anlegen" unten) - es gibt
-  bewusst keine offene Registrierung über den Browser.
-  Aktuell (Zwischenschritt) sehen noch alle angemeldeten Personen
-  denselben, gemeinsamen Datenstand - getrennte, private Notizbereiche
-  pro Person sind als nächster Ausbauschritt geplant.
+  die API erreichbar (Umleitung zu `login.html`). Benutzer können sich
+  über den Link „Neuen Benutzer anlegen" auf der Anmeldeseite selbst
+  registrieren (offen für jeden mit der Login-URL - bewusst keine
+  Einladungscode-Pflicht) oder alternativ per Kommandozeile angelegt
+  werden (siehe „Benutzer anlegen" unten).
+  Jeder Benutzer hat einen eigenen, privaten Notizbereich (getrennt von
+  allen anderen) - außer der Seite „Erklärung KrisNote" samt
+  Unterseiten: Die wird jedem neuen Benutzer einmalig als Kopie
+  mitgegeben, damit niemand vor einer leeren App steht. Spätere
+  Änderungen an der Erklärung wirken sich nicht auf schon registrierte
+  Benutzer aus (echte, unabhängige Kopie).
 - Fällt die Verbindung zum Server aus, erscheint beim Speichern eine
   deutliche Warnung, damit nie unbemerkt eine Änderung verloren geht.
 
@@ -290,7 +295,8 @@ manifest.json      PWA-Manifest
 sw.js              Service Worker (Offline-Cache der App-Shell; API-Anfragen ausgenommen)
 icons/             App-Icons für Home-Bildschirm / Manifest
 server/            Node.js/Express-Server (Notizen + Datei-Uploads, siehe unten)
-data/              Vom Server angelegt: state.json (Notizdaten) + files/ (Bilder/PDFs).
+data/              Vom Server angelegt: users.json (Konten) + je Benutzer ein eigener,
+                   privater Bereich unter users/<benutzername>/ (state.json + files/).
                    Nicht Teil des Repositorys (.gitignore), da es die echten Nutzdaten sind.
 ```
 
