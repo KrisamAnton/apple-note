@@ -344,6 +344,40 @@
       <button type="button" class="popover-item" id="openReminderSettingsBtn">
         <span>Erinnerungs-Mail</span>
       </button>
+
+      <button type="button" class="popover-item" id="openChangePasswordBtn">
+        <span>Passwort ändern</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Passwort ändern: eigenes, mittig zentriertes Fenster -->
+  <div class="modal-backdrop" id="changePasswordModalBackdrop" hidden>
+    <div class="modal" id="changePasswordModal" role="dialog" aria-modal="true">
+      <p class="modal-title">Passwort ändern</p>
+
+      <label class="settings-field">
+        <span class="settings-field-label">Aktuelles Passwort</span>
+        <input type="password" class="popover-text-input" id="currentPasswordInput" autocomplete="current-password" />
+      </label>
+
+      <label class="settings-field">
+        <span class="settings-field-label">Neues Passwort</span>
+        <span class="settings-field-hint">Mindestens 8 Zeichen.</span>
+        <input type="password" class="popover-text-input" id="newPasswordInput" autocomplete="new-password" />
+      </label>
+
+      <label class="settings-field">
+        <span class="settings-field-label">Neues Passwort wiederholen</span>
+        <input type="password" class="popover-text-input" id="newPasswordRepeatInput" autocomplete="new-password" />
+      </label>
+
+      <p class="settings-save-status" id="changePasswordStatus"></p>
+
+      <div class="popover-form-actions">
+        <button type="button" class="popover-btn popover-btn-secondary" id="changePasswordCancelBtn">Abbrechen</button>
+        <button type="button" class="popover-btn popover-btn-primary" id="changePasswordSaveBtn">Ändern</button>
+      </div>
     </div>
   </div>
 

@@ -62,7 +62,17 @@ function makeUserStore(usersFile) {
     writeUsers(users);
     return record;
   }
-  return { readUsers, findUser, upsertUser };
+  function updatePassword(username, newPassword) {
+    const users = readUsers();
+    const normalized = String(username || '').trim().toLowerCase();
+    const idx = users.findIndex((u) => u.username.toLowerCase() === normalized);
+    if (idx === -1) return null;
+    const { salt, hash } = hashPassword(newPassword);
+    users[idx] = { ...users[idx], passwordSalt: salt, passwordHash: hash };
+    writeUsers(users);
+    return users[idx];
+  }
+  return { readUsers, findUser, upsertUser, updatePassword };
 }
 
 // ---------- Sitzungen ----------

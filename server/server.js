@@ -94,6 +94,22 @@ app.get('/api/me', (req, res) => {
   res.json({ username: req.username });
 });
 
+app.post('/api/change-password', (req, res) => {
+  const { currentPassword, newPassword } = req.body || {};
+  if (typeof currentPassword !== 'string' || typeof newPassword !== 'string' || !currentPassword || !newPassword) {
+    return res.status(400).json({ error: 'Aktuelles und neues Passwort erforderlich' });
+  }
+  if (newPassword.length < 8) {
+    return res.status(400).json({ error: 'Das neue Passwort muss mindestens 8 Zeichen lang sein' });
+  }
+  const user = userStore.findUser(req.username);
+  if (!user || !verifyPassword(currentPassword, user.passwordSalt, user.passwordHash)) {
+    return res.status(401).json({ error: 'Aktuelles Passwort ist falsch' });
+  }
+  userStore.updatePassword(user.username, newPassword);
+  res.json({ ok: true });
+});
+
 app.use('/files', express.static(FILES_DIR, { maxAge: '1y', immutable: true }));
 
 app.get('/api/state', (req, res) => {

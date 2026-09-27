@@ -388,6 +388,15 @@
     openReminderSettingsBtn: document.getElementById('openReminderSettingsBtn'),
     reminderSettingsModalBackdrop: document.getElementById('reminderSettingsModalBackdrop'),
     reminderSettingsModal: document.getElementById('reminderSettingsModal'),
+    openChangePasswordBtn: document.getElementById('openChangePasswordBtn'),
+    changePasswordModalBackdrop: document.getElementById('changePasswordModalBackdrop'),
+    changePasswordModal: document.getElementById('changePasswordModal'),
+    currentPasswordInput: document.getElementById('currentPasswordInput'),
+    newPasswordInput: document.getElementById('newPasswordInput'),
+    newPasswordRepeatInput: document.getElementById('newPasswordRepeatInput'),
+    changePasswordStatus: document.getElementById('changePasswordStatus'),
+    changePasswordCancelBtn: document.getElementById('changePasswordCancelBtn'),
+    changePasswordSaveBtn: document.getElementById('changePasswordSaveBtn'),
     reminderEmailInput: document.getElementById('reminderEmailInput'),
     smtpHostInput: document.getElementById('smtpHostInput'),
     smtpPortInput: document.getElementById('smtpPortInput'),
@@ -5843,6 +5852,62 @@
     }
   }
 
+  // ---------- Passwort ändern ----------
+
+  function openChangePasswordModal() {
+    closeSettingsPopover();
+    el.currentPasswordInput.value = '';
+    el.newPasswordInput.value = '';
+    el.newPasswordRepeatInput.value = '';
+    el.changePasswordStatus.textContent = '';
+    el.changePasswordStatus.classList.remove('error');
+    el.changePasswordModalBackdrop.hidden = false;
+    el.currentPasswordInput.focus();
+  }
+
+  function closeChangePasswordModal() {
+    el.changePasswordModalBackdrop.hidden = true;
+  }
+
+  async function saveNewPassword() {
+    const currentPassword = el.currentPasswordInput.value;
+    const newPassword = el.newPasswordInput.value;
+    const repeat = el.newPasswordRepeatInput.value;
+    const showError = (msg) => {
+      el.changePasswordStatus.textContent = msg;
+      el.changePasswordStatus.classList.add('error');
+    };
+    if (!currentPassword || !newPassword) {
+      showError('Bitte beide Passwort-Felder ausfüllen.');
+      return;
+    }
+    if (newPassword.length < 8) {
+      showError('Das neue Passwort muss mindestens 8 Zeichen lang sein.');
+      return;
+    }
+    if (newPassword !== repeat) {
+      showError('Die Wiederholung stimmt nicht mit dem neuen Passwort überein.');
+      return;
+    }
+    el.changePasswordStatus.classList.remove('error');
+    el.changePasswordStatus.textContent = 'Ändere …';
+    try {
+      const res = await fetch('/api/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showError(data.error || 'Ändern fehlgeschlagen.');
+        return;
+      }
+      closeChangePasswordModal();
+    } catch (err) {
+      showError('Verbindung zum Server fehlgeschlagen.');
+    }
+  }
+
   // ---------- Responsive view state (mobile) ----------
 
   function goToView(view) {
@@ -5982,6 +6047,12 @@
     });
     el.settingsCancelBtn.addEventListener('click', closeReminderSettingsModal);
     el.settingsSaveBtn.addEventListener('click', saveReminderSettings);
+    el.openChangePasswordBtn.addEventListener('click', openChangePasswordModal);
+    el.changePasswordModalBackdrop.addEventListener('click', (e) => {
+      if (e.target === el.changePasswordModalBackdrop) closeChangePasswordModal();
+    });
+    el.changePasswordCancelBtn.addEventListener('click', closeChangePasswordModal);
+    el.changePasswordSaveBtn.addEventListener('click', saveNewPassword);
     el.trashVisibleCheckbox.addEventListener('change', () => {
       trashVisible = el.trashVisibleCheckbox.checked;
       renderFolders();

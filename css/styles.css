@@ -2377,6 +2377,10 @@ button.popover-item {
   margin: 4px 2px 0;
 }
 
+.settings-save-status.error {
+  color: var(--danger);
+}
+
 .credential-fields-list {
   display: flex;
   flex-direction: column;
