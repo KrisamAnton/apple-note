@@ -4459,20 +4459,25 @@
   }
 
   // Merkt sich (falls vorhanden) die aktuelle Cursor-/Auswahlposition in einem
-  // gerade bearbeiteten Textfeld für pendingInlinePdfRange/-Host - identische
-  // Logik wie im wireRibbonBtn(el.addPdfBtn, ...)-Klick weiter unten, damit
-  // auch ein per Ziehen-und-Ablegen auf die Fläche gezogenes PDF die Option
-  // "im Text ablegen" im Auswahlfenster (siehe askPdfInsertMode()) anbietet.
+  // gerade bearbeiteten Textfeld für pendingInlinePdfRange/-Host - für den
+  // Werkzeugleisten-Knopf UND das Ziehen-und-Ablegen einer Datei auf die
+  // Fläche, damit beide die Option "im Text ablegen" im Auswahlfenster
+  // (siehe askPdfInsertMode()) anbieten. Nutzt wie convertFloatingPdfToInline()
+  // zusätzlich das kurze "Nachleben" der Cursor-Position über einen Blur
+  // hinweg (siehe exitTextEdit()) - beim Ziehen-und-Ablegen aus dem
+  // Dateisystem verlässt der Wechsel zum Explorer/Finder das Textfeld
+  // nämlich oft schon, bevor die Datei überhaupt losgelassen wird.
   function captureInlinePdfTarget() {
     pendingInlinePdfRange = null;
     pendingInlinePdfHost = null;
-    if (activeTextEdit) {
-      const sel = window.getSelection();
-      const liveRange = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
-      if (liveRange && activeTextEdit.body.contains(liveRange.commonAncestorContainer)) {
-        pendingInlinePdfRange = liveRange.cloneRange();
-        pendingInlinePdfHost = activeTextEdit;
-      }
+    const sel = window.getSelection();
+    const liveRange = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
+    if (activeTextEdit && liveRange && activeTextEdit.body.contains(liveRange.commonAncestorContainer)) {
+      pendingInlinePdfRange = liveRange.cloneRange();
+      pendingInlinePdfHost = activeTextEdit;
+    } else if (lastTextEditContext && lastTextEditRange && document.body.contains(lastTextEditContext.body)) {
+      pendingInlinePdfHost = lastTextEditContext;
+      pendingInlinePdfRange = lastTextEditRange.cloneRange();
     }
   }
 
