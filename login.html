@@ -193,6 +193,14 @@
   }
 
   #changePwView { display: none; }
+  /* Die Ansicht wird nicht mehr live per JS umgeschaltet, sondern über einen
+     echten Seiten-Neuaufbau (location.reload) gesteuert - manche Browser
+     (v.a. iOS Safari) malen ihre eigene Autofill-Farbe neu, sobald ein
+     zuvor per display:none verstecktes Feld wieder sichtbar wird, und
+     ignorieren dabei unseren CSS-Trick. Ein frischer Seitenaufbau verhält
+     sich dagegen genauso zuverlässig wie der allererste Seitenaufruf. */
+  html.changepw-view #loginForm { display: none; }
+  html.changepw-view #changePwView { display: block; }
   .login-back {
     display: block;
     text-align: center;
@@ -203,6 +211,13 @@
   }
   .login-back:hover { color: #fff; text-decoration: underline; }
 </style>
+<script>
+  // Muss vor dem ersten Rendern im <head> laufen, damit sofort die richtige
+  // Ansicht steht (kein kurzes Aufblitzen der falschen Ansicht).
+  if (location.hash === '#changepw') {
+    document.documentElement.classList.add('changepw-view');
+  }
+</script>
 </head>
 <body>
   <form class="login-card" id="loginForm" autocomplete="on">
@@ -336,23 +351,41 @@
       registerNote.style.display = registerNote.style.display === 'block' ? 'none' : 'block';
     });
 
-    // Umschalten zwischen Login- und Passwort-ändern-Ansicht.
+    // Umschalten zwischen Login- und Passwort-ändern-Ansicht: bewusst über
+    // einen echten Seiten-Neuaufbau (nicht nur display:none/block per JS),
+    // weil manche Browser (v.a. iOS Safari) ein zuvor verstecktes,
+    // automatisch ausgefülltes Feld beim Wieder-Einblenden neu (und ohne
+    // unsere CSS-Überschreibung) einfärben. Ein frischer Seitenaufbau
+    // verhält sich exakt wie der allererste Aufruf der Seite.
     const changePwView = document.getElementById('changePwView');
     document.getElementById('showChangePwLink').addEventListener('click', (e) => {
       e.preventDefault();
       // Benutzername wird aus dem Login-Feld übernommen, damit man ihn hier
       // nicht nochmal eintippen muss (er dient nur der Zuordnung im
       // Hintergrund, nicht zum Ändern des Benutzernamens selbst).
-      document.getElementById('pwUsername').value = document.getElementById('username').value.trim();
-      form.style.display = 'none';
-      changePwView.style.display = 'block';
-      document.getElementById('pwCurrent').focus();
+      sessionStorage.setItem('kn_pwUsername', document.getElementById('username').value.trim());
+      location.hash = 'changepw';
+      location.reload();
     });
     document.getElementById('backToLoginLink').addEventListener('click', (e) => {
       e.preventDefault();
-      changePwView.style.display = 'none';
-      form.style.display = 'block';
+      location.hash = '';
+      location.reload();
     });
+    if (document.documentElement.classList.contains('changepw-view')) {
+      document.getElementById('pwUsername').value = sessionStorage.getItem('kn_pwUsername') || '';
+      document.getElementById('pwCurrent').focus();
+    }
+    const pwChangedMsg = sessionStorage.getItem('kn_pwChanged');
+    if (pwChangedMsg) {
+      sessionStorage.removeItem('kn_pwChanged');
+      document.getElementById('username').value = sessionStorage.getItem('kn_pwUsername') || '';
+      errEl.textContent = 'Passwort geändert. Bitte melde dich mit dem neuen Passwort an.';
+      errEl.style.color = '#c9f7c9';
+      errEl.style.background = 'rgba(80, 255, 120, 0.12)';
+      errEl.style.borderColor = 'rgba(80, 255, 120, 0.3)';
+      errEl.style.display = 'block';
+    }
 
     const changePwErrEl = document.getElementById('changePwError');
     const changePwSubmitBtn = document.getElementById('changePwSubmit');
@@ -390,15 +423,11 @@
           changePwSubmitBtn.disabled = false;
           return;
         }
-        changePwView.style.display = 'none';
-        form.style.display = 'block';
-        errEl.textContent = 'Passwort geändert. Bitte melde dich mit dem neuen Passwort an.';
-        errEl.style.color = '#c9f7c9';
-        errEl.style.background = 'rgba(80, 255, 120, 0.12)';
-        errEl.style.borderColor = 'rgba(80, 255, 120, 0.3)';
-        errEl.style.display = 'block';
-        document.getElementById('username').value = document.getElementById('pwUsername').value;
-        changePwSubmitBtn.disabled = false;
+        sessionStorage.setItem('kn_pwChanged', '1');
+        sessionStorage.setItem('kn_pwUsername', document.getElementById('pwUsername').value);
+        location.hash = '';
+        location.reload();
+        return;
       } catch (err) {
         changePwErrEl.textContent = 'Verbindung zum Server fehlgeschlagen.';
         changePwErrEl.style.display = 'block';
