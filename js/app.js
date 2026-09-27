@@ -6012,51 +6012,13 @@
     document.addEventListener('selectionchange', rememberActiveSelectionRange);
     goToView(isMobileLayout() ? 'folders' : 'notes');
 
-    // TEMPORÄRES DEBUGGING (wird nach der Diagnose wieder entfernt) - schreibt
-    // jede Änderung am Suchfeld-Wert nach localStorage statt nur in die
-    // Konsole, damit die Aufzeichnung auch einen Seitenwechsel (Abmelden/
-    // Anmelden) übersteht.
-    (function debugSearchField() {
-      const desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
-      const log = (msg) => {
-        try {
-          const arr = JSON.parse(localStorage.getItem('kn_search_debug') || '[]');
-          arr.push(`${new Date().toISOString().slice(11, 23)} ${msg}`);
-          while (arr.length > 300) arr.shift();
-          localStorage.setItem('kn_search_debug', JSON.stringify(arr));
-        } catch (e) {
-          // egal - Diagnose darf die App nie zum Absturz bringen
-        }
-      };
-      log(`init() gestartet - Feldwert: ${JSON.stringify(el.searchInput.value)}`);
-      Object.defineProperty(el.searchInput, 'value', {
-        get() { return desc.get.call(this); },
-        set(v) { log(`value gesetzt auf ${JSON.stringify(v)}`); return desc.set.call(this, v); },
-      });
-      ['input', 'beforeinput', 'change', 'focus', 'blur'].forEach((evt) => {
-        el.searchInput.addEventListener(evt, (e) => {
-          log(`Event ${evt} isTrusted=${e.isTrusted} wert=${JSON.stringify(el.searchInput.value)}`);
-        });
-      });
-    })();
-
-    // Manche Browser (v.a. Safari) füllen das Suchfeld trotz autocomplete="off"
-    // beim Laden von sich aus mit einem früher auf diesem Gerät eingegebenen
-    // Begriff - teils nicht sofort, sondern erst mit kurzer Verzögerung nach
-    // dem eigentlichen Laden der Seite. Ein einmaliges Leeren direkt beim
-    // Start reicht deshalb nicht immer - hier wird zusätzlich noch zweimal
-    // kurz danach nachgeprüft.
-    function clearStraySearchAutofill() {
-      if (!el.searchInput.value) return;
-      el.searchInput.value = '';
-      if (searchQuery) {
-        searchQuery = '';
-        renderNoteList();
-      }
-    }
-    clearStraySearchAutofill();
-    setTimeout(clearStraySearchAutofill, 400);
-    setTimeout(clearStraySearchAutofill, 1500);
+    // Manche Browser füllen das Suchfeld trotz autocomplete="off" schon beim
+    // allerersten Rendern (noch bevor überhaupt ein Ereignis feuern kann) von
+    // sich aus mit einem früher eingegebenen Begriff. Das hier läuft ganz am
+    // Anfang von init(), also bevor der Benutzer überhaupt etwas eingetippt
+    // haben kann - spätere Fremdbefüllungen fängt stattdessen der
+    // beforeinput-Abgleich beim "input"-Listener weiter unten ab (siehe dort).
+    if (el.searchInput.value) el.searchInput.value = '';
 
     state = await loadState();
     // Der Name unten in der Seitenleiste stand bisher fest im HTML ("Anton
