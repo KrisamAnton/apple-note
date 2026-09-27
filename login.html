@@ -11,12 +11,15 @@
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     min-height: 100vh;
-    /* Das Hintergrundbild zeigt selbst schon eine (nicht echte) Anmeldekarte -
-       ein Verlauf blendet den unteren Bereich weich zu einem einfarbigen
-       Dunkel-Lila aus, damit die eigentliche, echte Karte darunter (siehe
-       .login-card) nicht mit der eingezeichneten Attrappe kollidiert. */
+    /* Eine absolut auf die im Bild eingezeichnete (nicht echte) Karte
+       positionierte echte Karte funktioniert nur für eine Fenstergröße genau -
+       bei anderen Seitenverhältnissen "wandert" die Größe der Grafik (cover)
+       anders als die feste Kartenposition auseinander. Deshalb wieder fest
+       mittig zentriert (funktioniert bei jeder Fenstergröße gleich gut) - der
+       Verlauf ist dafür deutlich heller/kräftiger als im ersten Versuch, damit
+       möglichst viel vom Original-Bild sichtbar bleibt. */
     background:
-      linear-gradient(180deg, rgba(18, 10, 36, 0) 0%, rgba(18, 10, 36, 0.15) 22%, rgba(15, 8, 30, 0.75) 42%, rgba(13, 7, 26, 0.95) 58%, #0f0820 78%),
+      linear-gradient(180deg, rgba(18, 10, 36, 0) 0%, rgba(18, 10, 36, 0.05) 28%, rgba(16, 9, 32, 0.68) 44%, rgba(14, 8, 28, 0.93) 56%, #100822 68%),
       url('icons/login-background.webp') center top / cover no-repeat;
     background-color: #120a24;
     display: flex;
@@ -28,13 +31,13 @@
   .login-card {
     width: 100%;
     max-width: 360px;
-    background: rgba(24, 12, 46, 0.6);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(20, 11, 40, 0.82);
+    backdrop-filter: blur(22px) saturate(150%);
+    -webkit-backdrop-filter: blur(22px) saturate(150%);
+    border: 1px solid rgba(255, 255, 255, 0.16);
     border-radius: 22px;
     padding: 34px 28px 28px;
-    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
     color: #fff;
   }
 
@@ -83,6 +86,16 @@
     outline: none;
     border-color: rgba(183, 148, 255, 0.7);
     background: rgba(255, 255, 255, 0.1);
+  }
+  /* Chrome füllt gespeicherte Zugangsdaten sonst mit einem festen, hier nicht
+     überschreibbaren weißen Hintergrund - dieser Trick (riesiger, verzögerter
+     box-shadow "von innen") erzwingt stattdessen wieder unseren eigenen. */
+  .login-field input:-webkit-autofill,
+  .login-field input:-webkit-autofill:hover,
+  .login-field input:-webkit-autofill:focus {
+    -webkit-text-fill-color: #fff;
+    -webkit-box-shadow: 0 0 0 1000px rgba(255, 255, 255, 0.07) inset;
+    transition: background-color 9999s ease-in-out 0s;
   }
   .login-field.has-toggle input { padding-right: 42px; }
   .eye-toggle {
