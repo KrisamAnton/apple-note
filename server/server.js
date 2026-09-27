@@ -94,6 +94,12 @@ const PUBLIC_PATHS = new Set([
   '/api/change-password-public',
   '/api/register',
   '/icons/login-background.webp',
+  // Enthält keine privaten Daten (nur Name/Icons/Farben der App) - der
+  // Browser fragt sie aber teils schon vor dem Anmelden ab (z. B. für den
+  // "Zum Startbildschirm hinzufügen"-Hinweis auf der Login-Seite). Bisher
+  // kam dabei statt echtem JSON die Anmelde-Weiterleitung zurück ("Manifest:
+  // Line 1, column 1, Syntax error" in der Konsole).
+  '/manifest.json',
 ]);
 
 app.use((req, res, next) => {

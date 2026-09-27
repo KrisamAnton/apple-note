@@ -6012,12 +6012,23 @@
     document.addEventListener('selectionchange', rememberActiveSelectionRange);
     goToView(isMobileLayout() ? 'folders' : 'notes');
 
-    // Manche Browser füllen das Suchfeld trotz autocomplete="off" beim Laden
-    // von sich aus mit einem früher auf diesem Gerät eingegebenen Suchbegriff
-    // (browsereigene "letzte Suchen"-Erinnerung, unabhängig vom Server) - die
-    // Suche soll aber bei jedem Start leer beginnen, egal wer zuvor auf
-    // diesem Gerät angemeldet war.
-    if (el.searchInput.value) el.searchInput.value = '';
+    // Manche Browser (v.a. Safari) füllen das Suchfeld trotz autocomplete="off"
+    // beim Laden von sich aus mit einem früher auf diesem Gerät eingegebenen
+    // Begriff - teils nicht sofort, sondern erst mit kurzer Verzögerung nach
+    // dem eigentlichen Laden der Seite. Ein einmaliges Leeren direkt beim
+    // Start reicht deshalb nicht immer - hier wird zusätzlich noch zweimal
+    // kurz danach nachgeprüft.
+    function clearStraySearchAutofill() {
+      if (!el.searchInput.value) return;
+      el.searchInput.value = '';
+      if (searchQuery) {
+        searchQuery = '';
+        renderNoteList();
+      }
+    }
+    clearStraySearchAutofill();
+    setTimeout(clearStraySearchAutofill, 400);
+    setTimeout(clearStraySearchAutofill, 1500);
 
     state = await loadState();
     // Der Name unten in der Seitenleiste stand bisher fest im HTML ("Anton
