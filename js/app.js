@@ -4421,6 +4421,8 @@
     return new Promise((resolve) => {
       pdfModeResolve = resolve;
       el.pdfInlineFileModeBtn.hidden = !pendingInlinePdfHost;
+      // TEMPORÄRE DIAGNOSE - wird nach der Fehlersuche wieder entfernt.
+      console.log('[PDF-DEBUG] askPdfInsertMode zeigt Popover, pdfInlineFileModeBtn.hidden =', el.pdfInlineFileModeBtn.hidden);
       el.pdfModePopoverBackdrop.hidden = false;
     });
   }
@@ -4510,6 +4512,16 @@
       pendingInlinePdfHost = lastTextEditContext;
       pendingInlinePdfRange = lastTextEditRange.cloneRange();
     }
+    // TEMPORÄRE DIAGNOSE - wird nach der Fehlersuche wieder entfernt.
+    console.log('[PDF-DEBUG] captureInlinePdfTarget:', {
+      activeTextEdit: !!activeTextEdit,
+      selRangeCount: sel ? sel.rangeCount : 'sel=null',
+      liveRangeInBody: !!(activeTextEdit && liveRange && activeTextEdit.body.contains(liveRange.commonAncestorContainer)),
+      lastTextEditContext: !!lastTextEditContext,
+      lastTextEditRange: !!lastTextEditRange,
+      lastContextBodyStillInDom: !!(lastTextEditContext && document.body.contains(lastTextEditContext.body)),
+      result_pendingInlinePdfHost: !!pendingInlinePdfHost,
+    });
   }
 
   async function addPdfObjectFromFile(file, dropPoint) {
@@ -6282,6 +6294,12 @@
     el.canvasSurface.addEventListener('drop', (e) => {
       el.canvasSurface.classList.remove('drag-over');
       const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
+      // TEMPORÄRE DIAGNOSE - wird nach der Fehlersuche wieder entfernt.
+      console.log('[PDF-DEBUG] drop-Ereignis:', {
+        fileCount: files.length,
+        fileNames: files.map((f) => f.name),
+        activeTextEditVorErfassung: !!activeTextEdit,
+      });
       if (files.length === 0) return;
       e.preventDefault();
       const rect = el.canvasSurface.getBoundingClientRect();
