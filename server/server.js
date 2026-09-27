@@ -25,10 +25,11 @@ const DATA_DIR = process.env.DATA_DIR || path.join(PROJECT_ROOT, 'data');
 // unangetastet als automatisches Backup liegen.
 const LEGACY_FILES_DIR = path.join(DATA_DIR, 'files');
 const LEGACY_STATE_FILE = path.join(DATA_DIR, 'state.json');
-const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
+const LEGACY_SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
-// Jeder Benutzer bekommt einen eigenen, privaten Bereich für seine Notizen und
-// hochgeladenen Dateien - komplett getrennt von allen anderen Benutzern.
+// Jeder Benutzer bekommt einen eigenen, privaten Bereich für seine Notizen,
+// hochgeladenen Dateien und Einstellungen (Erinnerungs-Mail/SMTP) - komplett
+// getrennt von allen anderen Benutzern.
 const USERS_DATA_DIR = path.join(DATA_DIR, 'users');
 const PORT = process.env.PORT || 3000;
 
@@ -43,28 +44,40 @@ function userStateFile(username) {
 function userFilesDir(username) {
   return path.join(userDir(username), 'files');
 }
+function userSettingsFile(username) {
+  return path.join(userDir(username), 'settings.json');
+}
 
 // Einmalige, sichere Migration: bestehende Benutzer (aus der Zeit vor
 // getrennten Konten) bekommen beim ersten Start nach dem Update eine Kopie
 // des bisherigen gemeinsamen Datenbestands als ihren privaten Bereich - die
 // Originaldateien werden dabei nur gelesen, nie verschoben oder gelöscht.
 function migrateLegacySharedData() {
-  if (!fs.existsSync(LEGACY_STATE_FILE)) return;
   for (const user of userStore.readUsers()) {
-    const targetState = userStateFile(user.username);
-    if (fs.existsSync(targetState)) continue; // hat schon einen eigenen Bereich
-    fs.mkdirSync(userDir(user.username), { recursive: true });
-    fs.copyFileSync(LEGACY_STATE_FILE, targetState);
-    if (fs.existsSync(LEGACY_FILES_DIR)) {
-      fs.mkdirSync(userFilesDir(user.username), { recursive: true });
-      for (const name of fs.readdirSync(LEGACY_FILES_DIR)) {
-        const src = path.join(LEGACY_FILES_DIR, name);
-        if (fs.statSync(src).isFile()) {
-          fs.copyFileSync(src, path.join(userFilesDir(user.username), name));
+    if (fs.existsSync(LEGACY_STATE_FILE) && !fs.existsSync(userStateFile(user.username))) {
+      fs.mkdirSync(userDir(user.username), { recursive: true });
+      fs.copyFileSync(LEGACY_STATE_FILE, userStateFile(user.username));
+      if (fs.existsSync(LEGACY_FILES_DIR)) {
+        fs.mkdirSync(userFilesDir(user.username), { recursive: true });
+        for (const name of fs.readdirSync(LEGACY_FILES_DIR)) {
+          const src = path.join(LEGACY_FILES_DIR, name);
+          if (fs.statSync(src).isFile()) {
+            fs.copyFileSync(src, path.join(userFilesDir(user.username), name));
+          }
         }
       }
+      console.log(`Bisherige gemeinsame Notizen als privater Bereich für "${user.username}" übernommen.`);
     }
-    console.log(`Bisherige gemeinsame Notizen als privater Bereich für "${user.username}" übernommen.`);
+    // Die bisherige, serverweite Erinnerungs-Mail-Konfiguration (Phase 1-3)
+    // ging bisher an EINE fest hinterlegte Adresse, unabhängig davon, wer
+    // gerade angemeldet war - jeder Benutzer bekommt sie jetzt als eigenen,
+    // unabhängigen Startpunkt (kann sie selbst ändern/löschen, ohne andere
+    // Benutzer zu beeinflussen).
+    if (fs.existsSync(LEGACY_SETTINGS_FILE) && !fs.existsSync(userSettingsFile(user.username))) {
+      fs.mkdirSync(userDir(user.username), { recursive: true });
+      fs.copyFileSync(LEGACY_SETTINGS_FILE, userSettingsFile(user.username));
+      console.log(`Bisherige gemeinsame Erinnerungs-Mail-Einstellungen für "${user.username}" übernommen.`);
+    }
   }
 }
 migrateLegacySharedData();
@@ -423,9 +436,9 @@ const DEFAULT_SETTINGS = {
   smtpPassword: '',
 };
 
-async function readSettingsFile() {
+async function readUserSettingsFile(username) {
   try {
-    const raw = await fs.promises.readFile(SETTINGS_FILE, 'utf8');
+    const raw = await fs.promises.readFile(userSettingsFile(username), 'utf8');
     return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
   } catch (err) {
     if (err.code === 'ENOENT') return { ...DEFAULT_SETTINGS };
@@ -445,7 +458,7 @@ function sanitizeSettingsForClient(settings) {
 
 app.get('/api/settings', async (req, res) => {
   try {
-    res.json(sanitizeSettingsForClient(await readSettingsFile()));
+    res.json(sanitizeSettingsForClient(await readUserSettingsFile(req.username)));
   } catch (err) {
     console.error('Konnte Einstellungen nicht lesen:', err);
     res.status(500).json({ error: 'Lesen fehlgeschlagen' });
@@ -454,7 +467,7 @@ app.get('/api/settings', async (req, res) => {
 
 app.put('/api/settings', async (req, res) => {
   try {
-    const current = await readSettingsFile();
+    const current = await readUserSettingsFile(req.username);
     const body = req.body || {};
     const next = {
       ...current,
@@ -471,10 +484,12 @@ app.put('/api/settings', async (req, res) => {
     if (typeof body.smtpPassword === 'string' && body.smtpPassword) {
       next.smtpPassword = body.smtpPassword;
     }
+    const settingsFile = userSettingsFile(req.username);
+    fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
     const json = JSON.stringify(next, null, 2);
-    const tmpFile = `${SETTINGS_FILE}.${process.pid}.${Date.now()}.tmp`;
+    const tmpFile = `${settingsFile}.${process.pid}.${Date.now()}.tmp`;
     await fs.promises.writeFile(tmpFile, json);
-    await fs.promises.rename(tmpFile, SETTINGS_FILE);
+    await fs.promises.rename(tmpFile, settingsFile);
     res.json(sanitizeSettingsForClient(next));
   } catch (err) {
     console.error('Konnte Einstellungen nicht speichern:', err);
@@ -763,11 +778,11 @@ async function checkAndSendDueReminders() {
   if (reminderCheckRunning) return;
   reminderCheckRunning = true;
   try {
-    const settings = await readSettingsFile();
-    if (!settings.reminderEmail || !settings.smtpHost || !settings.smtpUser || !settings.smtpPassword) {
-      return;
-    }
     for (const user of userStore.readUsers()) {
+      const settings = await readUserSettingsFile(user.username);
+      if (!settings.reminderEmail || !settings.smtpHost || !settings.smtpUser || !settings.smtpPassword) {
+        continue; // dieser Benutzer hat (noch) keine eigene Erinnerungs-Mail eingerichtet
+      }
       await checkAndSendDueRemindersForUser(user.username, settings);
     }
   } catch (err) {

@@ -296,7 +296,8 @@ sw.js              Service Worker (Offline-Cache der App-Shell; API-Anfragen aus
 icons/             App-Icons für Home-Bildschirm / Manifest
 server/            Node.js/Express-Server (Notizen + Datei-Uploads, siehe unten)
 data/              Vom Server angelegt: users.json (Konten) + je Benutzer ein eigener,
-                   privater Bereich unter users/<benutzername>/ (state.json + files/).
+                   privater Bereich unter users/<benutzername>/ (state.json + files/ +
+                   settings.json für die eigene Erinnerungs-Mail/SMTP-Konfiguration).
                    Nicht Teil des Repositorys (.gitignore), da es die echten Nutzdaten sind.
 ```
 
