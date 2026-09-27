@@ -4458,6 +4458,24 @@
     nameEl.addEventListener('keydown', onKeydown);
   }
 
+  // Merkt sich (falls vorhanden) die aktuelle Cursor-/Auswahlposition in einem
+  // gerade bearbeiteten Textfeld für pendingInlinePdfRange/-Host - identische
+  // Logik wie im wireRibbonBtn(el.addPdfBtn, ...)-Klick weiter unten, damit
+  // auch ein per Ziehen-und-Ablegen auf die Fläche gezogenes PDF die Option
+  // "im Text ablegen" im Auswahlfenster (siehe askPdfInsertMode()) anbietet.
+  function captureInlinePdfTarget() {
+    pendingInlinePdfRange = null;
+    pendingInlinePdfHost = null;
+    if (activeTextEdit) {
+      const sel = window.getSelection();
+      const liveRange = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
+      if (liveRange && activeTextEdit.body.contains(liveRange.commonAncestorContainer)) {
+        pendingInlinePdfRange = liveRange.cloneRange();
+        pendingInlinePdfHost = activeTextEdit;
+      }
+    }
+  }
+
   async function addPdfObjectFromFile(file, dropPoint) {
     const note = currentNote();
     if (!note || !file) return;
@@ -5968,16 +5986,7 @@
       // Muss VOR dem Öffnen des nativen Dateiauswahl-Fensters erfasst werden
       // (siehe pendingInlinePdfRange) - das Fenster nimmt sofort den Fokus
       // weg, damit wäre die Cursor-Position sonst schon verloren.
-      pendingInlinePdfRange = null;
-      pendingInlinePdfHost = null;
-      if (activeTextEdit) {
-        const sel = window.getSelection();
-        const liveRange = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
-        if (liveRange && activeTextEdit.body.contains(liveRange.commonAncestorContainer)) {
-          pendingInlinePdfRange = liveRange.cloneRange();
-          pendingInlinePdfHost = activeTextEdit;
-        }
-      }
+      captureInlinePdfTarget();
       el.pdfFileInput.click();
     });
     el.pdfFileInput.addEventListener('change', () => {
@@ -6242,6 +6251,11 @@
       const point = { x: (e.clientX - rect.left) / workspaceZoom, y: (e.clientY - rect.top) / workspaceZoom };
       const pdfFile = files.find((f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
       if (pdfFile) {
+        // Wie beim Ribbon-Knopf (siehe wireRibbonBtn(el.addPdfBtn, ...)) die
+        // Cursor-Position VOR dem Auswahlfenster sichern, damit "im Text
+        // ablegen" auch bei per Ziehen-und-Ablegen zugefügten PDFs zur
+        // Auswahl steht, statt nur bei bereits abgelegten PDFs.
+        captureInlinePdfTarget();
         addPdfObjectFromFile(pdfFile, point);
         return;
       }
