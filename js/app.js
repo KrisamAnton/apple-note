@@ -609,27 +609,37 @@
     return ids;
   }
 
-  // Die oberste Hauptseite einer Notiz (sie selbst, falls sie schon eine
-  // Hauptseite ohne Elternteil ist).
-  function rootAncestorId(id) {
-    let current = findNote(id);
-    while (current && current.parentNoteId) {
+  // Der Bezugspunkt für die Familien-Markierung: normalerweise die
+  // zweitoberste Ebene (das Kind der ganz obersten Hauptseite, das selbst
+  // Vorfahre der gewählten Notiz ist) - nur wenn die gewählte Notiz bereits
+  // die oberste Ebene selbst ist, bleibt sie der Bezugspunkt. So markiert
+  // z. B. das Auswählen einer Unterseite von "Home Assistant" nur "Home
+  // Assistant" + dessen eigene Unterseiten, nicht gleich die ganze restliche
+  // Struktur unter der übergeordneten Sammelseite (z. B. "Programme unter
+  // Proxmox") mit ihren anderen, unbeteiligten Zweigen (z. B. "Paperless").
+  function familyRootId(id) {
+    const note = findNote(id);
+    if (!note) return null;
+    if (!note.parentNoteId) return note.id;
+    let current = note;
+    while (current.parentNoteId) {
       const parent = findNote(current.parentNoteId);
-      if (!parent) break;
+      if (!parent) return current.id;
+      if (!parent.parentNoteId) return current.id;
       current = parent;
     }
-    return current ? current.id : null;
+    return current.id;
   }
 
   // Alle Zeilen, die zur selben "Familie" wie die aktuell gewählte Notiz
-  // gehören (ihre Hauptseite + sämtliche Unterseiten, egal ob gerade
-  // ein-/ausgeklappt) - für die dezente graue Gruppen-Markierung in der
-  // Notizliste. Gibt null zurück, wenn es dafür (Hauptseite ohne
-  // Unterseiten) ohnehin nur eine einzige Zeile gäbe - dann reicht die
-  // normale Auswahl-Markierung völlig aus.
+  // gehören (ihr Bezugspunkt, siehe familyRootId(), + sämtliche dessen
+  // Unterseiten, egal ob gerade ein-/ausgeklappt) - für die dezente graue
+  // Gruppen-Markierung in der Notizliste. Gibt null zurück, wenn es dafür
+  // ohnehin nur eine einzige Zeile gäbe - dann reicht die normale
+  // Auswahl-Markierung völlig aus.
   function selectionFamilyNoteIds() {
     if (!selectedNoteId) return null;
-    const rootId = rootAncestorId(selectedNoteId);
+    const rootId = familyRootId(selectedNoteId);
     if (!rootId) return null;
     const family = [rootId, ...descendantNoteIds(rootId)];
     return family.length > 1 ? new Set(family) : null;

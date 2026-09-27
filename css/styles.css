@@ -27,7 +27,7 @@
   /* Bewusst grau statt der lila Akzentfarbe: markiert die "Familie" (Ober-
      und alle Unterseiten) der gerade ausgewählten Notiz, ohne mit der
      kräftigeren lila Markierung der tatsächlich aktiven Zeile zu verschmelzen. */
-  --family-bg: rgba(0, 0, 0, 0.07);
+  --family-bg: rgba(0, 0, 0, 0.05);
   --titlebar-bg: #e7e7ea;
   --danger: #ff3b30;
   --shadow-popover: 0 12px 32px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.08);
@@ -50,7 +50,7 @@
     --selection-bg: rgba(196, 181, 253, 0.18);
     --selection-bg-strong: #c4b5fd;
     --hover-bg: rgba(255, 255, 255, 0.06);
-    --family-bg: rgba(255, 255, 255, 0.09);
+    --family-bg: rgba(255, 255, 255, 0.06);
     --titlebar-bg: #3a3a3c;
     --shadow-popover: 0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
   }
@@ -837,21 +837,22 @@ textarea {
 
 /* Unterseiten sollen sich auf den ersten Blick von der übergeordneten
    Hauptzeile unterscheiden - deutlich schwächere Schrift statt der fetten
-   Überschrift, und bei Auswahl nur eine dezente Einfärbung statt der
-   kräftigen vollen Akzentfarbe (die bleibt der Hauptzeile vorbehalten). */
+   Überschrift. Bei AUSWAHL gilt das nicht mehr: die gerade bearbeitete Zeile
+   soll immer gleich kräftig hervorstechen, egal auf welcher Ebene sie liegt -
+   deshalb dieselbe volle Akzentfarbe wie bei einer ausgewählten Hauptzeile. */
 .note-item-sub .note-title {
   font-size: 14px;
   font-weight: 400;
 }
 
 .note-item-sub.active {
-  background: var(--selection-bg);
+  background: var(--selection-bg-strong);
 }
 
 .note-item-sub.active .note-title,
 .note-item-sub.active .note-toggle,
 .note-item-sub.active .note-add-sub {
-  color: var(--text-primary);
+  color: #1c1c1e;
 }
 
 .note-title:empty::before {
