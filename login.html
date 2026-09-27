@@ -96,9 +96,12 @@
      box-shadow "von innen") erzwingt stattdessen wieder unseren eigenen. */
   .login-field input:-webkit-autofill,
   .login-field input:-webkit-autofill:hover,
-  .login-field input:-webkit-autofill:focus {
-    -webkit-text-fill-color: #fff;
-    -webkit-box-shadow: 0 0 0 1000px rgba(255, 255, 255, 0.07) inset;
+  .login-field input:-webkit-autofill:focus,
+  .login-field input:autofill {
+    -webkit-text-fill-color: #fff !important;
+    caret-color: #fff !important;
+    -webkit-box-shadow: 0 0 0 1000px rgba(255, 255, 255, 0.07) inset !important;
+    box-shadow: 0 0 0 1000px rgba(255, 255, 255, 0.07) inset !important;
     transition: background-color 9999s ease-in-out 0s;
   }
   .login-field.has-toggle input { padding-right: 42px; }
@@ -247,18 +250,20 @@
     <p class="login-tagline">Ein Ort für alles, was wichtig ist. 💜</p>
   </form>
 
-  <form class="login-card" id="changePwView" autocomplete="on">
+  <form class="login-card" id="changePwView" autocomplete="off">
     <p class="login-title">Kris<span class="accent">Note</span></p>
     <p class="login-subtitle">Passwort ändern</p>
 
     <p class="login-error" id="changePwError"></p>
 
+    <input type="hidden" id="pwUsername" />
+
     <div class="login-field">
       <svg class="field-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-        <circle cx="10" cy="6.5" r="3.2" stroke="currentColor" stroke-width="1.6"/>
-        <path d="M3.5 17c0-3.3 2.9-5.5 6.5-5.5s6.5 2.2 6.5 5.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        <rect x="4.5" y="8.5" width="11" height="8" rx="2" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M6.5 8.5V6a3.5 3.5 0 0 1 7 0v2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
       </svg>
-      <input type="text" id="pwUsername" placeholder="Benutzername" autocomplete="username" required />
+      <input type="password" id="pwCurrent" name="pw-current-nofill" placeholder="Aktuelles Passwort" autocomplete="off" required />
     </div>
 
     <div class="login-field">
@@ -266,7 +271,7 @@
         <rect x="4.5" y="8.5" width="11" height="8" rx="2" stroke="currentColor" stroke-width="1.6"/>
         <path d="M6.5 8.5V6a3.5 3.5 0 0 1 7 0v2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
       </svg>
-      <input type="password" id="pwCurrent" placeholder="Aktuelles Passwort" autocomplete="current-password" required />
+      <input type="password" id="pwNew" name="pw-new1-nofill" placeholder="Neues Passwort (mind. 8 Zeichen)" autocomplete="off" required />
     </div>
 
     <div class="login-field">
@@ -274,15 +279,7 @@
         <rect x="4.5" y="8.5" width="11" height="8" rx="2" stroke="currentColor" stroke-width="1.6"/>
         <path d="M6.5 8.5V6a3.5 3.5 0 0 1 7 0v2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
       </svg>
-      <input type="password" id="pwNew" placeholder="Neues Passwort (mind. 8 Zeichen)" autocomplete="new-password" required />
-    </div>
-
-    <div class="login-field">
-      <svg class="field-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-        <rect x="4.5" y="8.5" width="11" height="8" rx="2" stroke="currentColor" stroke-width="1.6"/>
-        <path d="M6.5 8.5V6a3.5 3.5 0 0 1 7 0v2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-      </svg>
-      <input type="password" id="pwNewRepeat" placeholder="Neues Passwort wiederholen" autocomplete="new-password" required />
+      <input type="password" id="pwNewRepeat" name="pw-new2-nofill" placeholder="Neues Passwort wiederholen" autocomplete="off" required />
     </div>
 
     <button type="submit" class="login-submit" id="changePwSubmit">
@@ -343,9 +340,13 @@
     const changePwView = document.getElementById('changePwView');
     document.getElementById('showChangePwLink').addEventListener('click', (e) => {
       e.preventDefault();
+      // Benutzername wird aus dem Login-Feld übernommen, damit man ihn hier
+      // nicht nochmal eintippen muss (er dient nur der Zuordnung im
+      // Hintergrund, nicht zum Ändern des Benutzernamens selbst).
+      document.getElementById('pwUsername').value = document.getElementById('username').value.trim();
       form.style.display = 'none';
       changePwView.style.display = 'block';
-      document.getElementById('pwUsername').focus();
+      document.getElementById('pwCurrent').focus();
     });
     document.getElementById('backToLoginLink').addEventListener('click', (e) => {
       e.preventDefault();
@@ -358,6 +359,12 @@
     changePwView.addEventListener('submit', async (e) => {
       e.preventDefault();
       changePwErrEl.style.display = 'none';
+      const uname = document.getElementById('pwUsername').value.trim();
+      if (!uname) {
+        changePwErrEl.textContent = 'Bitte zurück zum Login und dort zuerst den Benutzernamen eingeben, dann erneut auf "Passwort ändern" klicken.';
+        changePwErrEl.style.display = 'block';
+        return;
+      }
       const newPw = document.getElementById('pwNew').value;
       const newPwRepeat = document.getElementById('pwNewRepeat').value;
       if (newPw !== newPwRepeat) {
