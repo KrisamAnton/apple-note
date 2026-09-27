@@ -1327,6 +1327,25 @@
   // Überlebt (kurz) einen Blur - siehe exitTextEdit()/convertFloatingPdfToInline().
   let lastTextEditContext = null;
   let lastTextEditRange = null;
+
+  // Hält lastTextEditContext/-Range fortlaufend aktuell, statt sie erst
+  // reaktiv beim Blur selbst aus window.getSelection() auszulesen (siehe
+  // exitTextEdit()): Ein natives Ziehen-und-Ablegen einer Datei aus dem
+  // Dateisystem lässt den Browser offenbar schon beim Betreten der Fläche
+  // (dragenter) sowohl den Fokus ALS AUCH die Textauswahl selbst leeren,
+  // bevor unser eigener blur-Handler überhaupt reagieren kann - zu diesem
+  // Zeitpunkt wäre dann auch das "Nachleben" schon leer. Mit einem
+  // laufenden Mitschnitt bei jeder Cursor-/Auswahländerung bleibt die
+  // zuletzt gültige Stelle stattdessen die ganze Zeit über aktuell.
+  function rememberActiveSelectionRange() {
+    if (!activeTextEdit) return;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    if (!activeTextEdit.body.contains(range.commonAncestorContainer)) return;
+    lastTextEditRange = range.cloneRange();
+    lastTextEditContext = activeTextEdit;
+  }
   let headingTargetNode = null;
   let inkStrokeState = null;
   let drawColor = '#1c1c1e';
@@ -1440,6 +1459,11 @@
   // Buttons in index.html) statt des nativen title-Attributs - dessen
   // Verzögerung ist browserseitig fest vorgegeben und lässt sich nicht
   // verkürzen, außerdem passt dort keine zweizeilige Zusatzerklärung hinein.
+  // Per Ereignis-Delegation (Capture-Phase, da mouseenter/-leave selbst nicht
+  // "bubbeln") statt fest verdrahteter Einzel-Listener - so greift das auch
+  // für Knöpfe, die erst später/wiederholt neu erzeugt werden (z. B. die
+  // Werkzeugleiste eines PDF-/Datei-Objekts, siehe makeToolbarBtn()), ohne
+  // dass diese Funktion jedes Mal erneut aufgerufen werden müsste.
   function wireIconTooltips() {
     const SHOW_DELAY = 220;
     let showTimer = null;
@@ -1447,36 +1471,40 @@
       clearTimeout(showTimer);
       el.iconTooltip.classList.remove('visible');
     };
-    document.querySelectorAll('[data-tooltip]').forEach((btn) => {
-      btn.addEventListener('mouseenter', () => {
-        clearTimeout(showTimer);
-        showTimer = setTimeout(() => {
-          // Bei schnellem Drüberwischen über mehrere Knöpfe kann die
-          // verzögerte Anzeige erst auslösen, wenn die Maus längst auf einem
-          // anderen Knopf steht (oder ihn schon wieder verlassen hat) -
-          // ohne diese Prüfung erschiene der Tooltip dann am falschen Knopf.
-          if (!btn.matches(':hover')) return;
-          const title = btn.dataset.tooltip;
-          const hint = btn.dataset.tooltipHint;
-          el.iconTooltip.innerHTML =
-            `<div class="icon-tooltip-title">${escapeHtml(title)}</div>` +
-            (hint ? `<div class="icon-tooltip-hint">${escapeHtml(hint)}</div>` : '');
-          el.iconTooltip.classList.add('visible');
-          // Erst NACH dem Einblenden messen, sonst wäre die Größe (für die
-          // Zentrierung) noch die vom vorherigen (oder leeren) Inhalt.
-          const btnRect = btn.getBoundingClientRect();
-          const tipRect = el.iconTooltip.getBoundingClientRect();
-          const left = Math.min(
-            Math.max(8, btnRect.left + btnRect.width / 2 - tipRect.width / 2),
-            window.innerWidth - tipRect.width - 8
-          );
-          el.iconTooltip.style.left = `${Math.round(left)}px`;
-          el.iconTooltip.style.top = `${Math.round(btnRect.bottom + 8)}px`;
-        }, SHOW_DELAY);
-      });
-      btn.addEventListener('mouseleave', hide);
-      btn.addEventListener('click', hide);
-    });
+    document.addEventListener('mouseenter', (e) => {
+      const btn = e.target.closest && e.target.closest('[data-tooltip]');
+      if (!btn) return;
+      clearTimeout(showTimer);
+      showTimer = setTimeout(() => {
+        // Bei schnellem Drüberwischen über mehrere Knöpfe kann die
+        // verzögerte Anzeige erst auslösen, wenn die Maus längst auf einem
+        // anderen Knopf steht (oder ihn schon wieder verlassen hat) - ohne
+        // diese Prüfung erschiene der Tooltip dann am falschen Knopf.
+        if (!btn.matches(':hover')) return;
+        const title = btn.dataset.tooltip;
+        const hint = btn.dataset.tooltipHint;
+        el.iconTooltip.innerHTML =
+          `<div class="icon-tooltip-title">${escapeHtml(title)}</div>` +
+          (hint ? `<div class="icon-tooltip-hint">${escapeHtml(hint)}</div>` : '');
+        el.iconTooltip.classList.add('visible');
+        // Erst NACH dem Einblenden messen, sonst wäre die Größe (für die
+        // Zentrierung) noch die vom vorherigen (oder leeren) Inhalt.
+        const btnRect = btn.getBoundingClientRect();
+        const tipRect = el.iconTooltip.getBoundingClientRect();
+        const left = Math.min(
+          Math.max(8, btnRect.left + btnRect.width / 2 - tipRect.width / 2),
+          window.innerWidth - tipRect.width - 8
+        );
+        el.iconTooltip.style.left = `${Math.round(left)}px`;
+        el.iconTooltip.style.top = `${Math.round(btnRect.bottom + 8)}px`;
+      }, SHOW_DELAY);
+    }, true);
+    document.addEventListener('mouseleave', (e) => {
+      if (e.target.closest && e.target.closest('[data-tooltip]')) hide();
+    }, true);
+    document.addEventListener('click', (e) => {
+      if (e.target.closest && e.target.closest('[data-tooltip]')) hide();
+    }, true);
     // Erfasst per Capture-Phase auch das Scrollen der (horizontal
     // überlaufenden) Ribbon-Leiste selbst - sonst bliebe der Tooltip an der
     // alten Stelle stehen, während der zugehörige Knopf wegscrollt.
@@ -1489,7 +1517,10 @@
     btn.className = 'object-toolbar-btn' + (danger ? ' danger' : '');
     btn.innerHTML = `<svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${icon}</svg>`;
     if (label) {
-      btn.title = label;
+      // data-tooltip statt title: siehe wireIconTooltips() - erscheint so
+      // deutlich schneller als der native, browserseitig fest verzögerte
+      // Tooltip.
+      btn.dataset.tooltip = label;
       btn.setAttribute('aria-label', label);
     }
     btn.addEventListener('pointerdown', (e) => {
@@ -5907,6 +5938,7 @@
     setupBackButtons();
     initColumnResizers();
     wireIconTooltips();
+    document.addEventListener('selectionchange', rememberActiveSelectionRange);
     goToView(isMobileLayout() ? 'folders' : 'notes');
 
     state = await loadState();
