@@ -44,10 +44,11 @@ app.use(express.json({ limit: '25mb' }));
 
 // ---------- Anmeldung ----------
 //
-// login.html und der Login-Endpunkt selbst müssen ohne Anmeldung erreichbar
-// bleiben (sonst könnte sich niemand mehr anmelden) - alles andere (Fläche,
-// API, hochgeladene Dateien) verlangt ab hier eine gültige Sitzung.
-const PUBLIC_PATHS = new Set(['/login.html', '/api/login']);
+// login.html, der Login-Endpunkt selbst und das Hintergrundbild der
+// Anmeldeseite müssen ohne Anmeldung erreichbar bleiben (sonst könnte sich
+// niemand mehr anmelden bzw. die Seite bliebe optisch leer) - alles andere
+// (Fläche, API, hochgeladene Dateien) verlangt ab hier eine gültige Sitzung.
+const PUBLIC_PATHS = new Set(['/login.html', '/api/login', '/icons/login-background.webp']);
 
 app.use((req, res, next) => {
   if (PUBLIC_PATHS.has(req.path)) return next();

@@ -1,9 +1,10 @@
-const CACHE_VERSION = 'v5';
+const CACHE_VERSION = 'v6';
 const CACHE_NAME = `apple-notes-pwa-${CACHE_VERSION}`;
 
 const APP_SHELL = [
   './',
   './index.html',
+  './login.html',
   './manifest.json',
   './css/styles.css',
   './js/app.js',
@@ -13,6 +14,7 @@ const APP_SHELL = [
   './icons/favicon-32-v2.png',
   './icons/sidebar-logo.png',
   './icons/welcome-splash.webp',
+  './icons/login-background.webp',
 ];
 
 self.addEventListener('install', (event) => {

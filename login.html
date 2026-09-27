@@ -6,78 +6,194 @@
 <title>KrisNote – Anmelden</title>
 <style>
   * { box-sizing: border-box; }
+  html, body { height: 100%; }
   body {
+    margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    background: #1c1c1e;
-    color: #fff;
+    min-height: 100vh;
+    /* Das Hintergrundbild zeigt selbst schon eine (nicht echte) Anmeldekarte -
+       ein Verlauf blendet den unteren Bereich weich zu einem einfarbigen
+       Dunkel-Lila aus, damit die eigentliche, echte Karte darunter (siehe
+       .login-card) nicht mit der eingezeichneten Attrappe kollidiert. */
+    background:
+      linear-gradient(180deg, rgba(18, 10, 36, 0) 0%, rgba(18, 10, 36, 0.15) 22%, rgba(15, 8, 30, 0.75) 42%, rgba(13, 7, 26, 0.95) 58%, #0f0820 78%),
+      url('icons/login-background.webp') center top / cover no-repeat;
+    background-color: #120a24;
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 100vh;
-    margin: 0;
+    padding: 24px;
   }
-  form {
-    background: #2c2c2e;
-    padding: 32px;
-    border-radius: 14px;
-    width: 280px;
+
+  .login-card {
+    width: 100%;
+    max-width: 360px;
+    background: rgba(24, 12, 46, 0.6);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 22px;
+    padding: 34px 28px 28px;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
+    color: #fff;
   }
-  h1 {
-    font-size: 20px;
-    margin: 0 0 20px;
+
+  .login-title {
     text-align: center;
+    font-size: 27px;
+    font-weight: 800;
+    margin: 0;
+    letter-spacing: -0.02em;
   }
-  label {
-    display: block;
+  .login-title .accent {
+    background: linear-gradient(90deg, #b794ff, #7c5cff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .login-subtitle {
+    text-align: center;
     font-size: 13px;
-    margin-bottom: 4px;
-    color: #a1a1a6;
+    color: rgba(255, 255, 255, 0.62);
+    margin: 6px 0 26px;
   }
-  input {
+
+  .login-field { position: relative; margin-bottom: 14px; }
+  .login-field .field-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 18px;
+    color: rgba(255, 255, 255, 0.55);
+    pointer-events: none;
+  }
+  .login-field input {
     width: 100%;
-    padding: 10px 12px;
-    margin-bottom: 14px;
-    border-radius: 8px;
-    border: 1px solid #48484a;
-    background: #1c1c1e;
+    padding: 13px 14px 13px 42px;
+    border-radius: 13px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.07);
     color: #fff;
     font-size: 15px;
   }
-  button {
-    width: 100%;
-    padding: 12px;
+  .login-field input::placeholder { color: rgba(255, 255, 255, 0.45); }
+  .login-field input:focus {
+    outline: none;
+    border-color: rgba(183, 148, 255, 0.7);
+    background: rgba(255, 255, 255, 0.1);
+  }
+  .login-field.has-toggle input { padding-right: 42px; }
+  .eye-toggle {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 30px;
+    height: 30px;
     border: none;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.55);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     border-radius: 8px;
-    background: #7c5cff;
+  }
+  .eye-toggle:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+  .eye-toggle svg { width: 19px; height: 19px; }
+
+  .login-error {
+    display: none;
+    font-size: 13px;
+    color: #ff9d9d;
+    background: rgba(255, 80, 80, 0.12);
+    border: 1px solid rgba(255, 80, 80, 0.3);
+    border-radius: 10px;
+    padding: 8px 12px;
+    margin-bottom: 14px;
+  }
+
+  .login-submit {
+    width: 100%;
+    margin-top: 6px;
+    padding: 14px;
+    border: none;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #6d3bff, #a34bff);
     color: #fff;
     font-size: 15px;
-    font-weight: 600;
+    font-weight: 700;
     cursor: pointer;
-    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-shadow: 0 10px 24px rgba(124, 58, 255, 0.4);
   }
-  button:disabled { opacity: 0.6; cursor: default; }
-  .error {
-    color: #ff6b6b;
-    font-size: 13px;
-    margin: 0 0 12px;
-    display: none;
+  .login-submit:disabled { opacity: 0.6; cursor: default; }
+  .login-submit svg { width: 16px; height: 16px; }
+
+  .login-tagline {
+    text-align: center;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.55);
+    margin-top: 22px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
   }
 </style>
 </head>
 <body>
-  <form id="loginForm">
-    <h1>KrisNote</h1>
-    <p class="error" id="loginError"></p>
-    <label for="username">Benutzername</label>
-    <input type="text" id="username" autocomplete="username" required autofocus />
-    <label for="password">Passwort</label>
-    <input type="password" id="password" autocomplete="current-password" required />
-    <button type="submit" id="loginSubmit">Anmelden</button>
+  <form class="login-card" id="loginForm" autocomplete="on">
+    <p class="login-title">Kris<span class="accent">Note</span></p>
+    <p class="login-subtitle">Dein persönliches Wissensarchiv</p>
+
+    <p class="login-error" id="loginError"></p>
+
+    <div class="login-field">
+      <svg class="field-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <circle cx="10" cy="6.5" r="3.2" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M3.5 17c0-3.3 2.9-5.5 6.5-5.5s6.5 2.2 6.5 5.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <input type="text" id="username" placeholder="Benutzername" autocomplete="username" required autofocus />
+    </div>
+
+    <div class="login-field has-toggle">
+      <svg class="field-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <rect x="4.5" y="8.5" width="11" height="8" rx="2" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M6.5 8.5V6a3.5 3.5 0 0 1 7 0v2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <input type="password" id="password" placeholder="Passwort" autocomplete="current-password" required />
+      <button type="button" class="eye-toggle" id="togglePassword" aria-label="Passwort anzeigen">
+        <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <path d="M1.5 10S4.5 4 10 4s8.5 6 8.5 6-3 6-8.5 6-8.5-6-8.5-6z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+          <circle cx="10" cy="10" r="2.3" stroke="currentColor" stroke-width="1.5"/>
+        </svg>
+      </button>
+    </div>
+
+    <button type="submit" class="login-submit" id="loginSubmit">
+      <span>Anmelden</span>
+      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+
+    <p class="login-tagline">Ein Ort für alles, was wichtig ist. 💜</p>
   </form>
+
   <script>
     const form = document.getElementById('loginForm');
     const errEl = document.getElementById('loginError');
     const submitBtn = document.getElementById('loginSubmit');
+    const passwordInput = document.getElementById('password');
+
+    document.getElementById('togglePassword').addEventListener('click', () => {
+      passwordInput.type = passwordInput.type === 'password' ? 'text' : 'password';
+    });
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       errEl.style.display = 'none';
@@ -88,7 +204,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             username: document.getElementById('username').value,
-            password: document.getElementById('password').value,
+            password: passwordInput.value,
           }),
         });
         if (!res.ok) {
