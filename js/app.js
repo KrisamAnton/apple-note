@@ -6545,21 +6545,30 @@
       }
     });
 
-    // Manche Browser (v.a. Edge/Chrome) setzen ihren Autofill-Vorschlag nicht
-    // schon beim Laden der Seite ein, sondern erst wenn das Feld tatsächlich
-    // den Fokus bekommt - das würde die Prüfungen in init() verpassen. Weicht
-    // der Feldwert direkt nach dem Fokussieren von unserem zuletzt bekannten
-    // Suchbegriff ab, kann das nur von außen (nicht vom Benutzer) gekommen
-    // sein und wird sofort wieder entfernt.
-    el.searchInput.addEventListener('focus', () => {
-      if (el.searchInput.value !== searchQuery) el.searchInput.value = searchQuery;
-      setTimeout(() => {
-        if (el.searchInput.value !== searchQuery) el.searchInput.value = searchQuery;
-      }, 50);
+    // Edge setzt seinen Autofill-Vorschlag ("anton", der zuletzt angemeldete
+    // Benutzername) offenbar bei ganz unterschiedlichen, nicht vorhersagbaren
+    // Gelegenheiten ein (beim Fokussieren des Feldes, aber auch beim Klicken
+    // irgendwo sonst auf der Seite) - und löst dabei ein ganz normales
+    // "input"-Ereignis aus, das bisher jede noch so unabsichtliche
+    // Wertänderung als echte Suche behandelt hat. Der zuverlässige
+    // Unterschied zu einer echten Eingabe: Vor einer ECHTEN Eingabe (Tippen,
+    // Einfügen, Diktat, IME) feuert der Browser immer zuerst "beforeinput" -
+    // ein von außen (Autofill) gesetzter Wert tut das nicht. Nur wenn
+    // "beforeinput" dem "input" unmittelbar vorausging, wird die Änderung
+    // als echte Suche übernommen; alles andere wird sofort rückgängig
+    // gemacht, ohne die Notizliste zu filtern.
+    let realSearchEdit = false;
+    el.searchInput.addEventListener('beforeinput', () => {
+      realSearchEdit = true;
     });
 
     let searchDebounce = null;
     el.searchInput.addEventListener('input', () => {
+      if (!realSearchEdit) {
+        el.searchInput.value = searchQuery;
+        return;
+      }
+      realSearchEdit = false;
       clearTimeout(searchDebounce);
       searchDebounce = setTimeout(() => {
         searchQuery = el.searchInput.value;
