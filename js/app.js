@@ -502,6 +502,12 @@
     backgroundPopover: document.getElementById('backgroundPopover'),
     canvasWorkspace: document.getElementById('canvasWorkspace'),
     canvasSurface: document.getElementById('canvasSurface'),
+    objectBulkBar: document.getElementById('objectBulkBar'),
+    objectBulkCount: document.getElementById('objectBulkCount'),
+    objectBulkCopyBtn: document.getElementById('objectBulkCopyBtn'),
+    objectBulkDeleteBtn: document.getElementById('objectBulkDeleteBtn'),
+    objectBulkClearBtn: document.getElementById('objectBulkClearBtn'),
+    objectPasteBtn: document.getElementById('objectPasteBtn'),
     inkLayer: document.getElementById('inkLayer'),
     drawToolbar: document.getElementById('drawToolbar'),
     drawPenToolBtn: document.getElementById('drawPenToolBtn'),
@@ -1241,6 +1247,12 @@
   }
 
   function renderEditor() {
+    // Eine Mehrfachauswahl von Objekten bezieht sich immer nur auf die
+    // gerade offene Notiz - beim Wechsel zu einer anderen (oder zur leeren
+    // Ansicht) macht eine übernommene Auswahl keinen Sinn mehr.
+    multiSelectedObjectIds.clear();
+    updateObjectBulkBar();
+    el.objectPasteBtn.hidden = !objectClipboard;
     const note = findNote(selectedNoteId);
     if (!note) {
       el.editorEmpty.hidden = false;
@@ -1371,6 +1383,17 @@
   // ---------- Freie Zeichenfläche: Objekte ----------
 
   let selectedObjectId = null;
+  // Mehrfachauswahl von Objekten auf der Zeichenfläche (Umschalt-Klick) - für
+  // gemeinsames Verschieben/Löschen/Kopieren (Bilder, PDFs, Textfelder, ...).
+  let multiSelectedObjectIds = new Set();
+  let shiftKeyHeld = false;
+  document.addEventListener('keydown', (e) => { if (e.key === 'Shift') shiftKeyHeld = true; });
+  document.addEventListener('keyup', (e) => { if (e.key === 'Shift') shiftKeyHeld = false; });
+  window.addEventListener('blur', () => { shiftKeyHeld = false; });
+  // Kopierte Objekte (samt an sie angehefteter Zeichen-Striche) - beim
+  // Einfügen entsteht daraus jedes Mal eine frische, unabhängige Kopie mit
+  // neuen IDs, auch in einer ganz anderen Notiz.
+  let objectClipboard = null;
   let dragState = null;
   // Eigener Zwei-Finger-Zoom der ganzen Fläche (siehe Touch-Wiring weiter
   // unten) - bleibt bewusst über das Loslassen der Finger hinaus bestehen.
@@ -1678,8 +1701,55 @@
 
   // ----- Auswahl -----
 
+  function clearObjectMultiSelect() {
+    if (multiSelectedObjectIds.size === 0) return;
+    for (const id of multiSelectedObjectIds) {
+      const oe = findObjEl(id);
+      if (oe) oe.classList.remove('multiselected');
+    }
+    multiSelectedObjectIds.clear();
+    updateObjectBulkBar();
+  }
+
+  function updateObjectBulkBar() {
+    const count = multiSelectedObjectIds.size;
+    el.objectBulkBar.hidden = count < 2;
+    if (count >= 2) {
+      el.objectBulkCount.textContent = `${count} Objekte ausgewählt`;
+    }
+  }
+
   function selectObject(note, obj, objEl) {
     clearStrokeSelection();
+    // Umschalt-Klick baut/erweitert eine Mehrfachauswahl auf, statt die
+    // Auswahl wie sonst zu ersetzen - das bisher einzeln ausgewählte Objekt
+    // wird dabei beim allerersten Umschalt-Klick selbst zum Startpunkt der
+    // Gruppe mit aufgenommen.
+    if (shiftKeyHeld) {
+      if (multiSelectedObjectIds.size === 0 && selectedObjectId && selectedObjectId !== obj.id) {
+        multiSelectedObjectIds.add(selectedObjectId);
+        const prevEl = findObjEl(selectedObjectId);
+        if (prevEl) prevEl.classList.add('multiselected');
+      }
+      if (multiSelectedObjectIds.has(obj.id)) {
+        multiSelectedObjectIds.delete(obj.id);
+        objEl.classList.remove('multiselected');
+      } else {
+        multiSelectedObjectIds.add(obj.id);
+        objEl.classList.add('multiselected');
+      }
+      selectedObjectId = multiSelectedObjectIds.has(obj.id)
+        ? obj.id
+        : [...multiSelectedObjectIds][0] || null;
+      bringToFront(note, obj);
+      objEl.style.zIndex = obj.z;
+      updateObjectBulkBar();
+      schedulePersist();
+      return;
+    }
+    // Normaler Klick verwirft eine bestehende Mehrfachauswahl - man wählt
+    // damit bewusst wieder nur dieses eine Objekt.
+    clearObjectMultiSelect();
     if (selectedObjectId !== obj.id) {
       const prev = el.canvasSurface.querySelector('.canvas-object.selected');
       if (prev && prev !== objEl) prev.classList.remove('selected');
@@ -1695,6 +1765,7 @@
     const prev = el.canvasSurface.querySelector('.canvas-object.selected');
     if (prev) prev.classList.remove('selected');
     selectedObjectId = null;
+    clearObjectMultiSelect();
     clearStrokeSelection();
   }
 
@@ -1766,17 +1837,35 @@
   function startObjectDrag(e, note, obj, objEl) {
     if (e.button !== undefined && e.button !== 0 && e.pointerType === 'mouse') return;
     e.preventDefault();
-    selectObject(note, obj, objEl);
+    // Klick+Ziehen auf ein Objekt, das schon Teil einer Mehrfachauswahl ist,
+    // bewegt die ganze Gruppe gemeinsam, ohne die Auswahl zu verändern - nur
+    // ein Umschalt-Klick soll die Auswahl selbst an-/abwählen, nicht ziehen.
+    const dragAsGroup = !shiftKeyHeld && multiSelectedObjectIds.size > 1 && multiSelectedObjectIds.has(obj.id);
+    if (!dragAsGroup) {
+      selectObject(note, obj, objEl);
+    } else {
+      bringToFront(note, obj);
+      objEl.style.zIndex = obj.z;
+      schedulePersist();
+    }
+    const groupIds = dragAsGroup ? [...multiSelectedObjectIds] : [obj.id];
+    const groupIdSet = new Set(groupIds);
+    const primaries = groupIds
+      .map((id) => getObj(note, id))
+      .filter(Boolean)
+      .map((o) => ({ id: o.id, x: o.x, y: o.y }));
+    // Angeheftete Zeichen-Striche/Beschriftungen jedes Objekts der Gruppe
+    // folgen unverändert mit, wie schon bisher beim Verschieben eines
+    // einzelnen Objekts.
     const children = note.objects
-      .filter((o) => o.parentId === obj.id)
+      .filter((o) => o.parentId && groupIdSet.has(o.parentId))
       .map((o) => ({ id: o.id, x: o.x, y: o.y }));
     dragState = {
       type: 'move',
       objId: obj.id,
       startX: e.clientX,
       startY: e.clientY,
-      startObjX: obj.x,
-      startObjY: obj.y,
+      primaries,
       children,
       moved: false,
     };
@@ -1815,8 +1904,7 @@
   function onObjectDragMove(e) {
     if (!dragState || dragState.type !== 'move') return;
     const note = currentNote();
-    const obj = note && getObj(note, dragState.objId);
-    if (!note || !obj) return;
+    if (!note) return;
     lastDragPointer = { clientX: e.clientX, clientY: e.clientY };
     // Durch workspaceZoom teilen: e.clientX/Y sind Bildschirm-Pixel, obj.x/y
     // dagegen Flächen-lokale (unskalierte) Koordinaten - ohne das würde ein
@@ -1824,13 +1912,19 @@
     const dx = (e.clientX - dragState.startX) / workspaceZoom;
     const dy = (e.clientY - dragState.startY) / workspaceZoom;
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragState.moved = true;
-    obj.x = clamp(dragState.startObjX + dx, -obj.w + 40, MAX_OBJ_DIM - 40);
-    obj.y = clamp(dragState.startObjY + dy, 0, MAX_OBJ_DIM - 40);
-    const objEl = findObjEl(obj.id);
-    if (objEl) {
-      objEl.style.left = `${obj.x}px`;
-      objEl.style.top = `${obj.y}px`;
-      objEl.classList.toggle('toolbar-below', obj.y < TOOLBAR_FLIP_THRESHOLD);
+    // Jedes eigenständig gezogene Objekt der Gruppe (bei Mehrfachauswahl
+    // mehrere, sonst nur das eine) wird für sich an den Flächenrand geklemmt.
+    for (const p of dragState.primaries) {
+      const obj = getObj(note, p.id);
+      if (!obj) continue;
+      obj.x = clamp(p.x + dx, -obj.w + 40, MAX_OBJ_DIM - 40);
+      obj.y = clamp(p.y + dy, 0, MAX_OBJ_DIM - 40);
+      const objEl = findObjEl(obj.id);
+      if (objEl) {
+        objEl.style.left = `${obj.x}px`;
+        objEl.style.top = `${obj.y}px`;
+        objEl.classList.toggle('toolbar-below', obj.y < TOOLBAR_FLIP_THRESHOLD);
+      }
     }
     for (const child of dragState.children) {
       const childObj = getObj(note, child.id);
@@ -1864,12 +1958,17 @@
         // ignorieren
       }
     }
-    if (note && obj && obj.type === 'text' && dragState.moved) {
-      updateAttachment(note, obj);
-    }
-    if (note && obj && dragState.moved) {
-      const movedTextObjs = [obj, ...dragState.children.map((c) => getObj(note, c.id))]
-        .filter((o) => o && o.type === 'text' && o.style === 'free');
+    if (note && dragState.moved) {
+      // Bei Mehrfachauswahl bekommt jedes verschobene Textfeld der Gruppe
+      // dieselbe Behandlung wie bisher nur das eine gezogene Objekt.
+      for (const p of dragState.primaries) {
+        const pObj = getObj(note, p.id);
+        if (pObj && pObj.type === 'text') updateAttachment(note, pObj);
+      }
+      const movedTextObjs = [
+        ...dragState.primaries.map((p) => getObj(note, p.id)),
+        ...dragState.children.map((c) => getObj(note, c.id)),
+      ].filter((o) => o && o.type === 'text' && o.style === 'free');
       for (const textObj of movedTextObjs) {
         const textEl = findObjEl(textObj.id);
         const body = textEl && textEl.querySelector('.canvas-text-body');
@@ -3012,9 +3111,14 @@
     if (activeTextEdit) return;
     const ae = document.activeElement;
     if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
-    if (!selectedObjectId) return;
     const note = currentNote();
-    if (!note || !getObj(note, selectedObjectId)) return;
+    if (!note) return;
+    if (multiSelectedObjectIds.size > 1) {
+      e.preventDefault();
+      deleteSelectedObjects(note);
+      return;
+    }
+    if (!selectedObjectId || !getObj(note, selectedObjectId)) return;
     e.preventDefault();
     deleteObject(note, selectedObjectId);
   });
@@ -5279,6 +5383,83 @@
     renderNoteList();
   }
 
+  // Löscht alle mehrfach ausgewählten Objekte auf einmal - ein einziger
+  // Bestätigungsdialog für die ganze Gruppe statt einem pro Objekt.
+  function deleteSelectedObjects(note) {
+    const ids = [...multiSelectedObjectIds];
+    if (ids.length === 0) return;
+    if (!confirm(`${ids.length} ausgewählte Objekte löschen?`)) return;
+    const idSet = new Set(ids);
+    for (const id of ids) {
+      for (const o of note.objects) {
+        if (o.parentId === id) o.parentId = null;
+      }
+      for (const s of note.ink.strokes) {
+        if (s.parentId === id) {
+          s.points = strokeAbsolutePoints(note, s);
+          s.parentId = null;
+        }
+      }
+    }
+    note.objects = note.objects.filter((o) => !idSet.has(o.id));
+    for (const id of ids) {
+      const objEl = findObjEl(id);
+      if (objEl) objEl.remove();
+    }
+    if (idSet.has(selectedObjectId)) selectedObjectId = null;
+    clearObjectMultiSelect();
+    note.updatedAt = Date.now();
+    schedulePersist();
+    redrawInk(note);
+    renderNoteList();
+  }
+
+  // Kopiert die mehrfach ausgewählten Objekte (samt an sie angehefteter
+  // Zeichen-Striche) als unabhängige Momentaufnahme in die Zwischenablage -
+  // erst beim Einfügen entstehen daraus frische Kopien mit neuen IDs, auch in
+  // einer ganz anderen Notiz (siehe pasteObjectsFromClipboard()).
+  function copySelectedObjectsToClipboard(note) {
+    const ids = [...multiSelectedObjectIds];
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    const objects = note.objects.filter((o) => idSet.has(o.id));
+    const strokes = note.ink.strokes.filter((s) => s.parentId && idSet.has(s.parentId));
+    objectClipboard = JSON.parse(JSON.stringify({ objects, strokes }));
+    el.objectPasteBtn.hidden = false;
+    clearObjectMultiSelect();
+  }
+
+  // Fügt die kopierten Objekte (samt ihrer kopierten angehefteten Zeichen-
+  // Striche) in die aktuell offene Notiz ein - jeder Aufruf erzeugt eine neue,
+  // unabhängige Kopie mit neuen IDs, das Original in objectClipboard bleibt
+  // für weitere Einfüge-Vorgänge (auch in andere Notizen) erhalten.
+  function pasteObjectsFromClipboard() {
+    const note = currentNote();
+    if (!note || !objectClipboard || objectClipboard.objects.length === 0) return;
+    const idMap = new Map();
+    for (const o of objectClipboard.objects) idMap.set(o.id, uid());
+    const maxZ = Math.max(0, ...note.objects.map((o) => o.z || 0));
+    const clones = objectClipboard.objects.map((o, i) => {
+      const clone = JSON.parse(JSON.stringify(o));
+      clone.id = idMap.get(o.id);
+      clone.parentId = o.parentId ? idMap.get(o.parentId) || null : null;
+      clone.z = maxZ + i + 1;
+      return clone;
+    });
+    note.objects.push(...clones);
+    for (const s of objectClipboard.strokes) {
+      if (!s.parentId || !idMap.has(s.parentId)) continue;
+      const strokeClone = JSON.parse(JSON.stringify(s));
+      strokeClone.id = uid();
+      strokeClone.parentId = idMap.get(s.parentId);
+      note.ink.strokes.push(strokeClone);
+    }
+    note.updatedAt = Date.now();
+    schedulePersist();
+    renderCanvas(note);
+    redrawInk(note);
+  }
+
   // ---------- Move popover ----------
 
   function openMovePopover() {
@@ -6185,6 +6366,16 @@
       if (file) addFileObjectFromFile(file);
       el.fileFileInput.value = '';
     });
+    el.objectPasteBtn.addEventListener('click', pasteObjectsFromClipboard);
+    el.objectBulkCopyBtn.addEventListener('click', () => {
+      const note = currentNote();
+      if (note) copySelectedObjectsToClipboard(note);
+    });
+    el.objectBulkDeleteBtn.addEventListener('click', () => {
+      const note = currentNote();
+      if (note) deleteSelectedObjects(note);
+    });
+    el.objectBulkClearBtn.addEventListener('click', clearObjectMultiSelect);
     el.addCredentialBtn.addEventListener('click', () => openCredentialPopover(currentNote(), null, el.addCredentialBtn));
     el.credentialPopoverBackdrop.addEventListener('click', (e) => {
       if (e.target === el.credentialPopoverBackdrop) closeCredentialPopover();

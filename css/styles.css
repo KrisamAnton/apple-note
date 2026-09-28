@@ -1222,6 +1222,25 @@ textarea {
   flex-wrap: wrap;
 }
 
+/* Leiste für Mehrfachauswahl von Objekten auf der Zeichenfläche (Umschalt-
+   Klick) - erscheint, sobald mehr als ein Objekt markiert ist. Position wie
+   die Zeichen-Werkzeugleiste (oben mittig, über der Fläche schwebend). */
+.object-bulk-bar {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6000;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-popover);
+}
+
 .draw-colors {
   display: flex;
   align-items: center;
@@ -1308,6 +1327,15 @@ textarea {
 .canvas-object.selected {
   border-color: var(--accent);
   z-index: 1000 !important;
+}
+
+/* Mehrfachauswahl (Umschalt-Klick) - eigener, gestrichelter Rahmen statt der
+   vollen Akzentfarbe der Einzelauswahl, damit klar bleibt: das ist Teil einer
+   Gruppe, hat aber (bewusst, um die Fläche nicht zu überladen) keine eigene
+   Werkzeugleiste/Ziehpunkte. */
+.canvas-object.multiselected {
+  border-color: var(--accent-strong);
+  border-style: dashed;
 }
 
 .canvas-object.dragging,
