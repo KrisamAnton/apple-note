@@ -502,11 +502,7 @@
     backgroundPopover: document.getElementById('backgroundPopover'),
     canvasWorkspace: document.getElementById('canvasWorkspace'),
     canvasSurface: document.getElementById('canvasSurface'),
-    objectBulkBar: document.getElementById('objectBulkBar'),
-    objectBulkCount: document.getElementById('objectBulkCount'),
-    objectBulkCopyBtn: document.getElementById('objectBulkCopyBtn'),
-    objectBulkDeleteBtn: document.getElementById('objectBulkDeleteBtn'),
-    objectBulkClearBtn: document.getElementById('objectBulkClearBtn'),
+    objectContextMenu: document.getElementById('objectContextMenu'),
     objectPasteBtn: document.getElementById('objectPasteBtn'),
     inkLayer: document.getElementById('inkLayer'),
     drawToolbar: document.getElementById('drawToolbar'),
@@ -1251,7 +1247,6 @@
     // gerade offene Notiz - beim Wechsel zu einer anderen (oder zur leeren
     // Ansicht) macht eine übernommene Auswahl keinen Sinn mehr.
     multiSelectedObjectIds.clear();
-    updateObjectBulkBar();
     el.objectPasteBtn.hidden = !objectClipboard;
     const note = findNote(selectedNoteId);
     if (!note) {
@@ -1626,6 +1621,19 @@
     ensureValidObjRect(obj, note);
     applyObjRect(objEl, obj);
 
+    // Rechtsklick: Standard-Kontextmenü mit Kopieren/Löschen (und Einfügen,
+    // falls schon etwas kopiert wurde) - rechtsklickt man auf ein Objekt
+    // außerhalb einer bestehenden Mehrfachauswahl, wird zunächst nur dieses
+    // eine ausgewählt; innerhalb einer bestehenden Gruppe bleibt sie erhalten.
+    objEl.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!(multiSelectedObjectIds.size > 1 && multiSelectedObjectIds.has(obj.id))) {
+        selectSingleObject(note, obj, objEl);
+      }
+      showObjectContextMenu(e.clientX, e.clientY, note);
+    });
+
     // Die Werkzeugleiste ist jetzt als kompletter grauer Balken (wie eine
     // Fenster-Titelleiste, siehe OneNote) selbst der Ziehgriff zum Verschieben -
     // ein eigener kleiner Verschieben-Knopf ist dadurch nicht mehr nötig. Die
@@ -1708,15 +1716,6 @@
       if (oe) oe.classList.remove('multiselected');
     }
     multiSelectedObjectIds.clear();
-    updateObjectBulkBar();
-  }
-
-  function updateObjectBulkBar() {
-    const count = multiSelectedObjectIds.size;
-    el.objectBulkBar.hidden = count < 2;
-    if (count >= 2) {
-      el.objectBulkCount.textContent = `${count} Objekte ausgewählt`;
-    }
   }
 
   function selectObject(note, obj, objEl) {
@@ -1743,12 +1742,16 @@
         : [...multiSelectedObjectIds][0] || null;
       bringToFront(note, obj);
       objEl.style.zIndex = obj.z;
-      updateObjectBulkBar();
       schedulePersist();
       return;
     }
-    // Normaler Klick verwirft eine bestehende Mehrfachauswahl - man wählt
-    // damit bewusst wieder nur dieses eine Objekt.
+    selectSingleObject(note, obj, objEl);
+  }
+
+  // Wählt genau dieses eine Objekt aus und verwirft dabei eine eventuell
+  // bestehende Mehrfachauswahl - der "normale" (nicht Umschalt-)Auswahlfall,
+  // wiederverwendet auch vom Rechtsklick-Kontextmenü.
+  function selectSingleObject(note, obj, objEl) {
     clearObjectMultiSelect();
     if (selectedObjectId !== obj.id) {
       const prev = el.canvasSurface.querySelector('.canvas-object.selected');
@@ -3121,6 +3124,42 @@
     if (!selectedObjectId || !getObj(note, selectedObjectId)) return;
     e.preventDefault();
     deleteObject(note, selectedObjectId);
+  });
+
+  // Strg+C/Strg+V kopiert/fügt das ausgewählte Objekt (oder die
+  // Mehrfachauswahl) auf der Fläche ein - wie in jedem anderen Programm
+  // üblich. Greift aus denselben Gründen wie oben bewusst nicht während
+  // Text bearbeitet wird oder der Fokus in einem Eingabefeld liegt (dort
+  // soll Strg+C/V ganz normal den Browser-eigenen Text kopieren/einfügen).
+  document.addEventListener('keydown', (e) => {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    if (e.key !== 'c' && e.key !== 'C' && e.key !== 'v' && e.key !== 'V') return;
+    if (activeTextEdit) return;
+    const ae = document.activeElement;
+    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+    const note = currentNote();
+    if (!note) return;
+    if (e.key === 'c' || e.key === 'C') {
+      if (multiSelectedObjectIds.size === 0 && !selectedObjectId) return;
+      e.preventDefault();
+      copySelectedObjectsToClipboard(note);
+    } else {
+      if (!objectClipboard || objectClipboard.objects.length === 0) return;
+      e.preventDefault();
+      pasteObjectsFromClipboard();
+    }
+  });
+
+  // Kontextmenü schließen, sobald irgendwo anders hingeklickt, ein neues
+  // Kontextmenü woanders geöffnet oder Escape gedrückt wird.
+  document.addEventListener('click', (e) => {
+    if (!el.objectContextMenu.hidden && !el.objectContextMenu.contains(e.target)) hideObjectContextMenu();
+  });
+  document.addEventListener('contextmenu', (e) => {
+    if (!el.objectContextMenu.hidden && !e.target.closest('.canvas-object')) hideObjectContextMenu();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') hideObjectContextMenu();
   });
 
   // Erweitert die Range-Grenzen nach außen auf die nächste Element-Ebene, solange sie
@@ -5414,17 +5453,25 @@
     renderNoteList();
   }
 
-  // Kopiert die mehrfach ausgewählten Objekte (samt an sie angehefteter
-  // Zeichen-Striche) als unabhängige Momentaufnahme in die Zwischenablage -
-  // erst beim Einfügen entstehen daraus frische Kopien mit neuen IDs, auch in
-  // einer ganz anderen Notiz (siehe pasteObjectsFromClipboard()).
+  // Kopiert die aktuelle Auswahl (mehrere markierte Objekte, sonst das eine
+  // einzeln ausgewählte) samt an sie angehefteter Zeichen-Striche als
+  // unabhängige Momentaufnahme in die Zwischenablage - erst beim Einfügen
+  // entstehen daraus frische Kopien mit neuen IDs, auch in einer ganz
+  // anderen Notiz (siehe pasteObjectsFromClipboard()).
   function copySelectedObjectsToClipboard(note) {
-    const ids = [...multiSelectedObjectIds];
+    const ids = multiSelectedObjectIds.size > 0 ? [...multiSelectedObjectIds] : [selectedObjectId].filter(Boolean);
     if (ids.length === 0) return;
     const idSet = new Set(ids);
+    // Angeheftete Beschriftungen (Textfelder mit parentId auf ein kopiertes
+    // Bild/PDF) automatisch mitnehmen, genau wie die angehefteten Zeichen-
+    // Striche weiter unten - sonst ginge eine Bildunterschrift beim Kopieren
+    // stillschweigend verloren.
+    for (const o of note.objects) {
+      if (o.parentId && idSet.has(o.parentId)) idSet.add(o.id);
+    }
     const objects = note.objects.filter((o) => idSet.has(o.id));
     const strokes = note.ink.strokes.filter((s) => s.parentId && idSet.has(s.parentId));
-    objectClipboard = JSON.parse(JSON.stringify({ objects, strokes }));
+    objectClipboard = JSON.parse(JSON.stringify({ objects, strokes, sourceNoteId: note.id, pasteCount: 0 }));
     el.objectPasteBtn.hidden = false;
     clearObjectMultiSelect();
   }
@@ -5436,6 +5483,15 @@
   function pasteObjectsFromClipboard() {
     const note = currentNote();
     if (!note || !objectClipboard || objectClipboard.objects.length === 0) return;
+    // Beim Einfügen in DIESELBE Notiz, aus der kopiert wurde, läge die Kopie
+    // sonst exakt auf dem Original (nicht von ihm zu unterscheiden, sieht wie
+    // "es passiert nichts" aus) - deshalb ein kleiner, bei jedem weiteren
+    // Einfügen wachsender Versatz. In eine ANDERE Notiz eingefügt bleibt die
+    // ursprüngliche Position erhalten (dort gibt es kein Original, das
+    // verdeckt werden könnte).
+    const sameNote = objectClipboard.sourceNoteId === note.id;
+    if (sameNote) objectClipboard.pasteCount += 1;
+    const offset = sameNote ? objectClipboard.pasteCount * 24 : 0;
     const idMap = new Map();
     for (const o of objectClipboard.objects) idMap.set(o.id, uid());
     const maxZ = Math.max(0, ...note.objects.map((o) => o.z || 0));
@@ -5444,6 +5500,10 @@
       clone.id = idMap.get(o.id);
       clone.parentId = o.parentId ? idMap.get(o.parentId) || null : null;
       clone.z = maxZ + i + 1;
+      if (offset) {
+        clone.x = clamp(clone.x + offset, -clone.w + 40, MAX_OBJ_DIM - 40);
+        clone.y = clamp(clone.y + offset, 0, MAX_OBJ_DIM - 40);
+      }
       return clone;
     });
     note.objects.push(...clones);
@@ -5458,6 +5518,46 @@
     schedulePersist();
     renderCanvas(note);
     redrawInk(note);
+  }
+
+  // ---------- Rechtsklick-Kontextmenü (Kopieren/Einfügen/Löschen) ----------
+
+  function hideObjectContextMenu() {
+    el.objectContextMenu.hidden = true;
+    el.objectContextMenu.innerHTML = '';
+  }
+
+  function addContextMenuItem(icon, label, danger, onClick) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'context-menu-item' + (danger ? ' danger' : '');
+    btn.innerHTML = `<svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${icon}</svg><span>${label}</span>`;
+    btn.addEventListener('click', () => {
+      hideObjectContextMenu();
+      onClick();
+    });
+    el.objectContextMenu.appendChild(btn);
+  }
+
+  function showObjectContextMenu(clientX, clientY, note) {
+    el.objectContextMenu.innerHTML = '';
+    addContextMenuItem(ICONS.copy, 'Kopieren', false, () => copySelectedObjectsToClipboard(note));
+    if (objectClipboard && objectClipboard.objects.length > 0) {
+      addContextMenuItem(ICONS.paste, 'Einfügen', false, () => pasteObjectsFromClipboard());
+    }
+    addContextMenuItem(ICONS.trash, 'Löschen', true, () => {
+      if (multiSelectedObjectIds.size > 1) deleteSelectedObjects(note);
+      else if (selectedObjectId) deleteObject(note, selectedObjectId);
+    });
+    el.objectContextMenu.hidden = false;
+    // Erst nach dem Einblenden messen (vorher hat das Menü noch keine reale
+    // Größe) - hält es innerhalb des sichtbaren Fensters, statt am rechten/
+    // unteren Rand abgeschnitten zu werden.
+    const menuRect = el.objectContextMenu.getBoundingClientRect();
+    const left = Math.min(clientX, window.innerWidth - menuRect.width - 8);
+    const top = Math.min(clientY, window.innerHeight - menuRect.height - 8);
+    el.objectContextMenu.style.left = `${Math.max(8, left)}px`;
+    el.objectContextMenu.style.top = `${Math.max(8, top)}px`;
   }
 
   // ---------- Move popover ----------
@@ -6367,15 +6467,6 @@
       el.fileFileInput.value = '';
     });
     el.objectPasteBtn.addEventListener('click', pasteObjectsFromClipboard);
-    el.objectBulkCopyBtn.addEventListener('click', () => {
-      const note = currentNote();
-      if (note) copySelectedObjectsToClipboard(note);
-    });
-    el.objectBulkDeleteBtn.addEventListener('click', () => {
-      const note = currentNote();
-      if (note) deleteSelectedObjects(note);
-    });
-    el.objectBulkClearBtn.addEventListener('click', clearObjectMultiSelect);
     el.addCredentialBtn.addEventListener('click', () => openCredentialPopover(currentNote(), null, el.addCredentialBtn));
     el.credentialPopoverBackdrop.addEventListener('click', (e) => {
       if (e.target === el.credentialPopoverBackdrop) closeCredentialPopover();

@@ -235,18 +235,7 @@
               </div>
             </div>
 
-            <div class="object-bulk-bar" id="objectBulkBar" hidden>
-              <span class="note-bulk-count" id="objectBulkCount"></span>
-              <button type="button" class="note-bulk-btn" id="objectBulkCopyBtn" title="Kopieren">
-                <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><rect x="2.5" y="2.5" width="10" height="10" rx="1.3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7 15.5h8a1.5 1.5 0 0 0 1.5-1.5V7" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
-                Kopieren
-              </button>
-              <button type="button" class="note-bulk-btn note-bulk-btn-danger" id="objectBulkDeleteBtn" title="Löschen">
-                <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M6 2.5h8l.5 1.5H16v1.5H4V4h1.5L6 2.5zM5 7h10l-.7 10.1c-.05.7-.63 1.4-1.5 1.4H7.2c-.87 0-1.45-.7-1.5-1.4L5 7z"/></svg>
-                Löschen
-              </button>
-              <button type="button" class="note-bulk-btn note-bulk-clear" id="objectBulkClearBtn" title="Auswahl aufheben" aria-label="Auswahl aufheben">✕</button>
-            </div>
+            <div class="context-menu" id="objectContextMenu" hidden></div>
 
             <div class="canvas-surface" id="canvasSurface">
               <canvas id="inkLayer" class="ink-layer"></canvas>

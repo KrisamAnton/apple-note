@@ -1222,23 +1222,46 @@ textarea {
   flex-wrap: wrap;
 }
 
-/* Leiste für Mehrfachauswahl von Objekten auf der Zeichenfläche (Umschalt-
-   Klick) - erscheint, sobald mehr als ein Objekt markiert ist. Position wie
-   die Zeichen-Werkzeugleiste (oben mittig, über der Fläche schwebend). */
-.object-bulk-bar {
-  position: absolute;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 6000;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
+/* Rechtsklick-Kontextmenü auf der Zeichenfläche (Kopieren/Einfügen/Löschen) -
+   fest positioniert an der Klickstelle, wie in jedem anderen Programm üblich. */
+.context-menu {
+  position: fixed;
+  z-index: 9000;
+  min-width: 160px;
+  padding: 4px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--bg-elevated);
   box-shadow: var(--shadow-popover);
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13.5px;
+  text-align: left;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.context-menu-item:hover {
+  background: var(--hover-bg);
+}
+
+.context-menu-item.danger {
+  color: var(--danger);
+}
+
+.context-menu-item .icon {
+  width: 15px;
+  height: 15px;
+  flex: none;
 }
 
 .draw-colors {
