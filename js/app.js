@@ -37,6 +37,8 @@
     restore: '<svg viewBox="0 0 20 20"><path d="M4 10a6 6 0 1 0 1.9-4.36" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4.2 3.8v3.6h3.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     bell: '<svg viewBox="0 0 20 20"><path d="M10 2a1 1 0 0 1 1 1v.6a5.5 5.5 0 0 1 4 5.3v2.9l1.3 2.1c.3.5-.05 1.1-.6 1.1H12a2 2 0 0 1-4 0H4.3c-.55 0-.9-.6-.6-1.1L5 11.8V8.9a5.5 5.5 0 0 1 4-5.3V3a1 1 0 0 1 1-1z" fill="currentColor"/></svg>',
     textCursor: '<svg viewBox="0 0 20 20"><path d="M8.5 3h3v1.6h-.5A1.4 1.4 0 0 0 9.6 6v8a1.4 1.4 0 0 0 1.4 1.4h.5V17h-3a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3z" fill="currentColor"/><rect x="3.5" y="3" width="3.5" height="1.6" fill="currentColor"/><rect x="3.5" y="15.4" width="3.5" height="1.6" fill="currentColor"/><rect x="13" y="3" width="3.5" height="1.6" fill="currentColor"/><rect x="13" y="15.4" width="3.5" height="1.6" fill="currentColor"/></svg>',
+    copy: '<svg viewBox="0 0 20 20"><rect x="2.5" y="2.5" width="10" height="10" rx="1.3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7 15.5h8a1.5 1.5 0 0 0 1.5-1.5V7" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
+    paste: '<svg viewBox="0 0 20 20"><rect x="4" y="3.5" width="12" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="7.5" y="2" width="5" height="3" rx="1" fill="currentColor"/><rect x="6.5" y="8" width="7" height="1.4" fill="currentColor"/><rect x="6.5" y="11" width="7" height="1.4" fill="currentColor"/></svg>',
   };
 
   const MARKER_COLORS = [
@@ -327,6 +329,18 @@
   const lastSelectedNoteIdByFolder = new Map();
   let searchQuery = '';
   let collapsedNoteIds = new Set();
+  // Mehrfachauswahl von Notizen in der Notizliste (Strg/Umschalt-Klick) - für
+  // gemeinsames Kopieren/Verschieben/Löschen. Getrennt von selectedNoteId
+  // (die weiterhin bestimmt, was im Editor rechts angezeigt wird).
+  let multiSelectedNoteIds = new Set();
+  let multiSelectAnchorId = null;
+  // Kopierte Notizen (jeweils eigener Unterbaum) - beim Einfügen entsteht
+  // daraus jedes Mal eine frische, unabhängige Kopie mit neuen IDs, das
+  // Original hier bleibt für weitere Einfüge-Vorgänge unverändert erhalten.
+  let noteClipboard = null;
+  // Reihenfolge der zuletzt gerenderten Notizzeilen (siehe renderNoteList()) -
+  // für Umschalt-Klick (Bereich auswählen).
+  let lastRenderedNoteRowIds = [];
   // Doppelklick-Erkennung für Ordner-Umbenennung: da jeder Klick renderFolders()
   // (kompletten DOM-Neuaufbau) auslöst, würde ein natives "dblclick"-Event nie
   // ankommen, weil das Eingabefeld zwischen den beiden Klicks ausgetauscht wird.
@@ -411,6 +425,13 @@
     noteCount: document.getElementById('noteCount'),
     collapseAllBtn: document.getElementById('collapseAllBtn'),
     newNoteBtn: document.getElementById('newNoteBtn'),
+    notePasteBtn: document.getElementById('notePasteBtn'),
+    noteBulkBar: document.getElementById('noteBulkBar'),
+    noteBulkCount: document.getElementById('noteBulkCount'),
+    noteBulkCopyBtn: document.getElementById('noteBulkCopyBtn'),
+    noteBulkMoveBtn: document.getElementById('noteBulkMoveBtn'),
+    noteBulkDeleteBtn: document.getElementById('noteBulkDeleteBtn'),
+    noteBulkClearBtn: document.getElementById('noteBulkClearBtn'),
     searchInput: document.getElementById('searchInput'),
     editorEmpty: document.getElementById('editorEmpty'),
     editor: document.getElementById('editor'),
@@ -935,6 +956,10 @@
         ? isTrashed(note)
         : !isTrashed(note) && (folderId === null || note.folderId === folderId));
     selectedNoteId = belongsToFolder ? rememberedId : null;
+    multiSelectedNoteIds.clear();
+    multiSelectAnchorId = null;
+    updateNoteBulkBar();
+    el.notePasteBtn.hidden = !noteClipboard || folderId === TRASH_FOLDER_ID;
     renderFolders();
     renderNoteList();
     renderEditor();
@@ -1109,6 +1134,11 @@
     // Während der Suche (flache, nach Relevanz sortierte Liste) ergibt eine
     // Hierarchie-Markierung keinen Sinn - nur in der normalen Baum-Ansicht.
     const familyIds = isSearchMode ? null : selectionFamilyNoteIds();
+    // Für Umschalt-Klick (Bereich auswählen) - merkt sich die Reihenfolge, in
+    // der die Zeilen gerade tatsächlich angezeigt werden (nach Auf-/Zuklapp-
+    // Zustand), damit "von hier bis dort" dieselbe Reihenfolge trifft, die man
+    // auch sieht.
+    lastRenderedNoteRowIds = rows.map((r) => r.note.id);
 
     for (const { note, depth, hasChildren } of rows) {
       const item = document.createElement('div');
@@ -1116,7 +1146,8 @@
       item.className = 'note-item'
         + (depth > 0 ? ' note-item-sub' : '')
         + (isActive ? ' active' : '')
-        + (!isActive && familyIds && familyIds.has(note.id) ? ' note-item-family' : '');
+        + (!isActive && familyIds && familyIds.has(note.id) ? ' note-item-family' : '')
+        + (multiSelectedNoteIds.has(note.id) ? ' note-item-multiselected' : '');
       item.style.paddingLeft = `${10 + depth * 16}px`;
       item.dataset.noteId = note.id;
 
@@ -1192,9 +1223,22 @@
       }
 
       if (!isSearchMode && !isTrashView) wireNoteItemDrag(item, note);
-      item.addEventListener('click', () => {
+      item.addEventListener('click', (e) => {
         if (noteDragSuppressClick) return;
-        selectNote(note.id);
+        if (isTrashView) {
+          selectNote(note.id);
+          return;
+        }
+        if (e.shiftKey) {
+          e.preventDefault();
+          selectNoteRange(note.id);
+        } else if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+          toggleNoteMultiSelect(note.id);
+        } else {
+          clearNoteMultiSelect();
+          selectNote(note.id);
+        }
       });
       el.noteList.appendChild(item);
     }
@@ -1344,6 +1388,180 @@
     renderNoteList();
     renderEditor();
     goToView('notes');
+  }
+
+  // ---------- Mehrfachauswahl in der Notizliste (Strg/Umschalt-Klick) ----------
+
+  function clearNoteMultiSelect() {
+    if (multiSelectedNoteIds.size === 0) return;
+    multiSelectedNoteIds.clear();
+    multiSelectAnchorId = null;
+    renderNoteList();
+    updateNoteBulkBar();
+  }
+
+  function toggleNoteMultiSelect(id) {
+    if (multiSelectedNoteIds.has(id)) {
+      multiSelectedNoteIds.delete(id);
+    } else {
+      multiSelectedNoteIds.add(id);
+    }
+    multiSelectAnchorId = id;
+    renderNoteList();
+    updateNoteBulkBar();
+  }
+
+  function selectNoteRange(id) {
+    const anchor = multiSelectAnchorId || selectedNoteId;
+    const order = lastRenderedNoteRowIds;
+    const from = anchor ? order.indexOf(anchor) : -1;
+    const to = order.indexOf(id);
+    if (from === -1 || to === -1) {
+      toggleNoteMultiSelect(id);
+      return;
+    }
+    const [start, end] = from <= to ? [from, to] : [to, from];
+    for (const rowId of order.slice(start, end + 1)) multiSelectedNoteIds.add(rowId);
+    renderNoteList();
+    updateNoteBulkBar();
+  }
+
+  function updateNoteBulkBar() {
+    const count = multiSelectedNoteIds.size;
+    el.noteBulkBar.hidden = count === 0;
+    if (count > 0) {
+      el.noteBulkCount.textContent = count === 1 ? '1 Notiz ausgewählt' : `${count} Notizen ausgewählt`;
+    }
+  }
+
+  // Ausgewählte Notizen, deren Vorfahre nicht selbst auch in der Auswahl
+  // steckt - eine mitausgewählte Unterseite einer ebenfalls ausgewählten
+  // Hauptseite würde sonst doppelt behandelt (einmal über ihre Hauptseite,
+  // einmal einzeln).
+  function topLevelSelectionIds(ids) {
+    const idSet = new Set(ids);
+    return ids.filter((id) => {
+      let current = findNote(id);
+      while (current && current.parentNoteId) {
+        if (idSet.has(current.parentNoteId)) return false;
+        current = findNote(current.parentNoteId);
+      }
+      return true;
+    });
+  }
+
+  function deleteSelectedNotes() {
+    const ids = topLevelSelectionIds([...multiSelectedNoteIds]);
+    if (ids.length === 0) return;
+
+    const rootsToTrash = ids.filter((id) => {
+      const note = findNote(id);
+      return note && !note.parentNoteId && !isNoteEmpty(note);
+    });
+    const rootsToDeleteForever = ids.filter((id) => !rootsToTrash.includes(id));
+
+    const parts = [];
+    if (rootsToTrash.length > 0) parts.push(`${rootsToTrash.length} in den Papierkorb`);
+    if (rootsToDeleteForever.length > 0) parts.push(`${rootsToDeleteForever.length} endgültig`);
+    const msg = `${ids.length} ausgewählte Notiz(en) löschen (${parts.join(', ')})? `
+      + 'Enthaltene Unterseiten werden automatisch mitgenommen.';
+    if (!confirm(msg)) return;
+
+    const allAffected = new Set();
+    for (const id of ids) {
+      allAffected.add(id);
+      for (const d of descendantNoteIds(id)) allAffected.add(d);
+    }
+
+    for (const id of rootsToTrash) {
+      const note = findNote(id);
+      if (!note) continue;
+      note.trashedAt = Date.now();
+      note.updatedAt = Date.now();
+    }
+    if (rootsToDeleteForever.length > 0) {
+      const toDelete = new Set();
+      for (const id of rootsToDeleteForever) {
+        toDelete.add(id);
+        for (const d of descendantNoteIds(id)) toDelete.add(d);
+      }
+      state.notes = state.notes.filter((n) => !toDelete.has(n.id));
+    }
+    if (allAffected.has(selectedNoteId)) selectedNoteId = null;
+    clearNoteMultiSelect();
+    schedulePersist();
+    renderFolders();
+    renderNoteList();
+    renderEditor();
+    goToView('notes');
+  }
+
+  // Kopiert die ausgewählten Notizen (jeweils mit ihrem kompletten
+  // Unterbaum) als unabhängige Momentaufnahme in die Zwischenablage - das
+  // Original hier bleibt für weitere Einfüge-Vorgänge unverändert erhalten,
+  // erst beim tatsächlichen Einfügen entstehen daraus frische Kopien mit
+  // neuen IDs (siehe pasteNotesFromClipboard()).
+  function copySelectedNotesToClipboard() {
+    const ids = topLevelSelectionIds([...multiSelectedNoteIds]);
+    if (ids.length === 0) return;
+    noteClipboard = ids.map((id) => {
+      const subtreeIds = new Set([id, ...descendantNoteIds(id)]);
+      const notes = state.notes.filter((n) => subtreeIds.has(n.id));
+      return JSON.parse(JSON.stringify(notes));
+    });
+    el.notePasteBtn.hidden = selectedFolderId === TRASH_FOLDER_ID;
+    clearNoteMultiSelect();
+  }
+
+  // Fügt die kopierten Notizen als neue, unabhängige Hauptseiten (mitsamt
+  // ihrer kopierten Unterseiten) im aktuell angezeigten Ordner ein - jeder
+  // Aufruf erzeugt eine komplett neue Kopie mit neuen IDs, das Original in
+  // noteClipboard bleibt für weitere Einfüge-Vorgänge erhalten.
+  function pasteNotesFromClipboard() {
+    if (!noteClipboard || noteClipboard.length === 0) return;
+    if (selectedFolderId === TRASH_FOLDER_ID) return;
+    const now = Date.now();
+
+    // Alle neu eingefügten obersten Kopien bekommen gemeinsam eine
+    // absteigende Reihenfolge VOR den bisherigen Notizen im aktuellen Ordner,
+    // in derselben Reihenfolge wie kopiert - würde man das für jede einzeln
+    // erst beim Einfügen neu berechnen, kämen mehrere zusammen kopierte
+    // Notizen verkehrt herum (letzte zuerst) heraus.
+    const existingTopLevelOrders = state.notes
+      .filter((n) => !n.parentNoteId && (n.folderId || null) === (selectedFolderId || null))
+      .map((n) => n.order ?? 0);
+    const topBase = (existingTopLevelOrders.length > 0 ? Math.min(...existingTopLevelOrders) : 0) - noteClipboard.length;
+
+    noteClipboard.forEach((subtree, topIndex) => {
+      const idMap = new Map();
+      for (const n of subtree) idMap.set(n.id, uid());
+      // Dasselbe Problem gilt für gemeinsam kopierte Geschwister-Unterseiten
+      // unter demselben (neuen) Elternteil - deshalb je Elternteil gruppiert
+      // und in der ursprünglichen Reihenfolge neu durchnummeriert.
+      const byNewParent = new Map();
+      for (const n of subtree) {
+        const newParentId = n.parentNoteId ? idMap.get(n.parentNoteId) || null : null;
+        if (!byNewParent.has(newParentId)) byNewParent.set(newParentId, []);
+        byNewParent.get(newParentId).push(n);
+      }
+      for (const [newParentId, siblings] of byNewParent) {
+        siblings.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        siblings.forEach((n, i) => {
+          const clone = JSON.parse(JSON.stringify(n));
+          clone.id = idMap.get(n.id);
+          clone.parentNoteId = newParentId;
+          clone.folderId = selectedFolderId;
+          clone.order = newParentId === null ? topBase + topIndex : i;
+          clone.createdAt = now;
+          clone.updatedAt = now;
+          delete clone.trashedAt;
+          state.notes.push(clone);
+        });
+      }
+    });
+    schedulePersist();
+    renderFolders();
+    renderNoteList();
   }
 
   // Holt eine Hauptseite (samt Unterseiten, die automatisch über isTrashed()
@@ -5284,12 +5502,24 @@
   function openMovePopover() {
     const note = findNote(selectedNoteId);
     if (!note) return;
+    openMovePopoverForNotes([selectedNoteId], el.moveNoteBtn);
+  }
+
+  // Verschiebt eine oder mehrere Notizen (samt ihrer jeweiligen Unterseiten)
+  // gemeinsam in einen anderen Ordner - genutzt sowohl vom "Verschieben"-Knopf
+  // im Editor (eine Notiz) als auch von der Mehrfachauswahl-Leiste in der
+  // Notizliste (mehrere auf einmal).
+  function openMovePopoverForNotes(noteIds, anchorEl) {
+    const notes = noteIds.map((id) => findNote(id)).filter(Boolean);
+    if (notes.length === 0) return;
     el.movePopoverList.innerHTML = '';
 
+    const currentFolderId = notes[0].folderId;
+    const allSameFolder = notes.every((n) => n.folderId === currentFolderId);
     const options = [{ id: null, name: 'Alle Notizen' }, ...state.folders.filter((f) => !f.trashedAt)];
     for (const opt of options) {
       const item = document.createElement('div');
-      item.className = 'popover-item' + (note.folderId === opt.id ? ' current' : '');
+      item.className = 'popover-item' + (allSameFolder && currentFolderId === opt.id ? ' current' : '');
       item.innerHTML = `<span class="folder-icon">${opt.id === null ? ICONS.allNotes : ICONS.folder}</span><span>${escapeHtml(opt.name)}</span>`;
       item.addEventListener('click', () => {
         // Unterseiten ziehen beim Verschieben mit, damit die Seite mitsamt ihrem
@@ -5297,23 +5527,26 @@
         // ihrer bisherigen Eltern-Notiz gelöst (sonst bliebe eine Referenz auf eine
         // Notiz in einem anderen Ordner bestehen, die z. B. beim späteren Löschen
         // der alten Eltern-Notiz ungewollt mitgelöscht würde).
-        if (note.folderId !== opt.id) {
-          const subtreeIds = new Set([note.id, ...descendantNoteIds(note.id)]);
-          for (const n of state.notes) {
-            if (subtreeIds.has(n.id)) n.folderId = opt.id;
+        for (const note of notes) {
+          if (note.folderId !== opt.id) {
+            const subtreeIds = new Set([note.id, ...descendantNoteIds(note.id)]);
+            for (const n of state.notes) {
+              if (subtreeIds.has(n.id)) n.folderId = opt.id;
+            }
+            note.parentNoteId = null;
           }
-          note.parentNoteId = null;
+          note.updatedAt = Date.now();
         }
-        note.updatedAt = Date.now();
         schedulePersist();
         closeMovePopover();
+        clearNoteMultiSelect();
         renderFolders();
         renderNoteList();
       });
       el.movePopoverList.appendChild(item);
     }
 
-    const btnRect = el.moveNoteBtn.getBoundingClientRect();
+    const btnRect = anchorEl.getBoundingClientRect();
     el.popoverBackdrop.hidden = false;
     const popover = el.movePopover;
     popover.style.top = `${btnRect.bottom + 6}px`;
@@ -6135,6 +6368,13 @@
       renderNoteList();
     });
     el.moveNoteBtn.addEventListener('click', openMovePopover);
+    el.noteBulkCopyBtn.addEventListener('click', copySelectedNotesToClipboard);
+    el.noteBulkMoveBtn.addEventListener('click', () => {
+      openMovePopoverForNotes(topLevelSelectionIds([...multiSelectedNoteIds]), el.noteBulkMoveBtn);
+    });
+    el.noteBulkDeleteBtn.addEventListener('click', deleteSelectedNotes);
+    el.noteBulkClearBtn.addEventListener('click', clearNoteMultiSelect);
+    el.notePasteBtn.addEventListener('click', pasteNotesFromClipboard);
     el.popoverBackdrop.addEventListener('click', (e) => {
       if (e.target === el.popoverBackdrop) closeMovePopover();
     });
