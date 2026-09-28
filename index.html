@@ -14,8 +14,8 @@
   <meta name="description" content="KrisNote – eine Notizen-App als Progressive Web App, angelehnt an Apple Notes." />
 
   <link rel="manifest" href="manifest.json" />
-  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon-v2.png" />
+  <link rel="icon" href="icons/favicon-32-v2.png" sizes="32x32" type="image/png" />
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
@@ -24,15 +24,26 @@
     <!-- Spalte 1: Ordner / Kategorien -->
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
-        <h1 class="sidebar-title">KrisNote</h1>
-        <button class="sidebar-add-btn" id="newFolderBtn" type="button" aria-label="Neuer Ordner" title="Neuer Ordner">
-          <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M9.2 2.5h1.6v6.7h6.7v1.6h-6.7v6.7H9.2v-6.7H2.5V9.2h6.7z"/></svg>
-        </button>
+        <img class="sidebar-logo" src="icons/sidebar-logo.png" alt="KrisNote" />
+        <div class="sidebar-header-right">
+          <button class="sidebar-add-btn" id="newFolderBtn" type="button" aria-label="Neuer Ordner" title="Neuer Ordner">
+            <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M9.2 2.5h1.6v6.7h6.7v1.6h-6.7v6.7H9.2v-6.7H2.5V9.2h6.7z"/></svg>
+          </button>
+          <button class="all-notes-btn active" id="allNotesBtn" type="button">
+            <span class="all-notes-label">Alle Notizen</span>
+            <span class="all-notes-count" id="allNotesCount">0</span>
+          </button>
+        </div>
       </div>
 
       <nav class="folder-list" id="folderList">
-        <!-- "Alle Notizen" und Ordner werden hier per JS eingefügt -->
+        <!-- Ordner werden hier per JS eingefügt -->
       </nav>
+
+      <div class="sidebar-footer">
+        <button class="sidebar-user-name" id="sidebarUserBtn" type="button">…</button>
+        <button class="sidebar-logout-btn" id="logoutBtn" type="button">Abmelden</button>
+      </div>
     </aside>
 
     <div class="sidebar-resizer" id="sidebarResizer"></div>
@@ -42,15 +53,20 @@
       <div class="note-list-header">
         <div class="search-field">
           <svg viewBox="0 0 20 20" class="icon icon-search" aria-hidden="true"><path fill-rule="evenodd" d="M13.6 12.3a6 6 0 1 1 1.3-1.3l3.9 3.9-1.3 1.3-3.9-3.9zM14 8a6 6 0 1 0-12 0 6 6 0 0 0 12 0z" clip-rule="evenodd"/></svg>
-          <input type="search" id="searchInput" placeholder="Suchen" autocomplete="off" />
+          <input type="search" id="searchInput" name="kn-search-nofill" placeholder="Suchen" autocomplete="off" />
         </div>
       </div>
 
       <div class="note-count-row">
         <p class="note-count" id="noteCount"></p>
-        <button class="sidebar-add-btn" id="newNoteBtn" type="button" aria-label="Neue Notiz" title="Neue Notiz">
-          <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M9.2 2.5h1.6v6.7h6.7v1.6h-6.7v6.7H9.2v-6.7H2.5V9.2h6.7z"/></svg>
-        </button>
+        <div class="note-count-row-actions">
+          <button class="collapse-all-btn" id="collapseAllBtn" type="button" hidden>
+            <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M7 4.5 13 10l-6 5.5v-2.2L10.4 10 7 6.7z"/></svg>
+          </button>
+          <button class="sidebar-add-btn" id="newNoteBtn" type="button" aria-label="Neue Notiz" title="Neue Notiz">
+            <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M9.2 2.5h1.6v6.7h6.7v1.6h-6.7v6.7H9.2v-6.7H2.5V9.2h6.7z"/></svg>
+          </button>
+        </div>
       </div>
 
       <div class="note-list" id="noteList">
@@ -63,27 +79,33 @@
     <!-- Spalte 3: Editor -->
     <main class="editor-pane" id="editorPane">
       <div class="editor-empty" id="editorEmpty">
-        <svg viewBox="0 0 64 64" class="empty-icon" aria-hidden="true">
-          <rect x="10" y="6" width="44" height="54" rx="6" fill="none" stroke="currentColor" stroke-width="2.5"/>
-          <line x1="18" y1="20" x2="46" y2="20" stroke="currentColor" stroke-width="2.5"/>
-          <line x1="18" y1="30" x2="46" y2="30" stroke="currentColor" stroke-width="2.5"/>
-          <line x1="18" y1="40" x2="38" y2="40" stroke="currentColor" stroke-width="2.5"/>
-        </svg>
-        <p>Keine Notiz ausgewählt</p>
+        <img class="editor-empty-image" src="icons/welcome-splash.webp" alt="" />
+        <p class="editor-empty-hint">Wähle links eine Notiz aus oder lege eine neue an</p>
       </div>
 
       <article class="editor" id="editor" hidden>
         <div class="editor-toolbar ribbon">
+          <div class="ribbon-group">
+            <button class="toolbar-btn" id="undoBtn" type="button" disabled aria-label="Rückgängig" title="Rückgängig (Strg+Z)">
+              <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M6 4 2 8l4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 8h9a5 5 0 1 1 0 10h-1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </button>
+            <button class="toolbar-btn" id="redoBtn" type="button" disabled aria-label="Wiederherstellen" title="Wiederherstellen (Strg+Y)">
+              <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M14 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 8H9a5 5 0 1 0 0 10h1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+
+          <div class="ribbon-divider"></div>
+
           <div class="ribbon-group" id="formatGroup">
             <button class="toolbar-btn" id="headingBtn" type="button" disabled aria-label="Formatvorlage (Überschrift)" title="Formatvorlage (Überschrift)">
               <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><text x="1.5" y="15" font-size="13" font-weight="800" fill="currentColor">H</text></svg>
             </button>
             <button class="toolbar-btn toolbar-select-btn" id="ribbonFontFamilyBtn" type="button" disabled aria-label="Schriftart" title="Schriftart">
-              <span class="select-label" id="ribbonFontFamilyLabel">Standard</span>
+              <span class="select-label" id="ribbonFontFamilyLabel">Calibri</span>
               <svg viewBox="0 0 10 6" class="select-chevron" aria-hidden="true"><path d="M0 1l5 4 5-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
             <button class="toolbar-btn toolbar-select-btn" id="ribbonFontSizeBtn" type="button" disabled aria-label="Schriftgröße" title="Schriftgröße">
-              <span class="select-label" id="ribbonFontSizeLabel">Standard</span>
+              <span class="select-label" id="ribbonFontSizeLabel">11</span>
               <svg viewBox="0 0 10 6" class="select-chevron" aria-hidden="true"><path d="M0 1l5 4 5-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
             <button class="toolbar-btn" id="boldBtn" type="button" disabled aria-label="Fett" title="Fett">
@@ -126,36 +148,61 @@
           <div class="ribbon-divider"></div>
 
           <div class="ribbon-group">
-            <button class="toolbar-btn" id="addTextBtn" type="button" aria-label="Text hinzufügen" title="Text hinzufügen">
-              <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M3 3h14v2.2h-6v11.8H9V5.2H3V3z"/></svg>
+            <button class="toolbar-btn" id="addTextBtn" type="button" aria-label="Text hinzufügen" data-tooltip="Text hinzufügen">
+              <span class="icon icon-emoji" aria-hidden="true">📝</span>
             </button>
-            <button class="toolbar-btn" id="drawModeBtn" type="button" aria-label="Zeichnen" title="Zeichnen (Stift-Modus)">
-              <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M13.6 2.4a1.9 1.9 0 0 1 2.7 2.7L7.4 14 4 15l1-3.4 8.6-9.2zM3 17.5h14V19H3v-1.5z"/></svg>
+            <button class="toolbar-btn" id="drawModeBtn" type="button" aria-label="Zeichnen" data-tooltip="Zeichnen (Stift-Modus)">
+              <span class="icon icon-emoji" aria-hidden="true">✏️</span>
             </button>
-            <button class="toolbar-btn" id="addImageBtn" type="button" aria-label="Bild hinzufügen" title="Bild hinzufügen">
-              <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M3 4h14a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm1 10h12l-3.8-5-2.7 3.5L7.5 10 4 14zm2-6a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/></svg>
+            <button class="toolbar-btn" id="addImageBtn" type="button" aria-label="Bild hinzufügen" data-tooltip="Bild hinzufügen">
+              <span class="icon icon-emoji" aria-hidden="true">🖼️</span>
             </button>
             <input type="file" id="imageFileInput" accept="image/*" hidden />
-            <button class="toolbar-btn" id="addPdfBtn" type="button" aria-label="PDF hinzufügen" title="PDF hinzufügen">
-              <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M5 2h7l3 3v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zm6.5.6V6H15L11.5 2.6zM6.2 9.5h1.6c.9 0 1.5.5 1.5 1.4 0 .9-.6 1.4-1.5 1.4h-.7v1.6H6.2V9.5zm1 .9v1h.5c.3 0 .5-.2.5-.5s-.2-.5-.5-.5h-.5zm2.7-.9h1.4c1.2 0 1.9.7 1.9 2.2 0 1.5-.7 2.2-1.9 2.2H9.9V9.5zm1 .9v2.6h.3c.6 0 1-.4 1-1.3s-.4-1.3-1-1.3h-.3zm3-.9h2.3v.9h-1.3v.7h1.2v.9h-1.2v1.6h-1V9.5z"/></svg>
+            <button class="toolbar-btn" id="addPdfBtn" type="button" aria-label="PDF hinzufügen" data-tooltip="PDF hinzufügen" data-tooltip-hint="Kann direkt in den Text eingefügt oder als eigene Datei auf der Fläche abgelegt werden">
+              <span class="icon icon-emoji" aria-hidden="true">📄</span>
             </button>
             <input type="file" id="pdfFileInput" accept="application/pdf" hidden />
+            <button class="toolbar-btn" id="addAudioBtn" type="button" aria-label="Sprachnotiz aufnehmen" data-tooltip="Sprachnotiz aufnehmen">
+              <span class="icon icon-emoji" aria-hidden="true">🎤</span>
+            </button>
+            <button class="toolbar-btn" id="addFileBtn" type="button" aria-label="Datei anhängen" data-tooltip="Datei anhängen (Word, Excel, ...)">
+              <span class="icon icon-emoji" aria-hidden="true">📎</span>
+            </button>
+            <input type="file" id="fileFileInput" hidden />
+            <button class="toolbar-btn" id="objectPasteBtn" type="button" aria-label="Kopierte Objekte hier einfügen" data-tooltip="Kopierte Objekte hier einfügen" data-tooltip-hint="Fügt zuvor auf der Fläche kopierte Bilder/PDFs/Textfelder ein - auch in einer ganz anderen Notiz" hidden>
+              <span class="icon icon-emoji" aria-hidden="true">📋</span>
+            </button>
+            <button class="toolbar-btn" id="addCredentialBtn" type="button" aria-label="Zugangsdaten hinzufügen" data-tooltip="Zugangsdaten hinzufügen" data-tooltip-hint="Speichert z. B. Benutzername und Passwort übersichtlich in einer eigenen Karte">
+              <span class="icon icon-emoji" aria-hidden="true">🔐</span>
+            </button>
+            <button class="toolbar-btn" id="addReminderBtn" type="button" aria-label="Erinnerung hinzufügen" data-tooltip="Erinnerung hinzufügen" data-tooltip-hint="Markierten Text (oder die aktuelle Zeile) als Erinnerung übernehmen - erscheint als kleines Glockensymbol direkt im Text">
+              <span class="icon icon-emoji" aria-hidden="true">⏰</span>
+            </button>
+            <button class="toolbar-btn" id="addNoteLinkBtn" type="button" aria-label="Link zu einer anderen Notiz" data-tooltip="Link zu einer anderen Notiz" data-tooltip-hint="Markierten Text mit einer anderen Notiz verknüpfen - ein Klick darauf springt dorthin, ein roter Zurück-Knopf führt wieder hierher">
+              <span class="icon icon-emoji" aria-hidden="true">🔗</span>
+            </button>
           </div>
 
           <div class="ribbon-divider"></div>
 
           <div class="ribbon-group">
-            <button class="toolbar-btn" id="backgroundBtn" type="button" aria-label="Hintergrund" title="Hintergrund der Fläche">
-              <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M4 3h12a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm1.2 3.2h.1m3.5 0h.1m3.5 0h.1M5.2 9.7h.1m3.5 0h.1m3.5 0h.1M5.2 13.2h.1m3.5 0h.1m3.5 0h.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg>
+            <button class="toolbar-btn" id="backgroundBtn" type="button" aria-label="Hintergrund" data-tooltip="Hintergrund der Fläche">
+              <span class="icon icon-emoji" aria-hidden="true">📋</span>
             </button>
-            <button class="toolbar-btn" id="moveNoteBtn" type="button" aria-label="Notiz verschieben" title="In Ordner verschieben">
-              <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M2 5.5C2 4.67 2.67 4 3.5 4h4.13c.36 0 .7.14.96.4l1.2 1.2c.26.26.6.4.96.4H16.5c.83 0 1.5.67 1.5 1.5v7.6c0 .83-.67 1.5-1.5 1.5h-13C2.67 16.6 2 15.93 2 15.1V5.5z"/></svg>
+            <button class="toolbar-btn" id="moveNoteBtn" type="button" aria-label="Notiz verschieben" data-tooltip="In Ordner verschieben">
+              <span class="icon icon-emoji" aria-hidden="true">📁</span>
             </button>
           </div>
         </div>
 
         <div class="editor-body">
-          <textarea id="titleInput" class="title-input" placeholder="Titel" rows="1"></textarea>
+          <div class="editor-title-row">
+            <button type="button" class="note-back-btn" id="noteBackBtn" hidden title="Zurück zur vorherigen Notiz">
+              <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M12 4 6 10l6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span>Zurück</span>
+            </button>
+            <textarea id="titleInput" class="title-input" placeholder="Titel" rows="1"></textarea>
+          </div>
 
           <div class="canvas-workspace" id="canvasWorkspace">
             <div class="draw-toolbar" id="drawToolbar" hidden>
@@ -187,6 +234,8 @@
                 <button type="button" class="sketch-done-btn" id="drawDoneBtn">Fertig</button>
               </div>
             </div>
+
+            <div class="context-menu" id="objectContextMenu" hidden></div>
 
             <div class="canvas-surface" id="canvasSurface">
               <canvas id="inkLayer" class="ink-layer"></canvas>
@@ -234,6 +283,169 @@
     </div>
   </div>
 
+  <!-- Interner Link: Notiz auswählen -->
+  <div class="popover-backdrop" id="noteLinkPickerBackdrop" hidden>
+    <div class="popover popover-wide" id="noteLinkPickerPopover">
+      <div class="popover-title-row">
+        <button type="button" class="popover-back-btn" id="noteLinkPickerBackBtn" hidden aria-label="Eine Ebene zurück">
+          <svg viewBox="0 0 20 20" class="icon" aria-hidden="true"><path d="M12 4 6 10l6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <p class="popover-title" id="noteLinkPickerTitle">Ordner wählen</p>
+      </div>
+      <div class="popover-list" id="noteLinkPickerList"></div>
+      <div class="popover-form-actions">
+        <button type="button" class="popover-btn popover-btn-secondary" id="noteLinkPickerCancelBtn">Abbrechen</button>
+        <button type="button" class="popover-btn popover-btn-primary" id="noteLinkPickerConfirmBtn" disabled>Link setzen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Zugangsdaten anlegen/bearbeiten -->
+  <div class="popover-backdrop" id="credentialPopoverBackdrop" hidden>
+    <div class="popover popover-form" id="credentialPopover">
+      <p class="popover-title">Zugangsdaten</p>
+      <input type="text" id="credentialTitleInput" class="popover-text-input" placeholder="Bezeichnung (z. B. Finanzonline.at)" />
+      <div class="credential-fields-list" id="credentialFieldsList"></div>
+      <button type="button" class="credential-add-field-btn" id="credentialAddFieldBtn">+ Feld hinzufügen</button>
+      <div class="popover-form-actions">
+        <button type="button" class="popover-btn popover-btn-secondary" id="credentialCancelBtn">Abbrechen</button>
+        <button type="button" class="popover-btn popover-btn-primary" id="credentialSaveBtn">Speichern</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Erinnerung anlegen/bearbeiten -->
+  <div class="popover-backdrop" id="reminderPopoverBackdrop" hidden>
+    <div class="popover popover-form" id="reminderPopover">
+      <p class="popover-title">Erinnerung</p>
+      <input type="text" id="reminderTitleInput" class="popover-text-input" placeholder="Überschrift (z. B. Vertrag AKS läuft aus)" />
+      <label class="settings-field">
+        <span class="settings-field-label">Erinnerungsdatum und -uhrzeit</span>
+        <input type="datetime-local" id="reminderDateInput" class="popover-text-input" />
+      </label>
+      <label class="settings-field">
+        <span class="settings-field-label">Erinnerungstext</span>
+        <span class="settings-field-hint">Wird zum Termin per Mail geschickt - manuell eingeben oder vorher Text in der Notiz markieren und dann auf "Erinnerung hinzufügen" klicken.</span>
+        <textarea id="reminderTextInput" class="popover-text-input reminder-text-input" rows="4" placeholder="Erinnerungstext"></textarea>
+      </label>
+      <div class="popover-form-actions">
+        <button type="button" class="popover-btn popover-btn-danger" id="reminderDeleteBtn" hidden>Löschen</button>
+        <button type="button" class="popover-btn popover-btn-secondary" id="reminderCancelBtn">Abbrechen</button>
+        <button type="button" class="popover-btn popover-btn-primary" id="reminderSaveBtn">Speichern</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Einstellungen (kleines Fenster beim Benutzernamen) -->
+  <div class="popover-backdrop" id="settingsPopoverBackdrop" hidden>
+    <div class="popover settings-popover" id="settingsPopover">
+      <p class="popover-title">Einstellungen</p>
+
+      <label class="popover-checkbox-item">
+        <input type="checkbox" id="trashVisibleCheckbox" />
+        <span>Papierkorb anzeigen</span>
+      </label>
+
+      <button type="button" class="popover-item" id="openReminderSettingsBtn">
+        <span>Erinnerungs-Mail</span>
+      </button>
+
+      <button type="button" class="popover-item" id="openChangePasswordBtn">
+        <span>Passwort ändern</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Passwort ändern: eigenes, mittig zentriertes Fenster -->
+  <div class="modal-backdrop" id="changePasswordModalBackdrop" hidden>
+    <div class="modal" id="changePasswordModal" role="dialog" aria-modal="true">
+      <p class="modal-title">Passwort ändern</p>
+
+      <label class="settings-field">
+        <span class="settings-field-label">Aktuelles Passwort</span>
+        <input type="password" class="popover-text-input" id="currentPasswordInput" autocomplete="current-password" />
+      </label>
+
+      <label class="settings-field">
+        <span class="settings-field-label">Neues Passwort</span>
+        <span class="settings-field-hint">Mindestens 8 Zeichen.</span>
+        <input type="password" class="popover-text-input" id="newPasswordInput" autocomplete="new-password" />
+      </label>
+
+      <label class="settings-field">
+        <span class="settings-field-label">Neues Passwort wiederholen</span>
+        <input type="password" class="popover-text-input" id="newPasswordRepeatInput" autocomplete="new-password" />
+      </label>
+
+      <p class="settings-save-status" id="changePasswordStatus"></p>
+
+      <div class="popover-form-actions">
+        <button type="button" class="popover-btn popover-btn-secondary" id="changePasswordCancelBtn">Abbrechen</button>
+        <button type="button" class="popover-btn popover-btn-primary" id="changePasswordSaveBtn">Ändern</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- E-Mail-Erinnerungen: eigenes, mittig zentriertes Fenster -->
+  <div class="modal-backdrop" id="reminderSettingsModalBackdrop" hidden>
+    <div class="modal" id="reminderSettingsModal" role="dialog" aria-modal="true">
+      <p class="modal-title">Erinnerungs-Mail</p>
+
+      <label class="settings-field">
+        <span class="settings-field-label">Erinnerungs-E-Mail-Adresse</span>
+        <span class="settings-field-hint">An diese Adresse werden fällige Erinnerungen aus den Notizen geschickt.</span>
+        <input type="email" class="popover-text-input" id="reminderEmailInput" placeholder="name@beispiel.at" autocomplete="off" />
+      </label>
+
+      <p class="settings-section-title settings-section-title-sub">Versand-Konto (SMTP)</p>
+      <p class="settings-field-hint">Zugangsdaten des E-Mail-Kontos, über das versendet wird. Beispiel für GMX: Server mail.gmx.net, Port 587, Verschlüsselung STARTTLS.</p>
+
+      <label class="settings-field">
+        <span class="settings-field-label">SMTP-Server</span>
+        <input type="text" class="popover-text-input" id="smtpHostInput" placeholder="z. B. mail.gmx.net" autocomplete="off" />
+      </label>
+
+      <div class="settings-field-row">
+        <label class="settings-field">
+          <span class="settings-field-label">Port</span>
+          <input type="number" class="popover-text-input" id="smtpPortInput" placeholder="587" autocomplete="off" />
+        </label>
+        <label class="settings-field">
+          <span class="settings-field-label">Verschlüsselung</span>
+          <select class="popover-text-input" id="smtpSecureSelect">
+            <option value="starttls">STARTTLS (empfohlen)</option>
+            <option value="ssl">SSL/TLS</option>
+            <option value="none">Keine</option>
+          </select>
+        </label>
+      </div>
+
+      <label class="settings-field">
+        <span class="settings-field-label">Benutzername</span>
+        <span class="settings-field-hint">Meist deine volle E-Mail-Adresse.</span>
+        <input type="text" class="popover-text-input" id="smtpUserInput" placeholder="name@beispiel.at" autocomplete="off" />
+      </label>
+
+      <label class="settings-field">
+        <span class="settings-field-label">Passwort</span>
+        <span class="settings-field-hint">Ist dein Konto zusätzlich abgesichert (2-Faktor/2FA), brauchst du ein eigenes "App-Passwort" statt deines normalen Passworts. Leer lassen, um das gespeicherte Passwort zu behalten.</span>
+        <input type="password" class="popover-text-input" id="smtpPasswordInput" placeholder="Passwort" autocomplete="new-password" />
+      </label>
+
+      <label class="settings-field">
+        <span class="settings-field-label">Absendername (optional)</span>
+        <input type="text" class="popover-text-input" id="smtpFromNameInput" placeholder="z. B. KrisNote Erinnerungen" autocomplete="off" />
+      </label>
+
+      <p class="settings-save-status" id="settingsSaveStatus"></p>
+
+      <div class="popover-form-actions">
+        <button type="button" class="popover-btn popover-btn-secondary" id="settingsCancelBtn">Abbrechen</button>
+        <button type="button" class="popover-btn popover-btn-primary" id="settingsSaveBtn">Speichern</button>
+      </div>
+    </div>
+  </div>
+
   <!-- PDF-Einfügeart -->
   <div class="popover-backdrop" id="pdfModePopoverBackdrop" hidden>
     <div class="popover popover-wide" id="pdfModePopover">
@@ -246,6 +458,10 @@
         <button type="button" class="popover-item popover-item-rich" data-mode="file">
           <span class="popover-item-title">Nur Datei ablegen</span>
           <span class="popover-item-desc">Kompakte Ablage als Datei-Symbol, ohne die Seiten anzuzeigen.</span>
+        </button>
+        <button type="button" class="popover-item popover-item-rich" data-mode="inline-file" id="pdfInlineFileModeBtn" hidden>
+          <span class="popover-item-title">An der Cursor-Stelle im Text platzieren</span>
+          <span class="popover-item-desc">Kleines Datei-Symbol direkt im Text - bewegt sich mit, wenn sich der Text darüber verändert.</span>
         </button>
       </div>
     </div>
@@ -283,8 +499,7 @@
 
   <!-- Schriftgröße -->
   <div class="popover-backdrop" id="fontSizePopoverBackdrop" hidden>
-    <div class="popover" id="fontSizePopover">
-      <p class="popover-title">Schriftgröße</p>
+    <div class="popover popover-compact" id="fontSizePopover">
       <div class="popover-list" id="fontSizeList"></div>
     </div>
   </div>
@@ -299,11 +514,14 @@
 
   <!-- Schriftart -->
   <div class="popover-backdrop" id="fontFamilyPopoverBackdrop" hidden>
-    <div class="popover" id="fontFamilyPopover">
-      <p class="popover-title">Schriftart</p>
+    <div class="popover popover-compact" id="fontFamilyPopover">
       <div class="popover-list" id="fontFamilyList"></div>
     </div>
   </div>
+
+  <!-- Schneller Info-Text für die Einfügen-Werkzeuge (siehe data-tooltip/
+       data-tooltip-hint an den jeweiligen Buttons + wireIconTooltips()) -->
+  <div class="icon-tooltip" id="iconTooltip" role="tooltip"></div>
 
   <script src="js/app.js"></script>
   <script>

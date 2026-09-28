@@ -1,16 +1,20 @@
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v6';
 const CACHE_NAME = `apple-notes-pwa-${CACHE_VERSION}`;
 
 const APP_SHELL = [
   './',
   './index.html',
+  './login.html',
   './manifest.json',
   './css/styles.css',
   './js/app.js',
-  './icons/icon-192.png',
-  './icons/icon-512.png',
-  './icons/apple-touch-icon.png',
-  './icons/favicon-32.png',
+  './icons/icon-192-v2.png',
+  './icons/icon-512-v2.png',
+  './icons/apple-touch-icon-v2.png',
+  './icons/favicon-32-v2.png',
+  './icons/sidebar-logo.png',
+  './icons/welcome-splash.webp',
+  './icons/login-background.webp',
 ];
 
 self.addEventListener('install', (event) => {
@@ -36,6 +40,16 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
+
+  const url = new URL(request.url);
+  // Notizdaten und hochgeladene Dateien kommen ausschließlich vom Server und
+  // dürfen nie aus dem Cache beantwortet werden – sonst könnten veraltete oder
+  // sogar Daten eines anderen Geräts angezeigt werden, statt ehrlich einen
+  // Verbindungsfehler zu melden.
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/files/')) {
+    event.respondWith(fetch(request));
+    return;
+  }
 
   // Netzwerk zuerst, damit Aktualisierungen sofort ankommen (nicht erst nach dem
   // nächsten Laden). Nur wenn das Netzwerk nicht erreichbar ist (offline), wird

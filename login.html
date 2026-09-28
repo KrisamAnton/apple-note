@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>KrisNote – Anmelden</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    min-height: 100vh;
+    /* Eine absolut auf die im Bild eingezeichnete (nicht echte) Karte
+       positionierte echte Karte funktioniert nur für eine Fenstergröße genau -
+       bei anderen Seitenverhältnissen "wandert" die Größe der Grafik (cover)
+       anders als die feste Kartenposition auseinander. Deshalb wieder fest
+       mittig zentriert (funktioniert bei jeder Fenstergröße gleich gut) - der
+       Verlauf ist dafür deutlich heller/kräftiger als im ersten Versuch, damit
+       möglichst viel vom Original-Bild sichtbar bleibt. Die helle Zone reicht
+       bewusst weiter nach unten, damit das Buch mit dem "K" und dem Stift auch
+       hinter der (jetzt tiefer sitzenden) Anmeldekarte noch gut sichtbar bleibt. */
+    background:
+      linear-gradient(180deg, rgba(18, 10, 36, 0) 0%, rgba(18, 10, 36, 0.05) 38%, rgba(16, 9, 32, 0.68) 56%, rgba(14, 8, 28, 0.93) 68%, #100822 80%),
+      url('icons/login-background.webp') center top / cover no-repeat;
+    background-color: #120a24;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .login-card {
+    width: 100%;
+    max-width: 360px;
+    margin-top: 12vh;
+    background: rgba(20, 11, 40, 0.82);
+    backdrop-filter: blur(22px) saturate(150%);
+    -webkit-backdrop-filter: blur(22px) saturate(150%);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 22px;
+    padding: 34px 28px 28px;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+    color: #fff;
+  }
+
+  .login-title {
+    text-align: center;
+    font-size: 34px;
+    font-weight: 900;
+    margin: 0;
+    letter-spacing: -0.03em;
+    text-shadow: 0 2px 18px rgba(124, 58, 255, 0.45);
+  }
+  .login-title .accent {
+    background: linear-gradient(90deg, #b794ff, #7c5cff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .login-subtitle {
+    text-align: center;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.62);
+    margin: 6px 0 26px;
+  }
+
+  .login-field { position: relative; margin-bottom: 14px; }
+  .login-field .field-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 18px;
+    color: rgba(255, 255, 255, 0.55);
+    pointer-events: none;
+  }
+  .login-field input {
+    width: 100%;
+    padding: 13px 14px 13px 42px;
+    border-radius: 13px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.07);
+    color: #fff;
+    font-size: 15px;
+  }
+  .login-field input::placeholder { color: rgba(255, 255, 255, 0.45); }
+  .login-field input:focus {
+    outline: none;
+    border-color: rgba(183, 148, 255, 0.7);
+    background: rgba(255, 255, 255, 0.1);
+  }
+  /* Chrome füllt gespeicherte Zugangsdaten sonst mit einem festen, hier nicht
+     überschreibbaren weißen Hintergrund - dieser Trick (riesiger, verzögerter
+     box-shadow "von innen") erzwingt stattdessen wieder unseren eigenen. */
+  .login-field input:-webkit-autofill,
+  .login-field input:-webkit-autofill:hover,
+  .login-field input:-webkit-autofill:focus,
+  .login-field input:autofill {
+    -webkit-text-fill-color: #fff !important;
+    caret-color: #fff !important;
+    -webkit-box-shadow: 0 0 0 1000px rgba(255, 255, 255, 0.07) inset !important;
+    box-shadow: 0 0 0 1000px rgba(255, 255, 255, 0.07) inset !important;
+    transition: background-color 9999s ease-in-out 0s;
+  }
+  .login-field.has-toggle input { padding-right: 42px; }
+  .eye-toggle {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 30px;
+    height: 30px;
+    border: none;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.55);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+  }
+  .eye-toggle:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+  .eye-toggle svg { width: 19px; height: 19px; }
+
+  .login-error {
+    display: none;
+    font-size: 13px;
+    color: #ff9d9d;
+    background: rgba(255, 80, 80, 0.12);
+    border: 1px solid rgba(255, 80, 80, 0.3);
+    border-radius: 10px;
+    padding: 8px 12px;
+    margin-bottom: 14px;
+  }
+
+  .login-submit {
+    width: 100%;
+    margin-top: 6px;
+    padding: 14px;
+    border: none;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #6d3bff, #a34bff);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-shadow: 0 10px 24px rgba(124, 58, 255, 0.4);
+  }
+  .login-submit:disabled { opacity: 0.6; cursor: default; }
+  .login-submit svg { width: 16px; height: 16px; }
+
+  .login-tagline {
+    text-align: center;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.55);
+    margin-top: 22px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+  }
+
+  .login-links {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 16px;
+    font-size: 12.5px;
+  }
+  .login-links a {
+    color: rgba(255, 255, 255, 0.68);
+    text-decoration: none;
+  }
+  .login-links a:hover { color: #fff; text-decoration: underline; }
+  .login-links .sep { color: rgba(255, 255, 255, 0.3); }
+
+  .login-note {
+    display: none;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.75);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-top: 14px;
+    text-align: center;
+  }
+
+  #changePwView { display: none; }
+  /* Die Ansicht wird nicht mehr live per JS umgeschaltet, sondern über einen
+     echten Seiten-Neuaufbau (location.reload) gesteuert - manche Browser
+     (v.a. iOS Safari) malen ihre eigene Autofill-Farbe neu, sobald ein
+     zuvor per display:none verstecktes Feld wieder sichtbar wird, und
+     ignorieren dabei unseren CSS-Trick. Ein frischer Seitenaufbau verhält
+     sich dagegen genauso zuverlässig wie der allererste Seitenaufruf. */
+  html.changepw-view #loginForm { display: none; }
+  html.changepw-view #changePwView { display: block; }
+  #registerView { display: none; }
+  html.register-view #loginForm { display: none; }
+  html.register-view #registerView { display: block; }
+  .login-back {
+    display: block;
+    text-align: center;
+    font-size: 12.5px;
+    color: rgba(255, 255, 255, 0.68);
+    text-decoration: none;
+    margin-top: 14px;
+  }
+  .login-back:hover { color: #fff; text-decoration: underline; }
+</style>
+<script>
+  // Muss vor dem ersten Rendern im <head> laufen, damit sofort die richtige
+  // Ansicht steht (kein kurzes Aufblitzen der falschen Ansicht).
+  if (location.hash === '#changepw') {
+    document.documentElement.classList.add('changepw-view');
+  } else if (location.hash === '#register') {
+    document.documentElement.classList.add('register-view');
+  }
+</script>
+</head>
+<body>
+  <form class="login-card" id="loginForm" autocomplete="on">
+    <p class="login-title">Kris<span class="accent">Note</span></p>
+    <p class="login-subtitle">Dein persönliches Wissensarchiv</p>
+
+    <p class="login-error" id="loginError"></p>
+
+    <div class="login-field">
+      <svg class="field-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <circle cx="10" cy="6.5" r="3.2" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M3.5 17c0-3.3 2.9-5.5 6.5-5.5s6.5 2.2 6.5 5.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <input type="text" id="username" placeholder="Benutzername" autocomplete="username" required autofocus />
+    </div>
+
+    <div class="login-field has-toggle">
+      <svg class="field-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <rect x="4.5" y="8.5" width="11" height="8" rx="2" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M6.5 8.5V6a3.5 3.5 0 0 1 7 0v2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <input type="password" id="password" placeholder="Passwort" autocomplete="current-password" required />
+      <button type="button" class="eye-toggle" id="togglePassword" aria-label="Passwort anzeigen">
+        <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <path d="M1.5 10S4.5 4 10 4s8.5 6 8.5 6-3 6-8.5 6-8.5-6-8.5-6z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+          <circle cx="10" cy="10" r="2.3" stroke="currentColor" stroke-width="1.5"/>
+        </svg>
+      </button>
+    </div>
+
+    <button type="submit" class="login-submit" id="loginSubmit">
+      <span>Anmelden</span>
+      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+
+    <div class="login-links">
+      <a href="#" id="showChangePwLink">Passwort ändern</a>
+      <span class="sep sep-register" id="registerSep" hidden>·</span>
+      <a href="#" id="showRegisterLink" hidden>Neuen Benutzer anlegen</a>
+    </div>
+
+    <p class="login-tagline">Ein Ort für alles, was wichtig ist. 💜</p>
+  </form>
+
+  <form class="login-card" id="changePwView" autocomplete="off">
+    <p class="login-title">Kris<span class="accent">Note</span></p>
+    <p class="login-subtitle">Passwort ändern</p>
+
+    <p class="login-error" id="changePwError"></p>
+
+    <input type="hidden" id="pwUsername" />
+
+    <div class="login-field">
+      <svg class="field-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <rect x="4.5" y="8.5" width="11" height="8" rx="2" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M6.5 8.5V6a3.5 3.5 0 0 1 7 0v2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <input type="password" id="pwCurrent" name="pw-current-nofill" placeholder="Aktuelles Passwort" autocomplete="off" required />
+    </div>
+
+    <div class="login-field">
+      <svg class="field-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <rect x="4.5" y="8.5" width="11" height="8" rx="2" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M6.5 8.5V6a3.5 3.5 0 0 1 7 0v2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <input type="password" id="pwNew" name="pw-new1-nofill" placeholder="Neues Passwort (mind. 8 Zeichen)" autocomplete="off" required />
+    </div>
+
+    <div class="login-field">
+      <svg class="field-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <rect x="4.5" y="8.5" width="11" height="8" rx="2" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M6.5 8.5V6a3.5 3.5 0 0 1 7 0v2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <input type="password" id="pwNewRepeat" name="pw-new2-nofill" placeholder="Neues Passwort wiederholen" autocomplete="off" required />
+    </div>
+
+    <button type="submit" class="login-submit" id="changePwSubmit">
+      <span>Passwort ändern</span>
+    </button>
+
+    <a href="#" class="login-back" id="backToLoginLink">Zurück zum Login</a>
+  </form>
+
+  <form class="login-card" id="registerView" autocomplete="off">
+    <p class="login-title">Kris<span class="accent">Note</span></p>
+    <p class="login-subtitle">Neuen Benutzer anlegen</p>
+
+    <p class="login-error" id="registerError"></p>
+
+    <div class="login-field">
+      <svg class="field-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <circle cx="10" cy="6.5" r="3.2" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M3.5 17c0-3.3 2.9-5.5 6.5-5.5s6.5 2.2 6.5 5.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <input type="text" id="regUsername" name="reg-username-nofill" placeholder="Benutzername" autocomplete="off" required />
+    </div>
+
+    <div class="login-field">
+      <svg class="field-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <circle cx="10" cy="6.5" r="3.2" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M3.5 17c0-3.3 2.9-5.5 6.5-5.5s6.5 2.2 6.5 5.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <input type="text" id="regDisplayName" name="reg-displayname-nofill" placeholder="Anzeigename (optional)" autocomplete="off" />
+    </div>
+
+    <div class="login-field">
+      <svg class="field-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <rect x="4.5" y="8.5" width="11" height="8" rx="2" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M6.5 8.5V6a3.5 3.5 0 0 1 7 0v2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <input type="password" id="regPassword" name="reg-password-nofill" placeholder="Passwort (mind. 8 Zeichen)" autocomplete="off" required />
+    </div>
+
+    <div class="login-field">
+      <svg class="field-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <rect x="4.5" y="8.5" width="11" height="8" rx="2" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M6.5 8.5V6a3.5 3.5 0 0 1 7 0v2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <input type="password" id="regPasswordRepeat" name="reg-password2-nofill" placeholder="Passwort wiederholen" autocomplete="off" required />
+    </div>
+
+    <button type="submit" class="login-submit" id="registerSubmit">
+      <span>Benutzer anlegen</span>
+    </button>
+
+    <a href="#" class="login-back" id="backToLoginFromRegisterLink">Zurück zum Login</a>
+  </form>
+
+  <script>
+    const form = document.getElementById('loginForm');
+    const errEl = document.getElementById('loginError');
+    const submitBtn = document.getElementById('loginSubmit');
+    const passwordInput = document.getElementById('password');
+
+    document.getElementById('togglePassword').addEventListener('click', () => {
+      passwordInput.type = passwordInput.type === 'password' ? 'text' : 'password';
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errEl.style.display = 'none';
+      submitBtn.disabled = true;
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: document.getElementById('username').value,
+            password: passwordInput.value,
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          errEl.textContent = data.error || 'Anmeldung fehlgeschlagen.';
+          errEl.style.display = 'block';
+          submitBtn.disabled = false;
+          return;
+        }
+        window.location.href = '/';
+      } catch (err) {
+        errEl.textContent = 'Verbindung zum Server fehlgeschlagen.';
+        errEl.style.display = 'block';
+        submitBtn.disabled = false;
+      }
+    });
+
+    // Umschalten zwischen Login- und Passwort-ändern-Ansicht: bewusst über
+    // einen echten Seiten-Neuaufbau (nicht nur display:none/block per JS),
+    // weil manche Browser (v.a. iOS Safari) ein zuvor verstecktes,
+    // automatisch ausgefülltes Feld beim Wieder-Einblenden neu (und ohne
+    // unsere CSS-Überschreibung) einfärben. Ein frischer Seitenaufbau
+    // verhält sich exakt wie der allererste Aufruf der Seite.
+    const changePwView = document.getElementById('changePwView');
+    document.getElementById('showChangePwLink').addEventListener('click', (e) => {
+      e.preventDefault();
+      // Benutzername wird aus dem Login-Feld übernommen, damit man ihn hier
+      // nicht nochmal eintippen muss (er dient nur der Zuordnung im
+      // Hintergrund, nicht zum Ändern des Benutzernamens selbst).
+      sessionStorage.setItem('kn_pwUsername', document.getElementById('username').value.trim());
+      location.hash = 'changepw';
+      location.reload();
+    });
+    document.getElementById('backToLoginLink').addEventListener('click', (e) => {
+      e.preventDefault();
+      location.hash = '';
+      location.reload();
+    });
+    if (document.documentElement.classList.contains('changepw-view')) {
+      document.getElementById('pwUsername').value = sessionStorage.getItem('kn_pwUsername') || '';
+      document.getElementById('pwCurrent').focus();
+    }
+    const pwChangedMsg = sessionStorage.getItem('kn_pwChanged');
+    if (pwChangedMsg) {
+      sessionStorage.removeItem('kn_pwChanged');
+      document.getElementById('username').value = sessionStorage.getItem('kn_pwUsername') || '';
+      errEl.textContent = 'Passwort geändert. Bitte melde dich mit dem neuen Passwort an.';
+      errEl.style.color = '#c9f7c9';
+      errEl.style.background = 'rgba(80, 255, 120, 0.12)';
+      errEl.style.borderColor = 'rgba(80, 255, 120, 0.3)';
+      errEl.style.display = 'block';
+    }
+
+    const changePwErrEl = document.getElementById('changePwError');
+    const changePwSubmitBtn = document.getElementById('changePwSubmit');
+    changePwView.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      changePwErrEl.style.display = 'none';
+      const uname = document.getElementById('pwUsername').value.trim();
+      if (!uname) {
+        changePwErrEl.textContent = 'Bitte zurück zum Login und dort zuerst den Benutzernamen eingeben, dann erneut auf "Passwort ändern" klicken.';
+        changePwErrEl.style.display = 'block';
+        return;
+      }
+      const newPw = document.getElementById('pwNew').value;
+      const newPwRepeat = document.getElementById('pwNewRepeat').value;
+      if (newPw !== newPwRepeat) {
+        changePwErrEl.textContent = 'Die neuen Passwörter stimmen nicht überein.';
+        changePwErrEl.style.display = 'block';
+        return;
+      }
+      changePwSubmitBtn.disabled = true;
+      try {
+        const res = await fetch('/api/change-password-public', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: document.getElementById('pwUsername').value,
+            currentPassword: document.getElementById('pwCurrent').value,
+            newPassword: newPw,
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          changePwErrEl.textContent = data.error || 'Passwort ändern fehlgeschlagen.';
+          changePwErrEl.style.display = 'block';
+          changePwSubmitBtn.disabled = false;
+          return;
+        }
+        sessionStorage.setItem('kn_pwChanged', '1');
+        sessionStorage.setItem('kn_pwUsername', document.getElementById('pwUsername').value);
+        location.hash = '';
+        location.reload();
+        return;
+      } catch (err) {
+        changePwErrEl.textContent = 'Verbindung zum Server fehlgeschlagen.';
+        changePwErrEl.style.display = 'block';
+        changePwSubmitBtn.disabled = false;
+      }
+    });
+
+    // Umschalten zwischen Login- und Registrieren-Ansicht - aus denselben
+    // Gründen wie oben über einen echten Seiten-Neuaufbau.
+    document.getElementById('showRegisterLink').addEventListener('click', (e) => {
+      e.preventDefault();
+      location.hash = 'register';
+      location.reload();
+    });
+    document.getElementById('backToLoginFromRegisterLink').addEventListener('click', (e) => {
+      e.preventDefault();
+      location.hash = '';
+      location.reload();
+    });
+
+    const registerView = document.getElementById('registerView');
+    const registerErrEl = document.getElementById('registerError');
+    const registerSubmitBtn = document.getElementById('registerSubmit');
+    registerView.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      registerErrEl.style.display = 'none';
+      const password = document.getElementById('regPassword').value;
+      const passwordRepeat = document.getElementById('regPasswordRepeat').value;
+      if (password !== passwordRepeat) {
+        registerErrEl.textContent = 'Die Passwörter stimmen nicht überein.';
+        registerErrEl.style.display = 'block';
+        return;
+      }
+      registerSubmitBtn.disabled = true;
+      try {
+        const res = await fetch('/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: document.getElementById('regUsername').value.trim(),
+            displayName: document.getElementById('regDisplayName').value.trim(),
+            password,
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          registerErrEl.textContent = data.error || 'Anlegen fehlgeschlagen.';
+          registerErrEl.style.display = 'block';
+          registerSubmitBtn.disabled = false;
+          return;
+        }
+        // /api/register meldet direkt an (wie /api/login) - sofort in die
+        // frisch eingerichtete App weiterleiten.
+        window.location.href = '/';
+      } catch (err) {
+        registerErrEl.textContent = 'Verbindung zum Server fehlgeschlagen.';
+        registerErrEl.style.display = 'block';
+        registerSubmitBtn.disabled = false;
+      }
+    });
+
+    // Der "Neuen Benutzer anlegen"-Link ist standardmäßig versteckt (siehe
+    // "hidden" oben im HTML) - erst wenn der Server bestätigt, dass
+    // ALLOW_REGISTRATION tatsächlich an ist, wird er eingeblendet. Ruft
+    // jemand #register trotzdem direkt auf (z. B. alter Lesezeichen-Link),
+    // bleibt das Formular gesperrt und zeigt stattdessen eine Erklärung -
+    // der Server würde den Versuch ohnehin mit 403 ablehnen.
+    fetch('/api/auth-status')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.registrationAllowed) {
+          document.getElementById('showRegisterLink').hidden = false;
+          document.getElementById('registerSep').hidden = false;
+        } else if (document.documentElement.classList.contains('register-view')) {
+          registerErrEl.textContent = 'Die Registrierung neuer Benutzer ist auf diesem Server deaktiviert.';
+          registerErrEl.style.display = 'block';
+          registerSubmitBtn.disabled = true;
+        }
+      })
+      .catch(() => {});
+  </script>
+</body>
+</html>

@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>KrisNote – Ersteinrichtung</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    min-height: 100vh;
+    background:
+      linear-gradient(180deg, rgba(18, 10, 36, 0) 0%, rgba(18, 10, 36, 0.05) 38%, rgba(16, 9, 32, 0.68) 56%, rgba(14, 8, 28, 0.93) 68%, #100822 80%),
+      url('icons/login-background.webp') center top / cover no-repeat;
+    background-color: #120a24;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .login-card {
+    width: 100%;
+    max-width: 400px;
+    margin: 6vh 0;
+    background: rgba(20, 11, 40, 0.82);
+    backdrop-filter: blur(22px) saturate(150%);
+    -webkit-backdrop-filter: blur(22px) saturate(150%);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 22px;
+    padding: 34px 28px 28px;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+    color: #fff;
+  }
+
+  .login-title {
+    text-align: center;
+    font-size: 30px;
+    font-weight: 900;
+    margin: 0;
+    letter-spacing: -0.03em;
+    text-shadow: 0 2px 18px rgba(124, 58, 255, 0.45);
+  }
+  .login-title .accent {
+    background: linear-gradient(90deg, #b794ff, #7c5cff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .login-subtitle {
+    text-align: center;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.62);
+    margin: 6px 0 22px;
+  }
+
+  .setup-info {
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: rgba(255, 255, 255, 0.78);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 20px;
+  }
+  .setup-info strong { color: #fff; }
+  .setup-info code {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 5px;
+    padding: 1px 5px;
+    font-size: 12px;
+  }
+  .setup-info ul { margin: 6px 0 0; padding-left: 18px; }
+  .setup-info li { margin-bottom: 4px; }
+
+  .login-field { position: relative; margin-bottom: 14px; }
+  .login-field .field-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 18px;
+    color: rgba(255, 255, 255, 0.55);
+    pointer-events: none;
+  }
+  .login-field input {
+    width: 100%;
+    padding: 13px 14px 13px 42px;
+    border-radius: 13px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.07);
+    color: #fff;
+    font-size: 15px;
+  }
+  .login-field input::placeholder { color: rgba(255, 255, 255, 0.45); }
+  .login-field input:focus {
+    outline: none;
+    border-color: rgba(183, 148, 255, 0.7);
+    background: rgba(255, 255, 255, 0.1);
+  }
+  .login-field input:-webkit-autofill,
+  .login-field input:-webkit-autofill:hover,
+  .login-field input:-webkit-autofill:focus,
+  .login-field input:autofill {
+    -webkit-text-fill-color: #fff !important;
+    caret-color: #fff !important;
+    -webkit-box-shadow: 0 0 0 1000px rgba(255, 255, 255, 0.07) inset !important;
+    box-shadow: 0 0 0 1000px rgba(255, 255, 255, 0.07) inset !important;
+    transition: background-color 9999s ease-in-out 0s;
+  }
+
+  .login-error {
+    display: none;
+    font-size: 13px;
+    color: #ff9d9d;
+    background: rgba(255, 80, 80, 0.12);
+    border: 1px solid rgba(255, 80, 80, 0.3);
+    border-radius: 10px;
+    padding: 8px 12px;
+    margin-bottom: 14px;
+  }
+
+  .login-submit {
+    width: 100%;
+    margin-top: 6px;
+    padding: 14px;
+    border: none;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #6d3bff, #a34bff);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-shadow: 0 10px 24px rgba(124, 58, 255, 0.4);
+  }
+  .login-submit:disabled { opacity: 0.6; cursor: default; }
+
+  .field-hint {
+    font-size: 11.5px;
+    color: rgba(255, 255, 255, 0.5);
+    margin: -8px 0 14px 2px;
+  }
+</style>
+</head>
+<body>
+  <form class="login-card" id="setupForm" autocomplete="off">
+    <p class="login-title">Kris<span class="accent">Note</span></p>
+    <p class="login-subtitle">Ersteinrichtung – ersten Benutzer anlegen</p>
+
+    <div class="setup-info">
+      Auf diesem Server ist noch <strong>kein Benutzer</strong> eingerichtet.
+      Bevor du hier fortfährst, brauchst du den <strong>Einrichtungscode</strong>,
+      den der Server beim Start ins Log geschrieben hat:
+      <ul>
+        <li><strong>Docker:</strong> <code>docker logs &lt;containername&gt;</code>
+          bzw. <code>docker compose logs</code></li>
+        <li><strong>systemd:</strong> <code>journalctl -u krisnote -n 50</code>
+          (Dienstname ggf. anpassen)</li>
+        <li>Sonst: im Terminal/Fenster, in dem der Server gestartet wurde</li>
+      </ul>
+      Suche dort nach der Zeile <strong>„Einrichtungscode:"</strong>.
+    </div>
+
+    <p class="login-error" id="setupError"></p>
+
+    <div class="login-field">
+      <svg class="field-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <rect x="3" y="8.5" width="14" height="9" rx="2" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M6.5 8.5V6a3.5 3.5 0 0 1 7 0v2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        <circle cx="10" cy="12.7" r="1.2" fill="currentColor"/>
+      </svg>
+      <input type="text" id="setupCode" name="setup-code-nofill" placeholder="Einrichtungscode" autocomplete="off" required />
+    </div>
+
+    <div class="login-field">
+      <svg class="field-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <circle cx="10" cy="6.5" r="3.2" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M3.5 17c0-3.3 2.9-5.5 6.5-5.5s6.5 2.2 6.5 5.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <input type="text" id="setupUsername" name="setup-username-nofill" placeholder="Benutzername" autocomplete="off" required />
+    </div>
+    <p class="field-hint">3–30 Zeichen: Buchstaben, Zahlen, "_", "-" und "."</p>
+
+    <div class="login-field">
+      <svg class="field-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <circle cx="10" cy="6.5" r="3.2" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M3.5 17c0-3.3 2.9-5.5 6.5-5.5s6.5 2.2 6.5 5.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <input type="text" id="setupDisplayName" name="setup-displayname-nofill" placeholder="Anzeigename (optional)" autocomplete="off" />
+    </div>
+
+    <div class="login-field">
+      <svg class="field-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <rect x="4.5" y="8.5" width="11" height="8" rx="2" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M6.5 8.5V6a3.5 3.5 0 0 1 7 0v2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <input type="password" id="setupPassword" name="setup-password-nofill" placeholder="Passwort (mind. 8 Zeichen)" autocomplete="off" required />
+    </div>
+
+    <div class="login-field">
+      <svg class="field-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <rect x="4.5" y="8.5" width="11" height="8" rx="2" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M6.5 8.5V6a3.5 3.5 0 0 1 7 0v2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <input type="password" id="setupPasswordRepeat" name="setup-password2-nofill" placeholder="Passwort wiederholen" autocomplete="off" required />
+    </div>
+
+    <button type="submit" class="login-submit" id="setupSubmit">
+      <span>Benutzer anlegen &amp; einrichten</span>
+    </button>
+  </form>
+
+  <script>
+    const form = document.getElementById('setupForm');
+    const errEl = document.getElementById('setupError');
+    const submitBtn = document.getElementById('setupSubmit');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errEl.style.display = 'none';
+
+      const password = document.getElementById('setupPassword').value;
+      const passwordRepeat = document.getElementById('setupPasswordRepeat').value;
+      if (password !== passwordRepeat) {
+        errEl.textContent = 'Die Passwörter stimmen nicht überein.';
+        errEl.style.display = 'block';
+        return;
+      }
+      if (password.length < 8) {
+        errEl.textContent = 'Das Passwort muss mindestens 8 Zeichen lang sein.';
+        errEl.style.display = 'block';
+        return;
+      }
+
+      submitBtn.disabled = true;
+      try {
+        const res = await fetch('/api/setup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            setupCode: document.getElementById('setupCode').value.trim(),
+            username: document.getElementById('setupUsername').value.trim(),
+            displayName: document.getElementById('setupDisplayName').value.trim(),
+            password,
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          errEl.textContent = data.error || 'Einrichtung fehlgeschlagen.';
+          errEl.style.display = 'block';
+          submitBtn.disabled = false;
+          return;
+        }
+        // /api/setup meldet direkt an (wie /api/login) - sofort in die frisch
+        // eingerichtete App weiterleiten.
+        window.location.href = '/';
+      } catch (err) {
+        errEl.textContent = 'Verbindung zum Server fehlgeschlagen.';
+        errEl.style.display = 'block';
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -23,7 +23,20 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
   „+"-Symbol, das beim Überfahren einer Notiz in der Liste erscheint.
   Die Notizliste zeigt das Ganze als ein- und ausklappbaren Baum;
   Löschen fragt nach und entfernt dann die gesamte Unterseiten-Kette,
-  Verschieben in einen anderen Ordner nimmt den Unterbaum automatisch mit
+  Verschieben in einen anderen Ordner nimmt den Unterbaum automatisch mit.
+  „Unterseite hinzufügen"/„Löschen" erscheinen erst bei Hover über der
+  Zeile und legen sich dann über das Ende des Titels, statt dauerhaft
+  Platz zu beanspruchen - der Titel reicht dadurch fast bis zum
+  rechten Rand der Spalte
+- **Notizen manuell per Ziehen umsortieren** (wie in OneNote): eine Zeile
+  in der Notizliste lang drücken (kurzer Puls zeigt das "Aufheben" an),
+  dann an die gewünschte Stelle ziehen und loslassen. Beim Ziehen über
+  eine andere Zeile zeigt eine Linie oberhalb/unterhalb "davor/danach
+  einsortieren" an, eine helle Einfärbung der ganzen Zeile "hier als
+  Unterseite verschachteln". Eine Hauptüberschrift nimmt beim Verschieben
+  automatisch alle ihre Unterseiten mit; eine Unterseite lässt sich
+  ebenso zu einer anderen Überschrift ziehen oder ganz herausziehen und
+  wird dann wieder zur eigenständigen Hauptüberschrift
 - Ordner anlegen, umbenennen (Doppelklick), farblich kennzeichnen
   (Klick auf den Farbpunkt) und löschen
 - Notizen (samt Unterseiten) zwischen Ordnern verschieben
@@ -43,16 +56,62 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
       keine Textauswahl nötig
     - **Textformatierung** (Auswahl markieren, dann in der Werkzeugleiste
       wählen): **Fett**, *Kursiv*, **Unterstrichen**, **Durchgestrichen**,
-      **Hoch-/Tiefgestellt**, **Schriftart** (5 Schriftfamilien), 
-      **Textfarbe** (8 Farben) und **Schriftgröße** (Klein/Standard/Groß/
-      Sehr groß) – wie in einer Textverarbeitung
+      **Hoch-/Tiefgestellt**, **Schriftart** (Calibri, Arial, Times New
+      Roman, Georgia, Courier New, Verdana, Comic Sans MS) und
+      **Schriftgröße** (echte Punktgrößen 8–72, wie in Word) – beide als
+      eigene Auswahlfelder mit Rahmen, genau wie in einer Textverarbeitung,
+      plus **Textfarbe** (8 Farben). Ohne markierten Text (nur Cursor in
+      der Zeile) wirkt die Formatierung auf die ganze aktuelle Zeile,
+      statt wirkungslos zu bleiben
+    - **Rückgängig/Wiederherstellen**: die beiden Pfeil-Symbole ganz links
+      im Ribbon (Strg+Z/Strg+Y funktionieren ebenso) nutzen den nativen
+      Bearbeitungsverlauf des Browsers im gerade bearbeiteten Textfeld -
+      deckt vor allem getippten/gelöschten Text zuverlässig ab
     - **Aufzählungszeichen** und **Nummerierung**: wirken auf die aktuelle
       Zeile bzw. Auswahl, wie in Word/OneNote
+    - **Bilder direkt in den Text einfügen** (wie in OneNote): ein Bild in
+      die Zwischenablage kopieren (z. B. Screenshot) und mit Strg+V/Cmd+V
+      an der Cursor-Position einfügen – es wird Teil des Textflusses und
+      bewegt sich mit dem Text mit, statt ein eigenes Objekt auf der
+      Fläche zu sein. Über einen Ziehpunkt unten rechts am Bild lässt sich
+      seine Größe direkt im Text ändern (Höhe passt sich proportional an).
+      Wird ein Bild dagegen in ein gerade erst durch Antippen der leeren
+      Fläche entstandenes, noch unbeschriebenes Textfeld eingefügt, wird
+      stattdessen ein eigenständiges Bild-Objekt daraus (wie beim
+      "Bild hinzufügen"-Knopf) – das Textfeld verschwindet dann wieder,
+      da es sonst als leere Hülle übrig bliebe
+    - **Formatiert einfügen** (Strg+V/Cmd+V aus Word, Browser, Google Docs
+      & Co.): Fett, Kursiv, Unterstrichen, Textfarbe, Überschriften,
+      Aufzählungen und Links bleiben beim Einfügen erhalten, statt zu
+      reinem Text zu werden. Aus Sicherheits- und Kompatibilitätsgründen
+      wird nur eine begrenzte, ungefährliche Auswahl an Formatierungen
+      übernommen (kein eingebetteter Code, keine Bilder/Tabellen aus der
+      Quelle - Bilder lassen sich wie gewohnt separat per Strg+V einfügen).
+      Das Textfeld passt seine Breite dabei automatisch an den
+      eingefügten Inhalt an (bis zu einer sinnvollen Obergrenze), statt
+      wie zuvor in seiner ursprünglichen, oft schmalen Breite zu
+      bleiben und jede Zeile sofort umbrechen zu lassen
     - **Textmarker**: einen Textabschnitt markieren und über das
       Marker-Symbol in der Werkzeugleiste hervorheben – 5 Farben in
       je 3 Stärken (Leicht/Mittel/Stark). Hervorhebungen, Farbe und
       Schriftgröße lassen sich über die jeweilige „Entfernen"/
       „Standard"-Option wieder aufheben
+    - **Überlauf-Anzeige beim „Textfeld"**: ist ein Textfeld mit fester
+      Größe kleiner als sein Inhalt (z. B. nach dem Verkleinern), zeigt
+      sich an der jeweiligen Kante (oben/unten/links/rechts) eine schlanke
+      Leiste – nur dann, wenn an dieser Kante tatsächlich etwas außerhalb
+      liegt, und verschwindet z. B. am unteren Rand wieder, sobald ganz
+      nach unten gescrollt wurde. Eine eigene, selbst gezeichnete Leiste
+      statt der Browser-Bildlaufleiste, da aktuelle Chrome-Versionen mit
+      aktivierten Overlay-Scrollbalken eigene Scrollbar-Gestaltung nicht
+      mehr zuverlässig anzeigen
+    - **Internetadressen werden automatisch zu Links**: eine erkannte
+      URL (beginnt mit „http://", „https://" oder „www.") wird beim
+      Verlassen des Textfelds automatisch unterstrichen und klickbar
+      gemacht. Außerhalb des Bearbeitungsmodus öffnet ein Klick darauf
+      direkt in einem neuen Tab; während des Bearbeitens platziert ein
+      einfacher Klick wie gewohnt nur den Cursor (Strg/Cmd+Klick öffnet
+      den Link auch dort)
 - **Werkzeugleiste im Ribbon-Stil** (an OneNote angelehnt): gruppierte
   Buttons mit Trennlinien (Formatvorlagen/Listen/Einfügen/Seite). Die
   Formatierungswerkzeuge (Überschrift, Schriftart, Fett, Kursiv,
@@ -73,10 +132,16 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
   es leer ist, zeigt sich auch kein Rahmen, keine Werkzeugleiste und kein
   Ziehpunkt – nur ein blinkender Cursor; die Fläche startet klein und
   wächst beim Tippen automatisch mit
-- **Verschieben über einen eigenen Ziehpunkt**: jedes ausgewählte Objekt
-  (Text/Bild/PDF) zeigt oberhalb eine kleine Leiste mit einem
-  Griff-Symbol – daran lässt es sich zuverlässig verschieben, unabhängig
-  vom Inhalt und auch auf Touch-Geräten (wie in OneNote)
+- **Verschieben über eine eigene Titelleiste**: jedes ausgewählte Objekt
+  (Text/Bild/PDF/Audio) zeigt eine kleine graue Leiste, die selbst der
+  Ziehgriff zum Verschieben ist – daran lässt es sich zuverlässig
+  verschieben, unabhängig vom Inhalt und auch auf Touch-Geräten
+- **Wischen/Kneif-Zoom funktioniert auch über Objekten**: ein Finger-Wisch
+  oder eine Zwei-Finger-Kneifgeste, die zufällig auf einem Text-, Bild-,
+  PDF- oder Audio-Objekt beginnt, verschiebt/zoomt wie erwartet die ganze
+  Fläche, statt versehentlich das darunterliegende Objekt zu verschieben
+  (Maus-Nutzer können ein Objekt weiterhin durch Ziehen auf der ganzen
+  Fläche direkt verschieben)
 - **Notiz-/Unterseiten-Zeile**: das Löschen einer Notiz oder Unterseite
   erfolgt ausschließlich über den roten Papierkorb-Button ganz rechts in
   der jeweiligen Zeile (nicht mehr über die Werkzeugleiste), damit eine
@@ -107,6 +172,51 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
     einer als Seiten eingefügten PDF lässt sich außerdem direkt zeichnen
     (Zeichnen-Modus) – Text und Zeichnung funktionieren gleichzeitig und
     beides kann genau wie bei einem Bild an der PDF verankert werden
+  - **Sonstige Dateien** (Word, Excel, PowerPoint, ZIP, ...): über den
+    Werkzeugleisten-Button "Datei anhängen" oder per Drag & Drop direkt
+    aus dem Dateisystem auf die Fläche ziehen. Da der Browser diese
+    Formate nicht selbst darstellen kann, wird nur ein Symbol mit
+    Dateiname und Typ (z. B. „WORD") abgelegt; ein Klick auf den Anhang
+    bzw. den „Datei öffnen"-Knopf lädt die Original-Datei herunter, die
+    sich danach lokal in der zugehörigen App (z. B. Word) öffnen lässt
+  - **Zugangsdaten** (Schlüssel-Symbol): strukturiert Benutzername,
+    Passwort und beliebig viele weitere frei benennbare Felder (z. B.
+    PIN, PUK) zu einer Karte zusammen, statt sie als unformatierten
+    Text abzutippen. Zugeklappt zeigt die Karte nur ihre Bezeichnung,
+    ein Klick darauf blendet alle Felder ein (und wieder aus) - der
+    aufgeklappte Zustand wird nicht gespeichert, jede Karte startet
+    nach einem Notizwechsel/Neuladen wieder zugeklappt. Über den
+    Stift-Knopf an der Karte lassen sich Bezeichnung und Felder jederzeit
+    nachbearbeiten (Felder hinzufügen/entfernen/umbenennen). Bezeichnung
+    und Feldinhalte sind über die normale Volltextsuche auffindbar.
+    Werden genauso wie alle anderen Notizinhalte unverschlüsselt auf dem
+    eigenen Server gespeichert
+- **Papierkorb für gelöschte Hauptseiten**: Löscht man eine Hauptseite mit
+  Unterseiten und/oder eigenem Inhalt, wird sie nicht wirklich gelöscht,
+  sondern wandert (samt allen Unterseiten) in einen Papierkorb - nur eine
+  wirklich leere Hauptseite (keine Unterseiten, kein eigener Inhalt) sowie
+  einzelne Unterseiten werden weiterhin sofort endgültig gelöscht. Der
+  Papierkorb ist standardmäßig versteckt und erscheint erst als eigener
+  Eintrag in der Ordnerliste, wenn man über "Papierkorb anzeigen" (Klick auf
+  den Namen unten links) einmal einblendet - beim Abmelden bzw. einem echten
+  Neuladen ist er automatisch wieder versteckt (die gelöschten Seiten selbst
+  bleiben aber dauerhaft erhalten, bis man sie wiederherstellt). In der
+  Papierkorb-Ansicht ersetzt bei jeder Hauptseite ein "Wiederherstellen"-
+  Knopf den sonstigen Löschen-Knopf (mit Sicherheitsabfrage) und holt sie
+  endgültig zurück
+- **Sprachnotizen aufnehmen**: über das Mikrofon-Symbol im Ribbon direkt im
+  Browser aufnehmen (nochmal klicken zum Beenden, der Button pulsiert rot
+  währenddessen). Die Aufnahme wird als eigenes Objekt mit Abspiel-Player an
+  der aktuellen Position auf der Fläche abgelegt – so lässt sie sich genau
+  neben dem passenden Textabschnitt platzieren
+  - **In Text umwandeln**: über den Knopf am Aufnahme-Objekt eine
+    Transkription im Hintergrund anstoßen (läuft lokal auf dem Server, auch
+    bei langen Aufnahmen von 30–90 Minuten – dauert dann einfach
+    entsprechend länger, ohne den Rest der App zu blockieren). Ist ein
+    Hugging-Face-Zugriffstoken hinterlegt (siehe „Self-Hosting" unten), wird
+    zusätzlich versucht, verschiedene Sprecher zu erkennen (Sprecher 1, 2, …);
+    jeder Sprecher-Name im Transkript lässt sich anklicken, um ihn
+    umzubenennen
 - **Zeichnen-Modus** (Stift-Symbol) für die ganze Fläche: mit Finger
   (Touch) oder Stift (z. B. Apple Pencil, inkl. Druckstärke) direkt auf
   der Fläche zeichnen – auch über Bildern/PDFs. Farbwahl, Radiergummi,
@@ -126,6 +236,14 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
     frei verschiebbar
 - **Hintergrund umstellen** (Raster-Symbol): Punkte, Linien oder leer
   (Whiteboard) – pro Notiz einstellbar
+- **Seitenleiste** (Ordnerliste) ist fest dunkel gestaltet, unabhängig vom
+  Hell-/Dunkelmodus des restlichen Programms - mit eigenem Logo oben links
+  (bleibt beim Scrollen der Ordnerliste an fester Stelle), daneben "Alle
+  Notizen" samt Anzahl als eigene, immer sichtbare Kachel (nicht Teil der
+  scrollenden Ordnerliste), und Name/„Abmelden"-Knopf unten
+- Beim (Neu-)Laden der Seite ist bewusst keine Notiz vorausgewählt - man
+  landet in einer Willkommens-Ansicht (eigene Grafik) statt zufällig in
+  der zuletzt bearbeiteten Notiz zu stehen
 - Helles und dunkles Erscheinungsbild (folgt den Systemeinstellungen)
 - Responsive: Split-View auf iPad/Desktop, Einzelspalten-Navigation auf
   kleinen Bildschirmen
@@ -134,84 +252,192 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
   auf der leeren Fläche selbst ist dabei nur der Doppel-Tipp-Zoom
   deaktiviert (der würde sonst mit "Tipp erzeugt Text" kollidieren)
 - Als PWA installierbar ("Zum Home-Bildschirm hinzufügen" in Safari)
-- Funktioniert offline (App-Shell wird per Service Worker gecacht)
+- App-Shell wird per Service Worker gecacht (schnellerer Start); für
+  Notizen, Bilder und PDFs ist aber eine Verbindung zum Server nötig,
+  da diese dort gespeichert sind
 
 ## Daten
 
-Alle Notizen und Ordner werden aktuell ausschließlich lokal im Browser
-gespeichert (`localStorage`). Es findet keine Synchronisierung zwischen
-Geräten statt – das ist für einen späteren Schritt vorgesehen.
+Alle Notizen, Ordner, Bilder und PDFs werden auf einem eigenen kleinen
+**Server gespeichert** (nicht mehr im Browser). Das bedeutet:
 
-Es gibt noch **kein Login/Benutzerkonto**. Jedes Gerät bzw. jeder
-Browser hat automatisch seinen eigenen, getrennten lokalen Speicher –
-nutzen also z. B. zwei Personen jeweils ihr eigenes Gerät, sehen sie
-nur ihre eigenen Notizen. Teilen sie sich dasselbe Gerät/denselben
-Browser, sehen sie hingegen dieselben Notizen, da es (noch) keine
-Trennung nach Benutzer auf einem gemeinsamen Gerät gibt.
-
-**Wichtige Einschränkung von `localStorage`:** Browser begrenzen diesen
-Speicher meist auf ca. 5–10 MB pro Seite. Bilder, PDFs und Zeichnungen
-werden eingebettet gespeichert und können dieses Limit bei umfangreichem
-Material (v. a. viele/große Bilder oder mehrseitige, als „Alle Seiten
-anzeigen" eingefügte PDFs) erreichen. Schlägt ein Speichervorgang
-dadurch fehl, erscheint eine deutliche Warnung – die zuletzt gemachte
-Änderung ist dann **nicht** gespeichert und geht beim Neuladen der
-Seite verloren, wenn nicht vorher Platz geschaffen wird (z. B. große
-Anhänge entfernen). Eine robustere Speicherung (z. B. über IndexedDB,
-das deutlich mehr Platz bietet) ist ein sinnvoller nächster Schritt,
-sobald das benötigt wird.
+- Die App ist von jedem Gerät im selben Netzwerk (bzw. über die
+  konfigurierte Adresse) aus mit demselben Datenstand erreichbar –
+  keine getrennten Datenstände pro Gerät/Browser mehr.
+- Es gibt praktisch **kein Speicherlimit** mehr wie beim früheren
+  `localStorage` (ca. 5–10 MB): Bilder und PDFs werden als normale
+  Dateien auf der Festplatte des Servers abgelegt, die Notizdaten
+  selbst (Texte, Positionen) bleiben eine kleine JSON-Datei. Auch
+  viele große PDFs (z. B. 100 Stück à 30 MB) sind kein Problem, solange
+  auf dem Server genug Festplattenplatz vorhanden ist.
+- **Login erforderlich**: Ohne gültige Anmeldung ist weder die App noch
+  die API erreichbar (Umleitung zu `login.html`). Der allererste
+  Benutzer wird bei der Ersteinrichtung über `/setup.html` mit einem
+  einmaligen Einrichtungscode angelegt (siehe „Erster Start" unten).
+  Danach ist die **Selbstregistrierung standardmäßig deaktiviert** –
+  weitere Benutzer legt man entweder per Kommandozeile an (siehe
+  „Weitere Benutzer anlegen" unten) oder schaltet die
+  Selbstregistrierung bewusst über `ALLOW_REGISTRATION=true` frei.
+  Jeder Benutzer hat einen eigenen, privaten Notizbereich (getrennt von
+  allen anderen) - außer der Seite „Erklärung KrisNote" samt
+  Unterseiten: Die wird jedem neuen Benutzer einmalig als Kopie
+  mitgegeben, damit niemand vor einer leeren App steht. Spätere
+  Änderungen an der Erklärung wirken sich nicht auf schon registrierte
+  Benutzer aus (echte, unabhängige Kopie).
+- Fällt die Verbindung zum Server aus, erscheint beim Speichern eine
+  deutliche Warnung, damit nie unbemerkt eine Änderung verloren geht.
 
 ## Technik
 
-Bewusst ohne Build-Prozess und ohne Frameworks umgesetzt – reines
-HTML/CSS/JavaScript:
+Frontend bewusst ohne Build-Prozess und ohne Frameworks umgesetzt –
+reines HTML/CSS/JavaScript. Dazu ein kleiner, eigenständiger
+Node.js-Server für Speicherung und Datei-Uploads:
 
 ```
-index.html       Grundgerüst (3-Spalten-Layout)
-css/styles.css    Styling im Apple-Notes-Look (hell/dunkel)
-js/app.js         App-Logik (State, Rendering, freie Zeichenfläche, localStorage)
-js/vendor/        Lokal eingebundene pdf.js-Bibliothek (Apache-2.0, für PDF-Vorschau)
-manifest.json     PWA-Manifest
-sw.js             Service Worker (Offline-Cache der App-Shell)
-icons/            App-Icons für Home-Bildschirm / Manifest
+index.html        Grundgerüst (3-Spalten-Layout)
+css/styles.css     Styling im Apple-Notes-Look (hell/dunkel)
+js/app.js          App-Logik (State, Rendering, freie Zeichenfläche, Server-Anbindung)
+js/vendor/         Lokal eingebundene pdf.js-Bibliothek (Apache-2.0, für PDF-Vorschau)
+manifest.json      PWA-Manifest
+sw.js              Service Worker (Offline-Cache der App-Shell; API-Anfragen ausgenommen)
+icons/             App-Icons für Home-Bildschirm / Manifest
+server/            Node.js/Express-Server (Notizen + Datei-Uploads, siehe unten)
+data/              Vom Server angelegt: users.json (Konten) + je Benutzer ein eigener,
+                   privater Bereich unter users/<benutzername>/ (state.json + files/ +
+                   settings.json für die eigene Erinnerungs-Mail/SMTP-Konfiguration).
+                   Nicht Teil des Repositorys (.gitignore), da es die echten Nutzdaten sind.
 ```
 
-Die einzige externe Abhängigkeit ist [pdf.js](https://mozilla.github.io/pdf.js/)
-(Mozilla, Apache-2.0-Lizenz) zum Rendern von PDF-Seiten – lokal im
-Repository mitgeliefert (kein CDN, funktioniert auch offline) und wird
-nur bei Bedarf nachgeladen, wenn tatsächlich eine PDF eingefügt wird.
+Die externen Abhängigkeiten sind [pdf.js](https://mozilla.github.io/pdf.js/)
+(Mozilla, Apache-2.0-Lizenz) zum Rendern von PDF-Seiten im Frontend –
+lokal mitgeliefert, kein CDN – sowie im Server `express` (Webserver)
+und `multer` (Datei-Uploads), installiert über `npm`.
 
 ## Lokal ausführen
 
-Da die App aus statischen Dateien besteht, reicht ein einfacher
-Webserver (Service Worker benötigen HTTP/HTTPS, `file://` funktioniert
-nicht zuverlässig):
-
 ```bash
-# z. B. mit Python
-python3 -m http.server 8000
-
-# oder mit Node
-npx serve .
+cd server
+npm install
+npm start
 ```
 
-Danach im Browser `http://localhost:8000` öffnen.
+Danach im Browser `http://localhost:3000` öffnen (Port über die
+Umgebungsvariable `PORT` änderbar). Der Server liefert sowohl die
+App selbst als auch die API (`/api/state`, `/api/upload`) aus.
 
-## Auf dem iPad testen (GitHub Pages)
+## Self-Hosting (z. B. auf einem eigenen Server/Proxmox)
 
-Die App wird über GitHub Pages bereitgestellt, sodass sie direkt in
-Safari auf dem iPad geöffnet werden kann:
+Der Server ist bewusst einfach gehalten (keine Datenbank) und lässt
+sich auf jedem Rechner mit Node.js betreiben, der dauerhaft erreichbar
+ist:
 
-1. In den Repository-Einstellungen unter **Settings → Pages** als
-   Quelle **„Deploy from a branch“** und den Branch `main`
-   (Ordner `/root`) auswählen.
-2. Nach dem Deployment ist die App unter
-   `https://krisamanton.github.io/apple-note/` erreichbar.
-3. Auf dem iPad in Safari öffnen, dann über das Teilen-Menü
-   **„Zum Home-Bildschirm“** hinzufügen, um die App wie eine native
-   App zu installieren.
+```bash
+git clone <dieses Repository>
+cd apple-note/server
+npm install
+PORT=3000 npm start
+```
+
+Für den Dauerbetrieb empfiehlt sich ein Prozess-Manager wie `pm2` oder
+ein systemd-Service, damit der Server nach einem Neustart automatisch
+wieder hochfährt. Die Adresse (z. B. eine eigene Domain/Subdomain)
+lässt sich per Reverse Proxy (z. B. Cloudflare Tunnel, nginx) auf den
+internen Server-Port weiterleiten. Alle Notizdaten und hochgeladenen
+Dateien liegen unter `server/../data/` (per Umgebungsvariable
+`DATA_DIR` änderbar) – dieses Verzeichnis sollte regelmäßig gesichert
+werden.
+
+### Transkription einrichten (optional)
+
+Damit „In Text umwandeln" funktioniert, muss zusätzlich Python 3 mit
+den Paketen aus `server/requirements.txt` installiert sein (siehe die
+Kommentare dort für den genauen `pip3`-Befehl – CPU-only, spart
+Speicherplatz). Ohne weitere Einrichtung wird nur der reine Text
+erkannt (ein Sprecher). Für die Sprechererkennung zusätzlich:
+
+1. Kostenlosen Account auf [huggingface.co](https://huggingface.co) anlegen.
+2. Den Nutzungsbedingungen von
+   [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1)
+   zustimmen (Button auf der Modell-Seite).
+3. Unter [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
+   ein Zugriffstoken (Read) erstellen.
+4. Als Umgebungsvariable `HF_TOKEN` für den Server hinterlegen (z. B. im
+   systemd-Service).
+
+Die Modellgröße für die Texterkennung lässt sich über `WHISPER_MODEL`
+einstellen (Standard: `medium` – gute Qualität, läuft auf einer
+modernen CPU ohne Grafikkarte in etwa 1-3-facher Aufnahmedauer;
+`small` ist schneller, aber etwas ungenauer). Transkriptionen laufen
+serverseitig strikt nacheinander und mit niedrigster Prozess-Priorität,
+damit eine lange Aufnahme weder die App selbst noch andere Dienste auf
+demselben Server ausbremst.
+
+## Erster Start
+
+Diese Schritte sind nur **einmal** nötig, direkt nachdem der Server zum
+ersten Mal gestartet wurde (noch kein Benutzer vorhanden):
+
+1. Server wie oben beschrieben starten (`npm start` bzw. den
+   Docker-Container/systemd-Dienst starten).
+2. Im **Server-Log** nach der Zeile `Einrichtungscode:` suchen:
+   - Bei **Docker**: `docker logs <containername>` bzw.
+     `docker compose logs` ausführen.
+   - Bei **systemd**: `journalctl -u krisnote -n 50` ausführen
+     (Dienstname ggf. anpassen).
+   - Sonst: einfach im Terminal/Fenster nachsehen, in dem der Server
+     gestartet wurde.
+   - Der Code sieht z. B. so aus: `Einrichtungscode: 3f9a1c7e02b4`.
+3. Im Browser `http://<server-adresse>:3000/setup.html` öffnen (bzw.
+   `http://localhost:3000/setup.html`, wenn man direkt auf dem Server
+   sitzt - `/login.html` leitet automatisch dorthin um, solange noch
+   kein Benutzer existiert).
+4. Einrichtungscode, gewünschten Benutzernamen, optional einen
+   Anzeigenamen und ein Passwort (mind. 8 Zeichen) eingeben und auf
+   „Benutzer anlegen & einrichten" klicken. Man ist danach sofort
+   angemeldet.
+5. Sobald dieser erste Benutzer existiert, ist `/setup.html` dauerhaft
+   gesperrt (leitet nur noch zu `/login.html` weiter) - ein erneuter
+   Aufruf kann also nichts mehr verändern oder überschreiben.
+
+**Falscher Code:** Nach 5 Fehlversuchen wird die Ersteinrichtung für
+15 Minuten gesperrt (schützt davor, dass jemand anderes im selben
+Netzwerk den Code errät, bevor man ihn selbst eingibt). Der Code lässt
+sich statt der zufälligen Erzeugung auch fest über die Umgebungsvariable
+`SETUP_CODE` vorgeben.
+
+**Selbstregistrierung (`ALLOW_REGISTRATION`):** Nach der Ersteinrichtung
+ist der „Neuen Benutzer anlegen"-Link auf der Anmeldeseite standardmäßig
+**ausgeblendet**, und `/api/register` antwortet mit „deaktiviert" (403).
+Das sollte man nur bewusst einschalten, wenn tatsächlich beliebige
+Personen mit Zugriff auf die Server-Adresse sich selbst einen Zugang
+anlegen dürfen sollen:
+
+```bash
+ALLOW_REGISTRATION=true PORT=3000 npm start
+```
+
+### Weitere Benutzer anlegen
+
+Unabhängig von `ALLOW_REGISTRATION` lassen sich weitere Benutzer immer
+auch per Kommandozeile auf dem Server anlegen oder aktualisieren
+(überschreibt bei bestehendem Benutzernamen nur das Passwort/den
+Anzeigenamen):
+
+```bash
+node server/create-user.js <benutzername> <passwort> [Anzeigename]
+```
+
+Passwörter werden gesalzen und gehasht (`crypto.scrypt`) in
+`data/users.json` abgelegt, nie im Klartext. Die Sitzung nach dem
+Anmelden ist 30 Tage gültig (Cookie) und lebt nur im Arbeitsspeicher
+des Servers - ein Neustart meldet alle wieder ab.
+
+**Bestehende Installationen:** Ist bereits mindestens ein Benutzer
+vorhanden, ändert sich am gewohnten Ablauf nichts - kein
+Einrichtungsmodus, `/setup.html` leitet einfach zu `/login.html` um,
+bestehende Logins gelten unverändert weiter.
 
 ## Nächste Schritte
 
-Individuelle Anpassungen, Sync zwischen Geräten und weitere Features
-werden in den nächsten Schritten besprochen und umgesetzt.
+Individuelle Anpassungen und weitere Features werden in den nächsten
+Schritten besprochen und umgesetzt.

@@ -1,7 +1,15 @@
 :root {
   color-scheme: light dark;
 
-  --bg-sidebar: #f2f1ec;
+  /* Die Seitenleiste ist bewusst IMMER dunkel (wie bei Wartix), unabhängig
+     vom Hell-/Dunkel-Modus des restlichen Programms - daher eigene, feste
+     Variablen statt der unten im Dark-Mode-Block umgeschalteten Farben. */
+  --sidebar-bg: #3a3d43;
+  --sidebar-text: #f2f2f4;
+  --sidebar-text-muted: rgba(242, 242, 244, 0.55);
+  --sidebar-hover: rgba(255, 255, 255, 0.08);
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+
   --bg-list: #fafaf8;
   --bg-editor: #ffffff;
   --bg-elevated: #ffffff;
@@ -10,20 +18,24 @@
   --text-primary: #1c1c1e;
   --text-secondary: rgba(60, 60, 67, 0.6);
   --text-tertiary: rgba(60, 60, 67, 0.4);
-  --accent: #f5a623;
-  --accent-strong: #d98c00;
-  --yellow-icon: #f7b500;
-  --selection-bg: rgba(245, 166, 35, 0.16);
-  --selection-bg-strong: #f5a623;
+  --accent: #a78bfa;
+  --accent-strong: #8b5cf6;
+  --yellow-icon: #a78bfa;
+  --selection-bg: rgba(167, 139, 250, 0.16);
+  --selection-bg-strong: #a78bfa;
   --hover-bg: rgba(0, 0, 0, 0.045);
+  /* Bewusst grau statt der lila Akzentfarbe: markiert die "Familie" (Ober-
+     und alle Unterseiten) der gerade ausgewählten Notiz, ohne mit der
+     kräftigeren lila Markierung der tatsächlich aktiven Zeile zu verschmelzen. */
+  --family-bg: rgba(0, 0, 0, 0.05);
+  --titlebar-bg: #e7e7ea;
   --danger: #ff3b30;
   --shadow-popover: 0 12px 32px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.08);
-  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font: Calibri, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg-sidebar: #1c1c1e;
     --bg-list: #202022;
     --bg-editor: #242426;
     --bg-elevated: #2c2c2e;
@@ -32,12 +44,14 @@
     --text-primary: #f2f2f7;
     --text-secondary: rgba(235, 235, 245, 0.6);
     --text-tertiary: rgba(235, 235, 245, 0.4);
-    --accent: #ffb340;
-    --accent-strong: #ffc25c;
-    --yellow-icon: #ffc42e;
-    --selection-bg: rgba(255, 179, 64, 0.18);
-    --selection-bg-strong: #ffb340;
+    --accent: #c4b5fd;
+    --accent-strong: #a78bfa;
+    --yellow-icon: #c4b5fd;
+    --selection-bg: rgba(196, 181, 253, 0.18);
+    --selection-bg-strong: #c4b5fd;
     --hover-bg: rgba(255, 255, 255, 0.06);
+    --family-bg: rgba(255, 255, 255, 0.06);
+    --titlebar-bg: #3a3a3c;
     --shadow-popover: 0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
   }
 }
@@ -143,7 +157,8 @@ textarea {
 
 .sidebar {
   grid-area: sidebar;
-  background: var(--bg-sidebar);
+  background: var(--sidebar-bg);
+  color: var(--sidebar-text);
   display: flex;
   flex-direction: column;
   padding: env(safe-area-inset-top, 0) 0 env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0);
@@ -151,19 +166,79 @@ textarea {
   min-height: 0;
 }
 
+/* Logo-Bereich ist ein normales (nicht scroll-)Kind des Flex-Containers
+   ".sidebar" - nur ".folder-list" darunter hat overflow-y:auto. Dadurch
+   bleibt das Logo beim Scrollen der Ordnerliste automatisch immer an
+   gleicher Stelle stehen, ohne position:fixed/sticky und ohne dass
+   scrollender Inhalt dahinter "durchscheinen" könnte (er liegt ja gar
+   nicht darunter, sondern in einem eigenen Bereich danach).
+   Genauso für ".sidebar-footer" weiter unten. */
 .sidebar-header {
+  flex: none;
+  height: 108px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: stretch;
   gap: 8px;
-  padding: 20px 14px 8px 20px;
+  padding: 8px 12px 8px 14px;
 }
 
-.sidebar-title {
-  font-size: 28px;
+.sidebar-logo {
+  display: block;
+  height: 100%;
+  width: auto;
+  object-fit: contain;
+  flex: none;
+}
+
+/* Rechte Spalte neben dem Logo: oben klein der "Neuer Ordner"-Knopf, darunter
+   füllt "Alle Notizen" (samt Anzahl) den Rest der Höhe/Breite aus - beide
+   zusammen sind jetzt genauso hoch wie das große Logo daneben. */
+.sidebar-header-right {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.all-notes-btn {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--sidebar-text);
+  cursor: pointer;
+  padding: 4px 4px;
+  text-align: center;
+}
+
+.all-notes-btn:hover {
+  background: var(--sidebar-hover);
+}
+
+.all-notes-btn.active {
+  background: var(--accent-strong);
+  color: #fff;
+}
+
+.all-notes-label {
+  font-size: 13px;
   font-weight: 700;
-  margin: 0;
-  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.all-notes-count {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.1;
 }
 
 .sidebar-add-btn {
@@ -184,6 +259,18 @@ textarea {
   background: var(--hover-bg);
 }
 
+/* Im dunklen Seitenleisten-Hintergrund braucht der "Neuer Ordner"-Knopf
+   eigene, immer helle Farben statt der Farben, die sonst je nach Hell-/
+   Dunkelmodus wechseln (die passen nur zum hellen Notizlisten-Hintergrund,
+   wo der gleiche Knopf-Stil auch für "Neue Notiz" verwendet wird). */
+.sidebar .sidebar-add-btn {
+  color: var(--sidebar-text);
+}
+
+.sidebar .sidebar-add-btn:hover {
+  background: var(--sidebar-hover);
+}
+
 .sidebar-add-btn .icon {
   width: 18px;
   height: 18px;
@@ -201,7 +288,7 @@ textarea {
   gap: 10px;
   padding: 8px 10px;
   border-radius: 8px;
-  color: var(--text-primary);
+  color: var(--sidebar-text);
   font-size: 15px;
   cursor: pointer;
   user-select: none;
@@ -209,20 +296,20 @@ textarea {
 }
 
 .folder-item:hover {
-  background: var(--hover-bg);
+  background: var(--sidebar-hover);
 }
 
 .folder-item.active {
-  background: var(--selection-bg-strong);
-  color: #1c1c1e;
+  background: var(--accent-strong);
+  color: #fff;
 }
 
 .folder-item.active .folder-icon {
-  color: #1c1c1e;
+  color: #fff;
 }
 
 .folder-item.active .folder-count {
-  color: rgba(28, 28, 30, 0.65);
+  color: rgba(255, 255, 255, 0.75);
 }
 
 .folder-icon {
@@ -253,11 +340,11 @@ textarea {
 }
 
 .folder-color-dot:hover {
-  box-shadow: 0 0 0 3px var(--hover-bg);
+  box-shadow: 0 0 0 3px var(--sidebar-hover);
 }
 
 .folder-item.active .folder-color-dot:hover {
-  box-shadow: 0 0 0 3px rgba(28, 28, 30, 0.12);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.25);
 }
 
 .folder-name {
@@ -277,13 +364,13 @@ textarea {
 
 .folder-count {
   font-size: 15px;
-  color: var(--text-tertiary);
+  color: var(--sidebar-text-muted);
   flex: none;
 }
 
 .folder-divider {
   height: 1px;
-  background: var(--border);
+  background: var(--sidebar-border);
   margin: 8px 10px;
 }
 
@@ -291,7 +378,7 @@ textarea {
   display: none;
   border: none;
   background: transparent;
-  color: var(--text-tertiary);
+  color: var(--sidebar-text-muted);
   width: 22px;
   height: 22px;
   border-radius: 6px;
@@ -305,8 +392,76 @@ textarea {
 }
 
 .folder-delete:hover {
-  background: rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.12);
   color: var(--danger);
+}
+
+/* Fixer Fußbereich unten (Name + Abmelden) - wie ".sidebar-header" ein
+   normales Flex-Kind ohne eigenes Scrollen, bleibt daher beim Scrollen
+   der Ordnerliste immer sichtbar an gleicher Stelle. */
+.sidebar-footer {
+  flex: none;
+  padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--sidebar-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sidebar-user-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sidebar-text);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 6px;
+  margin: -4px -6px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar-user-name:hover {
+  background: var(--sidebar-hover);
+}
+
+.popover-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.popover-checkbox-item:hover {
+  background: var(--hover-bg);
+}
+
+.popover-checkbox-item input {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.sidebar-logout-btn {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: none;
+  background: rgba(255, 255, 255, 0.92);
+  color: #1c1c1e;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+}
+
+.sidebar-logout-btn:hover {
+  background: #ffffff;
 }
 
 /* ---------- Notizliste (Spalte 2) ---------- */
@@ -377,6 +532,12 @@ textarea {
   letter-spacing: 0.02em;
 }
 
+.note-count-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .note-count-row .sidebar-add-btn {
   width: 26px;
   height: 26px;
@@ -385,6 +546,36 @@ textarea {
 .note-count-row .sidebar-add-btn .icon {
   width: 15px;
   height: 15px;
+}
+
+/* Klappt alle Hauptüberschriften auf einmal zu/auf, damit man bei vielen
+   Notizen mit Unterseiten schnell nur die Hauptüberschriften sieht. */
+.collapse-all-btn {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.collapse-all-btn:hover {
+  background: var(--hover-bg);
+}
+
+.collapse-all-btn .icon {
+  width: 26px;
+  height: 26px;
+  transition: transform 0.15s;
+}
+
+.collapse-all-btn.expanded .icon {
+  transform: rotate(90deg);
 }
 
 .note-list {
@@ -404,6 +595,61 @@ textarea {
   cursor: pointer;
   border-bottom: 1px solid var(--border);
   position: relative;
+  touch-action: pan-y;
+}
+
+/* Lang drücken zum manuellen Verschieben (wie in OneNote): kurzer Puls beim
+   "Anheben", danach reduzierte Deckkraft solange gezogen wird. Während des
+   Ziehens wird zusätzlich per touch-action: none jedes Scrollen der Liste
+   unterbunden, damit der Finger nicht versehentlich die Liste statt der Zeile
+   bewegt. */
+@keyframes notePickPulse {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.035); }
+  100% { transform: scale(1); }
+}
+
+.note-item-picked {
+  animation: notePickPulse 220ms ease;
+  z-index: 5;
+}
+
+.note-item-dragging {
+  opacity: 0.5;
+  touch-action: none;
+}
+
+.note-list-dragging {
+  user-select: none;
+}
+
+/* Zeigt beim Ziehen an, wo die Notiz landen würde: eine Linie ober-/unterhalb
+   der Zeile für "davor/danach einsortieren", eine helle Einfärbung der ganzen
+   Zeile für "als Unterseite hier verschachteln". */
+.note-item.note-drop-before::before,
+.note-item.note-drop-after::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+  pointer-events: none;
+}
+
+.note-item.note-drop-before::before {
+  top: -2px;
+}
+
+.note-item.note-drop-after::after {
+  bottom: -2px;
+}
+
+.note-item.note-drop-into {
+  background: var(--selection-bg);
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
 }
 
 .note-item-main {
@@ -414,8 +660,8 @@ textarea {
 .note-toggle,
 .note-toggle-spacer {
   flex: none;
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   margin-top: 0;
 }
 
@@ -435,8 +681,8 @@ textarea {
 }
 
 .note-toggle .icon {
-  width: 17px;
-  height: 17px;
+  width: 21px;
+  height: 21px;
   transition: transform 0.15s;
 }
 
@@ -444,11 +690,19 @@ textarea {
   transform: rotate(90deg);
 }
 
+/* Positioniert statt im normalen Zeilenfluss (der dafür sonst dauerhaft Platz
+   reserviert hätte, obwohl die Knöpfe nur bei Hover sichtbar sind) - dadurch
+   kann der Titel fast bis zum rechten Rand der Spalte reichen, statt immer
+   vorzeitig durch den reservierten Platz für diese Knöpfe abgeschnitten zu
+   werden. Bei Hover legen sie sich einfach über das Ende des (nötigenfalls
+   mit Ellipse abgeschnittenen) Titels. */
 .note-add-sub {
-  flex: none;
+  position: absolute;
+  right: 30px;
+  top: 50%;
+  transform: translateY(-50%);
   width: 22px;
   height: 22px;
-  margin-top: -1px;
   border: none;
   background: transparent;
   color: var(--text-tertiary);
@@ -476,10 +730,12 @@ textarea {
 }
 
 .note-delete-btn {
-  flex: none;
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
   width: 22px;
   height: 22px;
-  margin-top: -1px;
   border: none;
   background: transparent;
   color: var(--danger);
@@ -505,6 +761,39 @@ textarea {
   height: 13px;
 }
 
+/* Ersetzt in der Papierkorb-Ansicht den Löschen-Knopf einer Hauptseite. */
+.note-restore-btn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: #248a3d;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.note-item:hover .note-restore-btn,
+.note-item:focus-within .note-restore-btn {
+  opacity: 1;
+}
+
+.note-restore-btn:hover {
+  background: rgba(52, 199, 89, 0.14);
+}
+
+.note-restore-btn .icon {
+  width: 13px;
+  height: 13px;
+}
+
 .note-item:last-child {
   border-bottom: none;
 }
@@ -518,42 +807,57 @@ textarea {
 }
 
 .note-item.active .note-title,
-.note-item.active .note-preview,
-.note-item.active .note-meta,
 .note-item.active .note-toggle,
 .note-item.active .note-add-sub {
   color: #1c1c1e;
 }
 
+/* Markiert alle Zeilen, die zur selben "Familie" wie die aktuell gewählte
+   Notiz gehören (ihre Hauptseite + sämtliche Unterseiten) - bewusst nur
+   dezent grau, damit man auf einen Blick sieht, was zusammengehört, ohne
+   das mit der kräftigeren lila Markierung der tatsächlich aktiven Zeile zu
+   verwechseln. Bleibt aus, wenn es dabei nur eine einzige Zeile gäbe (siehe
+   selectionFamilyNoteIds()) - dann reicht die normale Auswahl-Markierung. */
+.note-item-family {
+  background: var(--family-bg);
+}
+
+.note-item-family:hover {
+  background: var(--hover-bg);
+}
+
 .note-title {
   font-size: 15px;
   font-weight: 600;
-  margin: 0 0 2px;
+  margin: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Unterseiten sollen sich auf den ersten Blick von der übergeordneten
+   Hauptzeile unterscheiden - deutlich schwächere Schrift statt der fetten
+   Überschrift. Bei AUSWAHL gilt das nicht mehr: die gerade bearbeitete Zeile
+   soll immer gleich kräftig hervorstechen, egal auf welcher Ebene sie liegt -
+   deshalb dieselbe volle Akzentfarbe wie bei einer ausgewählten Hauptzeile. */
+.note-item-sub .note-title {
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.note-item-sub.active {
+  background: var(--selection-bg-strong);
+}
+
+.note-item-sub.active .note-title,
+.note-item-sub.active .note-toggle,
+.note-item-sub.active .note-add-sub {
+  color: #1c1c1e;
 }
 
 .note-title:empty::before {
   content: "Neue Notiz";
   color: var(--text-tertiary);
-}
-
-.note-meta {
-  font-size: 13px;
-  color: var(--text-secondary);
-  display: flex;
-  gap: 6px;
-  margin: 0;
-}
-
-.note-preview {
-  color: var(--text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-  min-width: 0;
 }
 
 .note-list-empty {
@@ -576,18 +880,31 @@ textarea {
 
 .editor-empty {
   flex: 1;
+  position: relative;
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
-  color: var(--text-tertiary);
-  gap: 12px;
+  overflow: hidden;
+  min-height: 0;
 }
 
-.empty-icon {
-  width: 56px;
-  height: 56px;
-  opacity: 0.5;
+.editor-empty-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.editor-empty-hint {
+  position: relative;
+  z-index: 1;
+  margin: 0 0 28px;
+  padding: 6px 14px;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
 }
 
 .editor {
@@ -626,8 +943,8 @@ textarea {
 }
 
 .toolbar-btn {
-  width: 38px;
-  height: 38px;
+  width: 32px;
+  height: 32px;
   flex: none;
   border-radius: 4px;
   border: none;
@@ -639,8 +956,16 @@ textarea {
 }
 
 .toolbar-btn .icon {
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
+}
+
+.toolbar-btn .icon-emoji {
+  width: auto;
+  height: auto;
+  font-size: 19px;
+  line-height: 1;
+  font-style: normal;
 }
 
 .toolbar-btn:hover {
@@ -665,21 +990,61 @@ textarea {
   color: var(--accent-strong);
 }
 
-/* Schriftart-/Schriftgrößen-Button im Dropdown-Stil (wie in OneNote) */
+/* Eigener, schnell erscheinender Info-Text für die Einfügen-Werkzeuge (siehe
+   data-tooltip/data-tooltip-hint + wireIconTooltips() in app.js) - ersetzt
+   das native title-Attribut, dessen Verzögerung sich nicht verkürzen lässt
+   und das keine zweizeilige Erklärung erlaubt. */
+.icon-tooltip {
+  position: fixed;
+  z-index: 4000;
+  max-width: 240px;
+  padding: 6px 10px;
+  border-radius: 7px;
+  background: #262626;
+  color: #fff;
+  font-size: 12.5px;
+  line-height: 1.4;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 0.08s ease, transform 0.08s ease;
+}
+
+.icon-tooltip.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.icon-tooltip-title {
+  font-weight: 600;
+}
+
+.icon-tooltip-hint {
+  margin-top: 3px;
+  color: rgba(255, 255, 255, 0.75);
+  font-weight: 400;
+}
+
+/* Schriftart-/Schriftgrößen-Feld im klassischen Dropdown-Stil (wie in Word/
+   OneNote) - mit sichtbarem Rahmen, damit erkennbar ist, dass es sich um ein
+   Eingabe-/Auswahlfeld handelt und nicht um einen einfachen Knopf. */
 .toolbar-select-btn {
   width: auto;
   min-width: 0;
   gap: 4px;
-  padding: 0 6px 0 8px;
+  padding: 0 5px 0 7px;
+  border: 1px solid var(--border);
   border-radius: 4px;
+  background: var(--bg-elevated);
 }
 
 .toolbar-select-btn .select-label {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--text-primary);
   white-space: nowrap;
-  max-width: 74px;
+  max-width: 84px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -728,6 +1093,56 @@ textarea {
   color: var(--text-tertiary);
 }
 
+/* Umschließt die Überschrift und (falls vorhanden) den Zurück-Knopf einer
+   über einen internen Link erreichten Notiz - hält die Überschrift dabei
+   weiterhin mittig ausgerichtet, wie zuvor .title-input allein. */
+.editor-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 760px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.editor-title-row .title-input {
+  max-width: none;
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Nur sichtbar, wenn man gerade über einen internen Link auf dieser Notiz
+   gelandet ist (siehe navigateToNoteViaLink() in app.js) - bewusst auffällig
+   (rot, mindestens so groß wie die Überschrift), damit man sofort erkennt,
+   wie man zur ursprünglichen Notiz zurückkommt. */
+.note-back-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  margin-top: 10px;
+  height: 40px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 20px;
+  background: var(--danger);
+  color: #fff;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.note-back-btn:hover {
+  filter: brightness(1.08);
+}
+
+.note-back-btn .icon {
+  width: 20px;
+  height: 20px;
+}
+
 /* ---------- Freie Zeichenfläche ---------- */
 
 .canvas-workspace {
@@ -749,6 +1164,7 @@ textarea {
      dem eigenen "Tipp erzeugt Text"-Verhalten kollidieren. */
   touch-action: manipulation;
 }
+
 
 .canvas-surface[data-bg="dots"] {
   background-image: radial-gradient(var(--border-strong) 1px, transparent 1px);
@@ -804,6 +1220,48 @@ textarea {
   background: var(--bg-elevated);
   box-shadow: var(--shadow-popover);
   flex-wrap: wrap;
+}
+
+/* Rechtsklick-Kontextmenü auf der Zeichenfläche (Kopieren/Einfügen/Löschen) -
+   fest positioniert an der Klickstelle, wie in jedem anderen Programm üblich. */
+.context-menu {
+  position: fixed;
+  z-index: 9000;
+  min-width: 160px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-popover);
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13.5px;
+  text-align: left;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.context-menu-item:hover {
+  background: var(--hover-bg);
+}
+
+.context-menu-item.danger {
+  color: var(--danger);
+}
+
+.context-menu-item .icon {
+  width: 15px;
+  height: 15px;
+  flex: none;
 }
 
 .draw-colors {
@@ -894,6 +1352,15 @@ textarea {
   z-index: 1000 !important;
 }
 
+/* Mehrfachauswahl (Umschalt-Klick) - eigener, gestrichelter Rahmen statt der
+   vollen Akzentfarbe der Einzelauswahl, damit klar bleibt: das ist Teil einer
+   Gruppe, hat aber (bewusst, um die Fläche nicht zu überladen) keine eigene
+   Werkzeugleiste/Ziehpunkte. */
+.canvas-object.multiselected {
+  border-color: var(--accent-strong);
+  border-style: dashed;
+}
+
 .canvas-object.dragging,
 .canvas-object.resizing {
   opacity: 0.92;
@@ -914,8 +1381,63 @@ textarea {
   white-space: nowrap;
 }
 
+/* Liegt ein Objekt zu nah am oberen Rand der Fläche, würde die Werkzeugleiste
+   (die normalerweise 38px darüber schwebt) über die Fläche hinausragen und
+   unter der Ribbon-Leiste verschwinden - in dem Fall klappt sie stattdessen
+   unter das Objekt (siehe TOOLBAR_FLIP_THRESHOLD in app.js). */
+.canvas-object.toolbar-below .object-toolbar {
+  top: auto;
+  bottom: -38px;
+}
+
 .canvas-object.selected .object-toolbar-main {
   display: flex;
+}
+
+/* Die Werkzeugleiste eines ausgewählten Objekts ist als leicht grauer Balken
+   über die volle Breite gezogen (wie eine Fenster-Titelleiste, z. B. in
+   OneNote) und ist selbst der Ziehgriff zum Verschieben - kein eigener
+   Verschieben-Knopf mehr nötig. Die Knöpfe darin (Löschen usw.) stoppen die
+   Ereignis-Weitergabe selbst, lösen also kein Verschieben aus. */
+.object-toolbar-main {
+  box-sizing: border-box;
+  top: -18px;
+  left: 0;
+  right: 0;
+  height: 18px;
+  padding: 0 2px;
+  gap: 2px;
+  justify-content: flex-end;
+  background: var(--titlebar-bg);
+  border: none;
+  border-radius: 4px 4px 0 0;
+  box-shadow: none;
+  cursor: grab;
+  touch-action: none;
+}
+
+.object-toolbar-main:active {
+  cursor: grabbing;
+}
+
+.object-toolbar-main .object-toolbar-btn {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+}
+
+.object-toolbar-main .object-toolbar-btn .icon {
+  /* Absichtlich größer als der 18px hohe Balken selbst - übersteht dessen
+     Rand sichtbar nach oben/unten, statt durch die Zeilenhöhe begrenzt zu
+     werden (die soll ja gleich bleiben). Kein overflow:hidden am Button,
+     das Icon wird also nicht abgeschnitten. */
+  width: 24px;
+  height: 24px;
+}
+
+.canvas-object.toolbar-below .object-toolbar-main {
+  bottom: -18px;
+  border-radius: 0 0 4px 4px;
 }
 
 .object-toolbar-btn {
@@ -948,19 +1470,6 @@ textarea {
   height: 15px;
 }
 
-/* Eigener Ziehpunkt zum Verschieben (kleine Leiste oberhalb des Objekts, wie
-   in OneNote) - unabhängig vom Inhalt, damit Ziehen auf Touch-Geräten
-   zuverlässig als Verschieben statt als Scroll-Geste ankommt. */
-.object-move-handle {
-  color: var(--accent);
-  cursor: grab;
-  touch-action: none;
-}
-
-.object-move-handle:active {
-  cursor: grabbing;
-}
-
 .resize-handle {
   position: absolute;
   right: -8px;
@@ -975,7 +1484,45 @@ textarea {
   touch-action: none;
 }
 
-.canvas-object.selected .resize-handle {
+/* Größe ändern über die rechte Kante (Breite) und die untere Kante (Höhe) -
+   wie bei einem normalen Fenster, kein runder Ziehpunkt in der Ecke mehr (der
+   galt als optisch störend). In der Ecke selbst liegt zusätzlich eine
+   unsichtbare, etwas größere Zone (resize-edge-corner) über den beiden
+   Kanten, die - genau wie früher der runde Punkt - Breite UND Höhe
+   gleichzeitig ändert. */
+.resize-edge {
+  position: absolute;
+  display: none;
+  touch-action: none;
+  z-index: 2;
+}
+
+.resize-edge-right {
+  top: 0;
+  bottom: 0;
+  right: -4px;
+  width: 8px;
+  cursor: ew-resize;
+}
+
+.resize-edge-bottom {
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  height: 8px;
+  cursor: ns-resize;
+}
+
+.resize-edge-corner {
+  right: -6px;
+  bottom: -6px;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+  z-index: 3;
+}
+
+.canvas-object.selected .resize-edge {
   display: block;
 }
 
@@ -1000,10 +1547,65 @@ textarea {
   pointer-events: none;
 }
 
+/* Ist ein Textfeld ("Textfeld"-Stil, feste Größe) kleiner als sein Inhalt,
+   soll das immer sichtbar sein - nicht erst beim Draufhalten, wie es
+   moderne Browser mit ihren "Overlay"-Bildlaufleisten sonst machen (dort
+   bleiben sie unsichtbar, solange man nicht aktiv scrollt/hovert, und
+   aktuelle Chrome-Versionen ignorieren inzwischen sogar eigene
+   ::-webkit-scrollbar-Gestaltung, wenn Overlay-Bildlaufleisten aktiv sind -
+   ein eigener, echter Balken (kein Browser-Scrollbalken) ist daher
+   zuverlässiger). Je eine schlanke Leiste pro Kante wird per JS
+   (updateOverflowIndicators in app.js) ein-/ausgeblendet, sobald an dieser
+   Kante Inhalt über den sichtbaren Bereich hinausgeht - sonst bleibt sie
+   unsichtbar. */
+.overflow-indicator {
+  position: absolute;
+  pointer-events: none;
+  background: var(--border-strong);
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  z-index: 2;
+}
+
+.overflow-indicator.visible {
+  opacity: 1;
+}
+
+.overflow-indicator-top,
+.overflow-indicator-bottom {
+  left: 6px;
+  right: 6px;
+  height: 5px;
+}
+
+.overflow-indicator-top {
+  top: 2px;
+}
+
+.overflow-indicator-bottom {
+  bottom: 2px;
+}
+
+.overflow-indicator-left,
+.overflow-indicator-right {
+  top: 6px;
+  bottom: 6px;
+  width: 5px;
+}
+
+.overflow-indicator-left {
+  left: 2px;
+}
+
+.overflow-indicator-right {
+  right: 2px;
+}
+
 .canvas-text-body.editing {
   pointer-events: auto;
   cursor: text;
-  background: var(--selection-bg);
+  background: transparent;
 }
 
 .canvas-text-body.is-empty::before {
@@ -1016,6 +1618,30 @@ textarea {
   border-radius: 2px;
   padding: 0 1px;
   color: inherit;
+}
+
+.note-link {
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Link zu einer anderen KrisNote-Notiz (siehe addNoteLinkBtn/
+   navigateToNoteViaLink() in app.js) - bewusst eine andere Farbe als
+   .note-link (externer Internet-Link), damit man beide auf einen Blick
+   unterscheiden kann. */
+.note-internal-link {
+  color: #af52de;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Aus eingefügtem HTML (Word, Browser & Co.) übernommene <p>-Zeilen sollen
+   genauso eng stehen wie selbst getippte Zeilen (<div>, ohne Rand) - ohne
+   das hier würde der Standard-Absatzabstand des Browsers zwischen jeder
+   einzelnen eingefügten Zeile eine auffällig große Lücke reißen. */
+.canvas-text-body p {
+  margin: 0;
 }
 
 .canvas-text-body .heading-1 {
@@ -1042,6 +1668,45 @@ textarea {
   margin: 0;
 }
 
+.inline-text-image {
+  max-width: 100%;
+  display: block;
+  border-radius: 4px;
+}
+
+.inline-image-wrap {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  margin: 4px 0;
+  vertical-align: bottom;
+}
+
+.inline-image-resize-handle {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: var(--accent);
+  border: 2px solid var(--bg-elevated);
+  cursor: nwse-resize;
+  touch-action: none;
+  display: none;
+}
+
+.canvas-text-body.editing .inline-image-resize-handle {
+  display: block;
+}
+
+.inline-image-placeholder {
+  display: inline-block;
+  color: var(--text-tertiary);
+  font-style: italic;
+  font-size: 12px;
+}
+
 .heading-option.heading-1 {
   font-size: 17px;
   font-weight: 700;
@@ -1056,12 +1721,14 @@ textarea {
   position: absolute;
   inset: 0;
   cursor: grab;
-  /* Ohne das würde der Browser einen Ziehversuch mit dem Finger auf einem
-     bereits beschrifteten Textobjekt als Wisch-/Scroll-Geste der Fläche
-     interpretieren, statt ihn unserem eigenen Verschiebe-Handler zu geben –
-     das Objekt ließe sich dann nur noch über den Ziehpunkt in der Größe
-     ändern, aber nicht mehr verschieben. */
-  touch-action: none;
+  /* Bewusst KEIN touch-action:none hier - ein Finger-Ziehen soll (wie
+     erwartet) die ganze Fläche verschieben/zoomen, auch wenn es zufällig auf
+     einem Objekt beginnt, statt das Objekt selbst zu verschieben. Verschieben
+     per Finger bleibt über die kleine Titelleiste möglich (siehe
+     .object-toolbar-main), die eigens touch-action:none behält. Mit Maus/
+     Stift funktioniert das Ziehen auf der ganzen Fläche unverändert, da
+     touch-action nur Touch-Eingaben betrifft. */
+  touch-action: auto;
 }
 
 .canvas-object[data-type="text"][data-style="boxed"] {
@@ -1075,7 +1742,10 @@ textarea {
 }
 
 .canvas-object[data-type="text"].selected {
-  border-color: var(--accent);
+  /* Deutlich dezenter als bei anderen Objekttypen (die dickere/volle
+     Akzentfarbe wirkt bei Text schnell aufdringlich). */
+  border-width: 1px;
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
 }
 
 /* Solange freier Text leer ist (frisch angelegt, noch nichts getippt), zeigt
@@ -1091,14 +1761,67 @@ textarea {
   display: none !important;
 }
 
+/* Auch der Platzhaltertext ("Text ...") aus der Basisregel soll hier
+   verschwinden - beim Antippen der leeren Fläche soll wie in OneNote nur
+   das KN-Badge und danach (mit Abstand) der blinkende Cursor zu sehen
+   sein, ohne jeden Hinweistext.
+   Der Abstand zwischen Badge und Cursor wird bewusst NICHT über einen
+   margin auf dem Badge selbst erzeugt (das hat sich als unzuverlässig
+   erwiesen - der Cursor eines leeren contenteditable-Felds positioniert
+   sich nicht immer zuverlässig hinter dem margin eines ::before-Inhalts).
+   Stattdessen bekommt das Textfeld einen festen padding-left und das
+   Badge wird absolut darin platziert - so ist der Abstand zum Cursor
+   garantiert, weil er direkt aus dem padding-left des Textfelds folgt. */
+.canvas-object[data-type="text"][data-style="free"] .canvas-text-body.is-empty {
+  position: relative;
+  padding-left: 36px;
+}
+
+.canvas-object[data-type="text"][data-style="free"] .canvas-text-body.is-empty::before {
+  content: "KN";
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  pointer-events: none;
+}
+
+/* Freier Text wächst über growFreeTextToFit() automatisch mit dem Inhalt
+   mit - eine interne Bildlaufleiste wird dadurch praktisch nie gebraucht,
+   kann aber durch Rundungsdifferenzen bei Innenabstand/Zeilenhöhe knapp
+   an der Kante flackernd auftauchen. Bei freiem Text daher grundsätzlich
+   ausgeblendet (bei "Textfeld" mit fester Größe bleibt sie bestehen, da
+   dort Inhalt bewusst über die Boxgröße hinausgehen kann). */
+.canvas-object[data-type="text"][data-style="free"] .canvas-text-body {
+  overflow: hidden;
+}
+
+/* Auch die gelbliche Bearbeiten-Hervorhebung soll hier nicht erscheinen -
+   nur der Cursor, kein sichtbarer Hintergrund, solange noch nichts getippt wurde. */
+.canvas-object[data-type="text"][data-style="free"] .canvas-text-body.is-empty.editing {
+  background: transparent;
+}
+
 /* Bild-Objekt */
 
 .canvas-object[data-type="image"] {
   border-color: var(--border);
   background: var(--bg-elevated);
-  /* Wie beim Text-Objekt: sonst schnappt sich der Browser ein Ziehen mit dem
-     Finger als Scroll-Geste, statt es unserem Verschieben-Handler zu geben. */
-  touch-action: none;
+  /* Bewusst KEIN touch-action:none - ein Finger-Ziehen auf einem Bild soll
+     die Fläche verschieben/zoomen, nicht das Bild selbst (siehe Text-Objekt
+     weiter oben für die ausführliche Begründung). */
+  touch-action: auto;
 }
 
 .canvas-image-el {
@@ -1106,7 +1829,14 @@ textarea {
   height: 100%;
   object-fit: contain;
   display: block;
-  pointer-events: none;
+  /* Bewusst KEIN pointer-events:none mehr - sonst landet ein Rechtsklick nie
+     direkt auf dem <img>, und der Browser zeigt "Bild kopieren"/"Grafik
+     speichern unter" im Kontextmenü gar nicht erst an. Das Verschieben per
+     Ziehen funktioniert trotzdem weiter, weil der zugehörige Listener auf
+     dem übergeordneten Element sitzt und Pointer-Events dorthin durchreicht
+     (Event-Bubbling). -webkit-user-drag verhindert weiterhin, dass ein
+     Linksklick-Ziehen stattdessen das native "Bild aus der Seite ziehen"
+     auslöst und damit unser eigenes Verschieben stört. */
   user-select: none;
   -webkit-user-drag: none;
 }
@@ -1116,7 +1846,8 @@ textarea {
 .canvas-object[data-type="pdf"] {
   border-color: var(--border);
   background: var(--bg-elevated);
-  touch-action: none;
+  /* Bewusst KEIN touch-action:none - siehe Text-/Bild-Objekt weiter oben. */
+  touch-action: auto;
 }
 
 .pdf-badge {
@@ -1219,6 +1950,186 @@ textarea {
   color: var(--text-tertiary);
 }
 
+/* Generischer Datei-Anhang (Word, Excel, ...) - gleiches Chip-Layout wie der
+   PDF-Datei-Anhang, nur mit je nach Dateityp eingefärbtem Symbol. */
+
+.canvas-object[data-type="file"] {
+  border-color: var(--border);
+  background: var(--bg-elevated);
+}
+
+.file-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.file-chip-icon {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-chip-icon .icon {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+.file-chip-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.file-chip-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-chip-kind {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+/* Audio-Objekt */
+
+.canvas-object[data-type="audio"] {
+  border-color: var(--border);
+  background: var(--bg-elevated);
+  /* Bewusst KEIN touch-action:none - siehe Text-/Bild-Objekt weiter oben. */
+  touch-action: auto;
+}
+
+/* Eigener Innen-Wrapper statt objEl (=.audio-chip) selbst: objEl trägt auch
+   die schwebende Werkzeugleiste (position:absolute, oberhalb des Objekts) -
+   overflow:hidden direkt auf objEl würde die dadurch mit abschneiden. */
+.audio-chip-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.audio-chip-icon {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.audio-chip-icon .icon,
+.audio-chip-icon svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.audio-chip-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+}
+
+.audio-chip-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: none;
+}
+
+.audio-chip-player {
+  width: 100%;
+  height: 32px;
+  flex: none;
+}
+
+.audio-transcript {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  touch-action: pan-y;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.audio-transcript-status {
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+.audio-transcript-line {
+  margin-bottom: 4px;
+}
+
+.audio-transcript-speaker {
+  border: none;
+  background: none;
+  padding: 0;
+  font-weight: 700;
+  color: var(--accent-strong);
+  cursor: pointer;
+}
+
+.audio-transcript-speaker:hover {
+  text-decoration: underline;
+}
+
+.audio-transcript-progress-track {
+  margin-top: 6px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.audio-transcript-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.4s ease;
+}
+
+/* Aufnahme-Button in der Werkzeugleiste: pulsiert rot, solange aufgenommen wird */
+.toolbar-btn.recording-active {
+  color: #fff;
+  background: var(--danger);
+  animation: recording-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes recording-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
 /* Ablagefläche beim Drag&Drop von Dateien hervorheben */
 .canvas-surface.drag-over {
   outline: 3px dashed var(--accent);
@@ -1272,6 +2183,16 @@ textarea {
   background: var(--hover-bg);
 }
 
+button.popover-item {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+
 .popover-item .folder-icon {
   width: 18px;
   height: 18px;
@@ -1280,6 +2201,84 @@ textarea {
 .popover-wide {
   min-width: 280px;
   max-width: 320px;
+}
+
+/* Titelzeile mit optionalem "eine Ebene zurück"-Pfeil, z. B. beim
+   Durchklicken im Notiz-Auswahlfenster für interne Links (siehe
+   renderNoteLinkPicker() in app.js). */
+.popover-title-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.popover-back-btn {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  margin-left: 4px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.popover-back-btn:hover {
+  background: var(--hover-bg);
+}
+
+.popover-back-btn .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.popover-title-row .popover-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.popover-item-chevron {
+  flex: none;
+  margin-left: auto;
+  width: 14px;
+  height: 14px;
+  color: var(--text-tertiary);
+}
+
+.popover-hint {
+  padding: 14px 10px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+/* Schlichte, kompakte Liste (Schriftart/-größe) statt großer Kacheln - wie
+   ein normales Auswahlfeld/Dropdown (siehe native <select>-Listen), nicht
+   wie ein Raster aus großen Schaltflächen. */
+.popover-compact {
+  min-width: 70px;
+  max-width: 170px;
+  padding: 4px;
+  border-radius: 6px;
+}
+
+.popover-compact .popover-list {
+  max-height: 240px;
+}
+
+.popover-compact .popover-item {
+  padding: 4px 10px;
+  border-radius: 3px;
+  font-size: 13px;
+  font-weight: 400;
 }
 
 .popover-item-rich {
@@ -1336,6 +2335,500 @@ textarea {
 
 .format-swatch:hover {
   border-color: var(--accent);
+}
+
+/* ---------- Zugangsdaten (Formular zum Anlegen/Bearbeiten) ---------- */
+
+.popover-form {
+  min-width: 320px;
+  max-width: 360px;
+  padding: 10px;
+}
+
+.popover-text-input {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 14px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  margin: 0 0 8px;
+}
+
+/* ---------- Einstellungen-Popover (klein, beim Benutzernamen) ---------- */
+
+.settings-popover {
+  padding: 6px;
+}
+
+/* ---------- Zentriertes Modal-Fenster (z. B. Erinnerungs-Mail-Einstellungen) ----------
+   Anders als die anderen Popover (die neben einem Auslöser-Element "andocken")
+   sitzt dieses Fenster immer mittig im Bildschirm, unabhängig davon, wo der
+   Auslöser-Knopf gerade ist - passender für ein längeres Formular, das man in
+   Ruhe ausfüllt, statt es neben einer Sidebar-Ecke zu öffnen. */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9500;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.modal {
+  width: 100%;
+  max-width: 380px;
+  max-height: 85vh;
+  overflow-y: auto;
+  background: var(--bg-elevated);
+  border-radius: 14px;
+  box-shadow: var(--shadow-popover);
+  padding: 18px;
+}
+
+.modal-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 12px;
+}
+
+.settings-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 4px 2px 6px;
+}
+
+.settings-section-title-sub {
+  margin-top: 14px;
+}
+
+.settings-field {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.settings-field-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.settings-field-hint {
+  display: block;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin: 0 2px 6px;
+  line-height: 1.4;
+}
+
+.settings-field-row {
+  display: flex;
+  gap: 10px;
+}
+
+.settings-field-row .settings-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-save-status {
+  font-size: 12px;
+  color: var(--accent-strong);
+  min-height: 16px;
+  margin: 4px 2px 0;
+}
+
+.settings-save-status.error {
+  color: var(--danger);
+}
+
+.credential-fields-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.credential-field-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.credential-field-label-input {
+  flex: 0 0 38%;
+  min-width: 0;
+}
+
+.credential-field-value-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.credential-field-label-input,
+.credential-field-value-input {
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.credential-field-remove-btn {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 16px;
+  line-height: 1;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.credential-field-remove-btn:hover {
+  background: var(--hover-bg);
+  color: var(--danger);
+}
+
+.credential-add-field-btn {
+  display: block;
+  margin: 8px 0 4px;
+  padding: 6px 8px;
+  border: none;
+  background: transparent;
+  color: var(--accent-strong);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.credential-add-field-btn:hover {
+  background: var(--hover-bg);
+}
+
+.popover-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.popover-btn {
+  padding: 7px 14px;
+  border-radius: 7px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.popover-btn-secondary {
+  background: transparent;
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.popover-btn-secondary:hover {
+  background: var(--hover-bg);
+}
+
+.popover-btn-primary {
+  background: var(--accent-strong);
+  color: #fff;
+}
+
+.popover-btn-primary:hover {
+  background: var(--accent);
+}
+
+.popover-btn-danger {
+  background: transparent;
+  border-color: var(--danger);
+  color: var(--danger);
+  margin-right: auto;
+}
+
+.popover-btn-danger:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+/* ---------- Zugangsdaten-Karte (auf der Fläche) ---------- */
+
+.credential-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 8px 10px;
+  overflow: auto;
+  cursor: pointer;
+}
+
+.credential-card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.credential-card-header .icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--accent-strong);
+}
+
+.credential-card-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.credential-card-fields {
+  display: none;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.canvas-object[data-type="credential"].expanded .credential-card-fields {
+  display: flex;
+}
+
+.credential-card-field {
+  display: flex;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.credential-card-field-label {
+  flex: none;
+  color: var(--text-tertiary);
+  font-weight: 600;
+}
+
+.credential-card-field-value {
+  min-width: 0;
+  color: var(--text-primary);
+  word-break: break-word;
+  user-select: text;
+}
+
+textarea.popover-text-input {
+  resize: vertical;
+  min-height: 64px;
+}
+
+/* ---------- Erinnerungs-Karte (auf der Fläche) ---------- */
+
+.reminder-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 8px 10px;
+  overflow: auto;
+  cursor: pointer;
+}
+
+.reminder-card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.reminder-card-header .icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--danger);
+}
+
+.reminder-card-header.sent .icon {
+  color: #34c759;
+}
+
+.reminder-card-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reminder-card-date {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+.reminder-card-date.reminder-due {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.reminder-card-text {
+  display: none;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.canvas-object[data-type="reminder"].expanded .reminder-card-text {
+  display: block;
+}
+
+/* ---------- Inline-Erinnerungs-Marker (direkt im Text) ---------- */
+
+.inline-reminder-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  vertical-align: -3px;
+  margin: 0 2px;
+  cursor: pointer;
+  color: var(--danger);
+}
+
+.inline-reminder-marker.sent {
+  color: #34c759;
+}
+
+.inline-reminder-marker .icon {
+  width: 100%;
+  height: 100%;
+}
+
+/* ---------- Inline-PDF-Datei-Symbol (direkt im Text) ---------- */
+
+.inline-pdf-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  vertical-align: -8px;
+  margin: 0 2px;
+  padding: 4px 10px 4px 4px;
+  border-radius: 14px;
+  background: var(--hover-bg);
+  border: 1px solid var(--border);
+  cursor: default;
+  max-width: 260px;
+}
+
+/* Erscheint nur beim Überfahren mit der Maus, damit man die Datei auswählen
+   (öffnen/umbenennen/löschen) kann, statt dass ein einfacher Klick auf das
+   Symbol selbst schon die Datei öffnet. Die Klasse .inline-pdf-chip-hover
+   wird zusätzlich zum nativen :hover per JS gesetzt (siehe
+   buildTextContent()) - die Verschiebe-Überlagerung über dem Text blockiert
+   natives :hover sonst, solange man nicht gerade im Bearbeitungsmodus ist.
+   position:fixed (statt absolute relativ zum Symbol) mit per JS berechneten
+   left/top (siehe positionInlinePdfChipToolbar()) - eine an der Textbox
+   relativ positionierte Leiste würde vom eigenen overflow:hidden der Box
+   abgeschnitten, sobald das Symbol nah am oberen ODER unteren Rand einer
+   (oft nur einzeiligen) Textbox sitzt. Fixiert an den Bildschirm statt an
+   die Textbox gebunden, entgeht sie dieser Beschränkung komplett. */
+.inline-pdf-chip-toolbar {
+  position: fixed;
+  display: none;
+  align-items: center;
+  gap: 2px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+  box-shadow: var(--shadow-popover);
+  white-space: nowrap;
+  z-index: 2000;
+}
+
+.inline-pdf-chip:hover .inline-pdf-chip-toolbar,
+.inline-pdf-chip.inline-pdf-chip-hover .inline-pdf-chip-toolbar {
+  display: flex;
+}
+
+.inline-pdf-chip-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.inline-pdf-chip-btn:hover {
+  background: var(--hover-bg);
+}
+
+.inline-pdf-chip-btn .icon {
+  width: 15px;
+  height: 15px;
+}
+
+.inline-pdf-chip-btn-danger {
+  color: var(--danger);
+}
+
+.inline-pdf-chip-icon {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: var(--danger);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.inline-pdf-chip-icon .icon {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.inline-pdf-chip-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ---------- Responsive: iPad Portrait / kleinere Screens ---------- */
@@ -1427,4 +2920,10 @@ textarea {
 .editor-body::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.15);
   border-radius: 4px;
+}
+
+/* Auf dem immer dunklen Seitenleisten-Hintergrund braucht der Scrollbalken
+   der Ordnerliste eine helle statt dunkle Farbe, sonst wäre er unsichtbar. */
+.folder-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
 }
