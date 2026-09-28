@@ -1626,6 +1626,14 @@
     // außerhalb einer bestehenden Mehrfachauswahl, wird zunächst nur dieses
     // eine ausgewählt; innerhalb einer bestehenden Gruppe bleibt sie erhalten.
     objEl.addEventListener('contextmenu', (e) => {
+      // Ausnahme: Wird der Text gerade aktiv bearbeitet und der Rechtsklick
+      // trifft den bearbeiteten Text selbst, muss das NATIVE Kontextmenü des
+      // Browsers durchgelassen werden (Rechtschreibvorschläge, Ausschneiden/
+      // Kopieren/Einfügen "wie in Word") - unser eigenes Menü hat dort nichts
+      // verloren und würde die Korrekturvorschläge sonst verdecken.
+      if (activeTextEdit && activeTextEdit.obj.id === obj.id && activeTextEdit.body.contains(e.target)) {
+        return;
+      }
       e.preventDefault();
       e.stopPropagation();
       if (!(multiSelectedObjectIds.size > 1 && multiSelectedObjectIds.has(obj.id))) {
