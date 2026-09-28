@@ -578,67 +578,6 @@ textarea {
   transform: rotate(90deg);
 }
 
-/* Leiste für Mehrfachauswahl (Strg/Umschalt-Klick in der Notizliste) -
-   erscheint nur, solange mindestens eine Notiz markiert ist. */
-.note-bulk-bar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  margin: 0 10px 6px;
-  background: var(--selection-bg);
-  border-radius: 8px;
-  flex-wrap: wrap;
-}
-
-.note-bulk-count {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  margin-right: auto;
-}
-
-.note-bulk-btn {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  border: none;
-  background: var(--bg-elevated);
-  color: var(--text-primary);
-  font-size: 12.5px;
-  font-weight: 600;
-  padding: 5px 9px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.note-bulk-btn .icon {
-  width: 14px;
-  height: 14px;
-}
-
-.note-bulk-btn:hover {
-  background: var(--hover-bg);
-}
-
-.note-bulk-btn-danger {
-  color: var(--danger);
-}
-
-.note-bulk-clear {
-  padding: 5px 8px;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-/* Einzelne markierte Zeile bei Mehrfachauswahl - eigener, dünner Rahmen statt
-   Hintergrundfarbe, damit sie sich klar von der aktiven Zeile (volles Lila)
-   und der Familien-Markierung (Grau) unterscheidet. */
-.note-item-multiselected {
-  outline: 2px solid var(--accent-strong);
-  outline-offset: -2px;
-}
-
 .note-list {
   flex: 1;
   overflow-y: auto;
