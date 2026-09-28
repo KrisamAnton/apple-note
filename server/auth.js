@@ -19,6 +19,16 @@ function verifyPassword(password, salt, hash) {
   return crypto.timingSafeEqual(candidate, expected);
 }
 
+// Zeitkonstanter String-Vergleich (z. B. Einrichtungscode) beliebiger Länge -
+// crypto.timingSafeEqual() verlangt sonst gleich lange Buffer, ein voreiliges
+// Längen-Check davor wäre selbst wieder ein (kleines) Zeit-Leck. Beide Seiten
+// werden deshalb erst auf eine feste Länge gehasht.
+function timingSafeEqualString(a, b) {
+  const hashA = crypto.createHash('sha256').update(String(a)).digest();
+  const hashB = crypto.createHash('sha256').update(String(b)).digest();
+  return crypto.timingSafeEqual(hashA, hashB);
+}
+
 // ---------- Benutzer (users.json im Daten-Verzeichnis, wie state.json/
 // settings.json nie im Repo/über den statischen Datei-Server erreichbar) ----------
 
@@ -129,6 +139,7 @@ module.exports = {
   SESSION_MAX_AGE_MS,
   makeUserStore,
   verifyPassword,
+  timingSafeEqualString,
   createSession,
   getSession,
   destroySession,

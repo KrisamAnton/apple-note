@@ -262,8 +262,8 @@
 
     <div class="login-links">
       <a href="#" id="showChangePwLink">Passwort ändern</a>
-      <span class="sep">·</span>
-      <a href="#" id="showRegisterLink">Neuen Benutzer anlegen</a>
+      <span class="sep sep-register" id="registerSep" hidden>·</span>
+      <a href="#" id="showRegisterLink" hidden>Neuen Benutzer anlegen</a>
     </div>
 
     <p class="login-tagline">Ein Ort für alles, was wichtig ist. 💜</p>
@@ -528,6 +528,26 @@
         registerSubmitBtn.disabled = false;
       }
     });
+
+    // Der "Neuen Benutzer anlegen"-Link ist standardmäßig versteckt (siehe
+    // "hidden" oben im HTML) - erst wenn der Server bestätigt, dass
+    // ALLOW_REGISTRATION tatsächlich an ist, wird er eingeblendet. Ruft
+    // jemand #register trotzdem direkt auf (z. B. alter Lesezeichen-Link),
+    // bleibt das Formular gesperrt und zeigt stattdessen eine Erklärung -
+    // der Server würde den Versuch ohnehin mit 403 ablehnen.
+    fetch('/api/auth-status')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.registrationAllowed) {
+          document.getElementById('showRegisterLink').hidden = false;
+          document.getElementById('registerSep').hidden = false;
+        } else if (document.documentElement.classList.contains('register-view')) {
+          registerErrEl.textContent = 'Die Registrierung neuer Benutzer ist auf diesem Server deaktiviert.';
+          registerErrEl.style.display = 'block';
+          registerSubmitBtn.disabled = true;
+        }
+      })
+      .catch(() => {});
   </script>
 </body>
 </html>

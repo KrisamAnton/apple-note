@@ -11,11 +11,13 @@ const {
   SESSION_MAX_AGE_MS,
   makeUserStore,
   verifyPassword,
+  timingSafeEqualString,
   createSession,
   getSession,
   destroySession,
   parseCookies,
 } = require('./auth');
+const { makeAttemptLimiter } = require('./rate-limit');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const DATA_DIR = process.env.DATA_DIR || path.join(PROJECT_ROOT, 'data');
@@ -82,6 +84,49 @@ function migrateLegacySharedData() {
 }
 migrateLegacySharedData();
 
+// ---------- Ersteinrichtung (Einrichtungsmodus, wenn noch kein einziger
+// Benutzer existiert) ----------
+//
+// isSetupMode() wird bewusst bei jeder Anfrage neu ausgewertet (nicht einmalig
+// beim Start gemerkt): sobald POST /api/setup den ersten Benutzer angelegt
+// hat, ist der Einrichtungsweg noch in derselben laufenden Server-Instanz
+// sofort und dauerhaft gesperrt - kein Neustart nötig.
+function isSetupMode() {
+  return userStore.readUsers().length === 0;
+}
+
+// Schützt die Ersteinrichtung davor, dass jemand anderes im Netz sie zuerst
+// aufruft und sich selbst den ersten (und einzigen bevorrechtigten) Zugang
+// verschafft. Per Umgebungsvariable SETUP_CODE fest vorgebbar (z. B. für
+// automatisierte Ersteinrichtung), sonst zufällig erzeugt und laut im
+// Server-Log ausgegeben - das Log ist der einzige Ort, an dem der Code
+// jemals im Klartext auftaucht.
+let setupCode = null;
+if (isSetupMode()) {
+  setupCode = process.env.SETUP_CODE || crypto.randomBytes(6).toString('hex');
+  console.log('');
+  console.log('========================================================');
+  console.log('  KrisNote: Noch kein Benutzer vorhanden - Ersteinrichtung');
+  console.log('  Im Browser öffnen: /setup.html');
+  console.log(`  Einrichtungscode:  ${setupCode}`);
+  console.log('========================================================');
+  console.log('');
+}
+
+// Gegen Erraten des Einrichtungscodes bzw. Brute-Force bei Login/Registrierung -
+// siehe rate-limit.js. Absichtlich dieselben, großzügigen aber wirksamen
+// Grenzwerte für alle drei (5 Fehlversuche, danach 15 Minuten Sperre).
+const RATE_LIMIT_MAX_ATTEMPTS = 5;
+const RATE_LIMIT_LOCKOUT_MS = 15 * 60 * 1000;
+const setupAttemptLimiter = makeAttemptLimiter({ maxAttempts: RATE_LIMIT_MAX_ATTEMPTS, lockoutMs: RATE_LIMIT_LOCKOUT_MS });
+const loginAttemptLimiter = makeAttemptLimiter({ maxAttempts: RATE_LIMIT_MAX_ATTEMPTS, lockoutMs: RATE_LIMIT_LOCKOUT_MS });
+const registerAttemptLimiter = makeAttemptLimiter({ maxAttempts: RATE_LIMIT_MAX_ATTEMPTS, lockoutMs: RATE_LIMIT_LOCKOUT_MS });
+
+function rateLimitMessage(retryAfterMs) {
+  const minutes = Math.max(1, Math.ceil(retryAfterMs / 60000));
+  return `Zu viele Fehlversuche. Bitte in ${minutes} Minute${minutes === 1 ? '' : 'n'} erneut versuchen.`;
+}
+
 const app = express();
 
 // Quellcode und Rohdaten dürfen nie über den statischen Datei-Server erreichbar
@@ -113,7 +158,28 @@ const PUBLIC_PATHS = new Set([
   // kam dabei statt echtem JSON die Anmelde-Weiterleitung zurück ("Manifest:
   // Line 1, column 1, Syntax error" in der Konsole).
   '/manifest.json',
+  // Ersteinrichtung: die Seite selbst wird zwar auch hier als "öffentlich"
+  // gelistet, ist aber durch die eigene Weiterleitungs-Route direkt darunter
+  // tatsächlich nur erreichbar, solange isSetupMode() zutrifft (danach leitet
+  // diese Route jede Anfrage sofort zu /login.html um, bevor PUBLIC_PATHS
+  // überhaupt geprüft wird). /api/setup und /api/auth-status prüfen den
+  // Einrichtungsmodus stattdessen selbst in ihrem Handler (liefern sonst 403).
+  '/setup.html',
+  '/api/setup',
+  '/api/auth-status',
 ]);
+
+// Müssen vor dem allgemeinen Anmelde-Mittelsmann (PUBLIC_PATHS) laufen, weil
+// sie je nach Einrichtungsmodus zwischen den beiden sonst rein statischen
+// Seiten hin- und herleiten, bevor diese überhaupt ausgeliefert werden.
+app.get('/login.html', (req, res, next) => {
+  if (isSetupMode()) return res.redirect('/setup.html');
+  next();
+});
+app.get('/setup.html', (req, res, next) => {
+  if (!isSetupMode()) return res.redirect('/login.html');
+  next();
+});
 
 app.use((req, res, next) => {
   if (PUBLIC_PATHS.has(req.path)) return next();
@@ -134,10 +200,20 @@ app.post('/api/login', (req, res) => {
   if (typeof username !== 'string' || typeof password !== 'string' || !username || !password) {
     return res.status(400).json({ error: 'Benutzername und Passwort erforderlich' });
   }
+  // Schlüssel aus IP + Benutzername (nicht nur IP), damit ein falsch
+  // getipptes Passwort für Benutzer A nicht auch Benutzer B hinter derselben
+  // IP-Adresse (z. B. selbes Heimnetz) aussperrt.
+  const limiterKey = `${req.ip}:${username.toLowerCase()}`;
+  const limit = loginAttemptLimiter.check(limiterKey);
+  if (!limit.allowed) {
+    return res.status(429).json({ error: rateLimitMessage(limit.retryAfterMs) });
+  }
   const user = userStore.findUser(username);
   if (!user || !verifyPassword(password, user.passwordSalt, user.passwordHash)) {
+    loginAttemptLimiter.recordFailure(limiterKey);
     return res.status(401).json({ error: 'Benutzername oder Passwort falsch' });
   }
+  loginAttemptLimiter.recordSuccess(limiterKey);
   const sid = createSession(user.username);
   res.cookie(SESSION_COOKIE_NAME, sid, {
     httpOnly: true,
@@ -147,6 +223,15 @@ app.post('/api/login', (req, res) => {
     path: '/',
   });
   res.json({ ok: true, username: user.username, displayName: user.displayName });
+});
+
+// Öffentlicher Status für die Anmeldeseite (Registrieren-Button nur zeigen,
+// wenn ALLOW_REGISTRATION tatsächlich an ist - keine privaten Daten enthalten).
+app.get('/api/auth-status', (req, res) => {
+  res.json({
+    setupMode: isSetupMode(),
+    registrationAllowed: process.env.ALLOW_REGISTRATION === 'true',
+  });
 });
 
 app.post('/api/logout', (req, res) => {
@@ -299,8 +384,29 @@ function seedNewUserState(username) {
   fs.writeFileSync(userStateFile(username), JSON.stringify(state));
 }
 
-app.post('/api/register', (req, res) => {
-  const { username, password, displayName } = req.body || {};
+// ---------- Ersteinrichtung: allerersten Benutzer anlegen ----------
+//
+// Bewusst eine eigene Route statt einer Variante von /api/register: dadurch
+// bleibt /api/register unabhängig davon, ob ALLOW_REGISTRATION gesetzt ist,
+// immer nach demselben, festen Muster gesperrt (siehe dort), während dieser
+// Weg unabhängig davon ausschließlich per Einrichtungscode funktioniert und
+// sich nach dem ersten erfolgreichen Aufruf selbst dauerhaft abschaltet.
+app.post('/api/setup', (req, res) => {
+  if (!isSetupMode()) {
+    return res.status(403).json({ error: 'Die Ersteinrichtung wurde bereits abgeschlossen.' });
+  }
+  const limit = setupAttemptLimiter.check(req.ip);
+  if (!limit.allowed) {
+    return res.status(429).json({ error: rateLimitMessage(limit.retryAfterMs) });
+  }
+  const { setupCode: submittedCode, username, password, displayName } = req.body || {};
+  if (
+    typeof submittedCode !== 'string' || !submittedCode ||
+    !setupCode || !timingSafeEqualString(submittedCode, setupCode)
+  ) {
+    setupAttemptLimiter.recordFailure(req.ip);
+    return res.status(401).json({ error: 'Einrichtungscode falsch.' });
+  }
   if (typeof username !== 'string' || !USERNAME_PATTERN.test(username)) {
     return res.status(400).json({
       error: 'Benutzername muss 3-30 Zeichen lang sein (nur Buchstaben, Zahlen, "_", "-" und ".").',
@@ -309,11 +415,64 @@ app.post('/api/register', (req, res) => {
   if (typeof password !== 'string' || password.length < 8) {
     return res.status(400).json({ error: 'Das Passwort muss mindestens 8 Zeichen lang sein' });
   }
+  // Ab hier bis einschließlich upsertUser() läuft alles synchron (kein await,
+  // keine I/O-Rückrufe dazwischen) - Node.js verarbeitet HTTP-Anfragen
+  // einzeln nacheinander im selben Thread, ein zweites, praktisch
+  // gleichzeitig eintreffendes POST /api/setup kann diese Funktion daher
+  // frühestens NACH dem kompletten Durchlauf dieser Anfrage starten und
+  // findet dann isSetupMode() bereits als false vor (Prüfung ganz oben).
+  // Ein echtes Race zweier gleichzeitig erfolgreicher Ersteinrichtungen ist
+  // damit ausgeschlossen.
   if (userStore.findUser(username)) {
     return res.status(409).json({ error: 'Dieser Benutzername ist bereits vergeben' });
   }
   const user = userStore.upsertUser({ username, password, displayName });
   seedNewUserState(user.username);
+  setupAttemptLimiter.recordSuccess(req.ip);
+
+  const sid = createSession(user.username);
+  res.cookie(SESSION_COOKIE_NAME, sid, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: req.secure,
+    maxAge: SESSION_MAX_AGE_MS,
+    path: '/',
+  });
+  res.json({ ok: true, username: user.username, displayName: user.displayName });
+});
+
+app.post('/api/register', (req, res) => {
+  // Muss vor der ALLOW_REGISTRATION-Prüfung stehen: sonst ließe sich die
+  // Ersteinrichtung (samt Einrichtungscode-Schutz) umgehen, indem man
+  // stattdessen direkt hier registriert, während noch kein Benutzer existiert.
+  if (isSetupMode()) {
+    return res.status(403).json({ error: 'Noch keine Ersteinrichtung durchgeführt. Bitte /setup.html öffnen.' });
+  }
+  if (process.env.ALLOW_REGISTRATION !== 'true') {
+    return res.status(403).json({ error: 'Die Registrierung neuer Benutzer ist auf diesem Server deaktiviert.' });
+  }
+  const limit = registerAttemptLimiter.check(req.ip);
+  if (!limit.allowed) {
+    return res.status(429).json({ error: rateLimitMessage(limit.retryAfterMs) });
+  }
+  const { username, password, displayName } = req.body || {};
+  if (typeof username !== 'string' || !USERNAME_PATTERN.test(username)) {
+    registerAttemptLimiter.recordFailure(req.ip);
+    return res.status(400).json({
+      error: 'Benutzername muss 3-30 Zeichen lang sein (nur Buchstaben, Zahlen, "_", "-" und ".").',
+    });
+  }
+  if (typeof password !== 'string' || password.length < 8) {
+    registerAttemptLimiter.recordFailure(req.ip);
+    return res.status(400).json({ error: 'Das Passwort muss mindestens 8 Zeichen lang sein' });
+  }
+  if (userStore.findUser(username)) {
+    registerAttemptLimiter.recordFailure(req.ip);
+    return res.status(409).json({ error: 'Dieser Benutzername ist bereits vergeben' });
+  }
+  const user = userStore.upsertUser({ username, password, displayName });
+  seedNewUserState(user.username);
+  registerAttemptLimiter.recordSuccess(req.ip);
 
   // Direkt anmelden, genau wie bei /api/login - nach dem Anlegen soll man
   // sofort in der frisch eingerichteten App landen.

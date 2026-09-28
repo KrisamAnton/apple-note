@@ -266,11 +266,13 @@ Alle Notizen, Ordner, Bilder und PDFs werden auf einem eigenen kleinen
   viele große PDFs (z. B. 100 Stück à 30 MB) sind kein Problem, solange
   auf dem Server genug Festplattenplatz vorhanden ist.
 - **Login erforderlich**: Ohne gültige Anmeldung ist weder die App noch
-  die API erreichbar (Umleitung zu `login.html`). Benutzer können sich
-  über den Link „Neuen Benutzer anlegen" auf der Anmeldeseite selbst
-  registrieren (offen für jeden mit der Login-URL - bewusst keine
-  Einladungscode-Pflicht) oder alternativ per Kommandozeile angelegt
-  werden (siehe „Benutzer anlegen" unten).
+  die API erreichbar (Umleitung zu `login.html`). Der allererste
+  Benutzer wird bei der Ersteinrichtung über `/setup.html` mit einem
+  einmaligen Einrichtungscode angelegt (siehe „Erster Start" unten).
+  Danach ist die **Selbstregistrierung standardmäßig deaktiviert** –
+  weitere Benutzer legt man entweder per Kommandozeile an (siehe
+  „Weitere Benutzer anlegen" unten) oder schaltet die
+  Selbstregistrierung bewusst über `ALLOW_REGISTRATION=true` frei.
   Jeder Benutzer hat einen eigenen, privaten Notizbereich (getrennt von
   allen anderen) - außer der Seite „Erklärung KrisNote" samt
   Unterseiten: Die wird jedem neuen Benutzer einmalig als Kopie
@@ -331,22 +333,6 @@ npm install
 PORT=3000 npm start
 ```
 
-### Benutzer anlegen
-
-Ohne mindestens einen Benutzer ist die App nicht erreichbar (nur die
-Anmeldeseite selbst). Benutzer werden per Kommandozeile angelegt oder
-aktualisiert (überschreibt bei bestehendem Benutzernamen nur das
-Passwort/den Anzeigenamen):
-
-```bash
-node server/create-user.js <benutzername> <passwort> [Anzeigename]
-```
-
-Passwörter werden gesalzen und gehasht (`crypto.scrypt`) in
-`data/users.json` abgelegt, nie im Klartext. Die Sitzung nach dem
-Anmelden ist 30 Tage gültig (Cookie) und lebt nur im Arbeitsspeicher
-des Servers - ein Neustart meldet alle wieder ab.
-
 Für den Dauerbetrieb empfiehlt sich ein Prozess-Manager wie `pm2` oder
 ein systemd-Service, damit der Server nach einem Neustart automatisch
 wieder hochfährt. Die Adresse (z. B. eine eigene Domain/Subdomain)
@@ -380,6 +366,71 @@ modernen CPU ohne Grafikkarte in etwa 1-3-facher Aufnahmedauer;
 serverseitig strikt nacheinander und mit niedrigster Prozess-Priorität,
 damit eine lange Aufnahme weder die App selbst noch andere Dienste auf
 demselben Server ausbremst.
+
+## Erster Start
+
+Diese Schritte sind nur **einmal** nötig, direkt nachdem der Server zum
+ersten Mal gestartet wurde (noch kein Benutzer vorhanden):
+
+1. Server wie oben beschrieben starten (`npm start` bzw. den
+   Docker-Container/systemd-Dienst starten).
+2. Im **Server-Log** nach der Zeile `Einrichtungscode:` suchen:
+   - Bei **Docker**: `docker logs <containername>` bzw.
+     `docker compose logs` ausführen.
+   - Bei **systemd**: `journalctl -u krisnote -n 50` ausführen
+     (Dienstname ggf. anpassen).
+   - Sonst: einfach im Terminal/Fenster nachsehen, in dem der Server
+     gestartet wurde.
+   - Der Code sieht z. B. so aus: `Einrichtungscode: 3f9a1c7e02b4`.
+3. Im Browser `http://<server-adresse>:3000/setup.html` öffnen (bzw.
+   `http://localhost:3000/setup.html`, wenn man direkt auf dem Server
+   sitzt - `/login.html` leitet automatisch dorthin um, solange noch
+   kein Benutzer existiert).
+4. Einrichtungscode, gewünschten Benutzernamen, optional einen
+   Anzeigenamen und ein Passwort (mind. 8 Zeichen) eingeben und auf
+   „Benutzer anlegen & einrichten" klicken. Man ist danach sofort
+   angemeldet.
+5. Sobald dieser erste Benutzer existiert, ist `/setup.html` dauerhaft
+   gesperrt (leitet nur noch zu `/login.html` weiter) - ein erneuter
+   Aufruf kann also nichts mehr verändern oder überschreiben.
+
+**Falscher Code:** Nach 5 Fehlversuchen wird die Ersteinrichtung für
+15 Minuten gesperrt (schützt davor, dass jemand anderes im selben
+Netzwerk den Code errät, bevor man ihn selbst eingibt). Der Code lässt
+sich statt der zufälligen Erzeugung auch fest über die Umgebungsvariable
+`SETUP_CODE` vorgeben.
+
+**Selbstregistrierung (`ALLOW_REGISTRATION`):** Nach der Ersteinrichtung
+ist der „Neuen Benutzer anlegen"-Link auf der Anmeldeseite standardmäßig
+**ausgeblendet**, und `/api/register` antwortet mit „deaktiviert" (403).
+Das sollte man nur bewusst einschalten, wenn tatsächlich beliebige
+Personen mit Zugriff auf die Server-Adresse sich selbst einen Zugang
+anlegen dürfen sollen:
+
+```bash
+ALLOW_REGISTRATION=true PORT=3000 npm start
+```
+
+### Weitere Benutzer anlegen
+
+Unabhängig von `ALLOW_REGISTRATION` lassen sich weitere Benutzer immer
+auch per Kommandozeile auf dem Server anlegen oder aktualisieren
+(überschreibt bei bestehendem Benutzernamen nur das Passwort/den
+Anzeigenamen):
+
+```bash
+node server/create-user.js <benutzername> <passwort> [Anzeigename]
+```
+
+Passwörter werden gesalzen und gehasht (`crypto.scrypt`) in
+`data/users.json` abgelegt, nie im Klartext. Die Sitzung nach dem
+Anmelden ist 30 Tage gültig (Cookie) und lebt nur im Arbeitsspeicher
+des Servers - ein Neustart meldet alle wieder ab.
+
+**Bestehende Installationen:** Ist bereits mindestens ein Benutzer
+vorhanden, ändert sich am gewohnten Ablauf nichts - kein
+Einrichtungsmodus, `/setup.html` leitet einfach zu `/login.html` um,
+bestehende Logins gelten unverändert weiter.
 
 ## Nächste Schritte
 
