@@ -2799,6 +2799,13 @@
         if (name === 'href' && tag === 'A') continue; // unten separat geprüft
         node.removeAttribute(attr.name);
       }
+      if (tag === 'SPAN' && node.attributes.length === 0) {
+        // Ein Span ohne jede Eigenschaft (z. B. weil alle Standard-Stile
+        // verworfen wurden) ist nur ein leerer Wrapper.
+        while (node.firstChild) node.parentNode.insertBefore(node.firstChild, node);
+        node.remove();
+        continue;
+      }
       if (tag === 'A') {
         const href = (node.getAttribute('href') || '').trim();
         if (/^(https?:|mailto:)/i.test(href)) {
@@ -3298,31 +3305,202 @@
     return range;
   }
 
+  // Elemente, die beim Neuaufbau einer Zeile aus HTML ihre Klick-Handler/
+  // Besonderheiten verlieren würden - Zeilen damit werden weiterhin direkt am
+  // echten DOM formatiert (die Knoten bleiben dabei erhalten).
+  const FORMAT_DIRECT_ONLY_SELECTOR = 'img, .inline-pdf-chip, .inline-reminder-marker, [contenteditable="false"], audio, video, canvas';
+
+  function nodePathFrom(node, root) {
+    const path = [];
+    let n = node;
+    while (n !== root) {
+      const parent = n.parentNode;
+      if (!parent) return null;
+      path.unshift(Array.prototype.indexOf.call(parent.childNodes, n));
+      n = parent;
+    }
+    return path;
+  }
+
+  function nodeAtPath(root, path) {
+    let n = root;
+    for (const i of path) {
+      n = n && n.childNodes[i];
+      if (!n) return null;
+    }
+    return n;
+  }
+
+  // Die "Zeile", in der eine Formatierung ersetzt wird: ein Zeilen-<div>/<p>
+  // oder - für Text, der direkt im Textfeld steht (typisch: die erste Zeile) -
+  // die zusammenhängende Folge solcher Knoten bis zum nächsten Zeilen-Block.
+  function formatUnitOf(range, body) {
+    const children = Array.prototype.slice.call(body.childNodes);
+    const indexOf = (container, offset, isStart) =>
+      container === body ? (isStart ? offset : offset - 1) : children.indexOf(lineBlockOf(container, body));
+    const si = indexOf(range.startContainer, range.startOffset, true);
+    let ei = indexOf(range.endContainer, range.endOffset, false);
+    if (si < 0 || si >= children.length) return null;
+    ei = Math.min(Math.max(ei, si), children.length - 1);
+    if (isLineBlockEl(children[si])) return si === ei ? { block: children[si], i0: si, i1: si } : null;
+    let i0 = si;
+    while (i0 > 0 && !isLineBlockEl(children[i0 - 1])) i0--;
+    let i1 = si;
+    while (i1 < children.length - 1 && !isLineBlockEl(children[i1 + 1])) i1++;
+    return ei <= i1 ? { block: null, i0, i1 } : null;
+  }
+
+  function unitNodes(unit, body) {
+    return unit.block
+      ? Array.prototype.slice.call(unit.block.childNodes)
+      : Array.prototype.slice.call(body.childNodes, unit.i0, unit.i1 + 1);
+  }
+
+  function normalizeForCompare(html) {
+    return html
+      .replace(/<br\s*\/?>/gi, '')
+      .replace(/&nbsp;|\u00a0/g, ' ')
+      .replace(/ style=""/g, '')
+      .replace(/<\/?span>/gi, '')
+      .replace(/\s+/g, ' ');
+  }
+
   // Wendet eine Formatierung so an, dass der Browser sie in seinen eigenen
   // Rückgängig-Verlauf aufnimmt: Direkte DOM-Änderungen (extractContents/
   // insertNode) kennt der Verlauf nicht - der Rückgängig-Knopf übersprang die
   // Formatierung deshalb und machte stattdessen die davor getippte Änderung
-  // rückgängig. Hier wird die Änderung zuerst an einer losgelösten Kopie des
-  // Bereichs ausgeführt und das Ergebnis dann per insertHTML an die Stelle der
-  // Auswahl gesetzt (ein echter, rückgängig machbarer Browser-Schritt).
-  // Klappt das nicht, wird wie bisher direkt am echten DOM gearbeitet.
-  function applyFormatUndoable(range, body, applyFn) {
+  // rückgängig. Hier wird die Änderung zuerst an einer losgelösten Kopie der
+  // ganzen Zeile ausgeführt und die Zeile dann per insertHTML ersetzt (ein
+  // echter, rückgängig machbarer Browser-Schritt).
+  //
+  // Zwei Besonderheiten von insertHTML sind dabei wichtig:
+  // - Ersetzt man Text, dessen Anfang formatiert ist (z. B. markiert), und das
+  //   eingefügte Stück endet nicht mit einem Zeilenumbruch, übernimmt Chrome
+  //   die Formatierung des ersetzten Textes - "Markierung entfernen" würde
+  //   dann nichts bewirken. Ein abschließendes <br> verhindert das.
+  // - Chrome kann eingefügtes HTML umbauen. Deshalb wird das Ergebnis mit dem
+  //   erwarteten Zustand verglichen; weicht es ab, wird der Schritt
+  //   zurückgenommen und wie früher direkt am echten DOM gearbeitet (dann
+  //   ohne Rückgängig-Schritt, aber immer korrekt).
+  function applyFormatUndoable(ranges, body, applyFn) {
+    const first = ranges[0];
+    const unit = formatUnitOf(first, body);
+    const nodes = unit ? unitNodes(unit, body) : [];
+    const direct = !unit || nodes.length === 0 ||
+      nodes.some((n) => n.nodeType === Node.ELEMENT_NODE && (n.matches(FORMAT_DIRECT_ONLY_SELECTOR) || n.querySelector(FORMAT_DIRECT_ONLY_SELECTOR)));
+
+    // Auswahlen als Pfade merken, um sie nach einem eventuellen Zurücknehmen
+    // wiederherstellen zu können.
+    const saved = ranges.map((r) => ({
+      sp: nodePathFrom(r.startContainer, body),
+      ep: nodePathFrom(r.endContainer, body),
+      so: r.startOffset,
+      eo: r.endOffset,
+    }));
+    const applyDirect = () => {
+      ranges.forEach((r, i) => {
+        let live = r;
+        const sv = saved[i];
+        if (sv.sp && sv.ep) {
+          const sc = nodeAtPath(body, sv.sp);
+          const ec = nodeAtPath(body, sv.ep);
+          if (sc && ec) {
+            live = document.createRange();
+            live.setStart(sc, sv.so);
+            live.setEnd(ec, sv.eo);
+          }
+        }
+        applyFn(live);
+      });
+    };
+    if (direct) {
+      ranges.forEach((r) => applyFn(r));
+      return;
+    }
+
+    // Losgelöste Kopie der Zeile + dieselben Auswahlen darin.
     const tmp = document.createElement('div');
-    tmp.appendChild(range.cloneContents());
-    const tmpRange = document.createRange();
-    tmpRange.selectNodeContents(tmp);
+    nodes.forEach((n) => tmp.appendChild(n.cloneNode(true)));
+    const mapBoundary = (container, offset) => {
+      if (unit.block) {
+        const p = container === unit.block ? [] : nodePathFrom(container, unit.block);
+        return p ? [nodeAtPath(tmp, p), offset] : null;
+      }
+      if (container === body) return [tmp, Math.max(0, Math.min(tmp.childNodes.length, offset - unit.i0))];
+      const p = nodePathFrom(container, body);
+      if (!p) return null;
+      p[0] -= unit.i0;
+      return [nodeAtPath(tmp, p), offset];
+    };
+    const tmpRanges = [];
+    for (const r of ranges) {
+      const s = mapBoundary(r.startContainer, r.startOffset);
+      const e = mapBoundary(r.endContainer, r.endOffset);
+      if (!s || !e || !s[0] || !e[0]) {
+        applyDirect();
+        return;
+      }
+      const tr = document.createRange();
+      tr.setStart(s[0], s[1]);
+      tr.setEnd(e[0], e[1]);
+      tmpRanges.push(tr);
+    }
+
     let committed = false;
     try {
-      applyFn(tmpRange);
-      const sel = window.getSelection();
+      tmpRanges.forEach((tr) => applyFn(tr));
+
+      const expected = body.cloneNode(true);
+      if (unit.block) {
+        expected.childNodes[unit.i0].innerHTML = tmp.innerHTML;
+      } else {
+        const old = Array.prototype.slice.call(expected.childNodes, unit.i0, unit.i1 + 1);
+        Array.prototype.forEach.call(tmp.childNodes, (n) => expected.insertBefore(n.cloneNode(true), old[0]));
+        old.forEach((n) => expected.removeChild(n));
+      }
+
+      const selRange = document.createRange();
+      if (unit.block) {
+        selRange.selectNodeContents(unit.block);
+      } else {
+        // Einen abschließenden Zeilenumbruch der Zeile NICHT mitmarkieren:
+        // schließt die Auswahl ihn ein, verschmilzt Chrome die Zeile beim
+        // Ersetzen mit der darauffolgenden.
+        const last = nodes[nodes.length - 1];
+        const selLast = last.nodeName === 'BR' && nodes.length > 1 ? nodes[nodes.length - 2] : last;
+        selRange.setStartBefore(nodes[0]);
+        selRange.setEndAfter(selLast);
+      }
       body.focus({ preventScroll: true });
+      const sel = window.getSelection();
       sel.removeAllRanges();
-      sel.addRange(range);
-      committed = document.execCommand('insertHTML', false, tmp.innerHTML);
+      sel.addRange(selRange);
+      const html = tmp.innerHTML.replace(/(<br\s*\/?>)+$/i, '') + '<br>';
+      committed = document.execCommand('insertHTML', false, html);
+      if (committed && normalizeForCompare(body.innerHTML) !== normalizeForCompare(expected.innerHTML)) {
+        document.execCommand('undo');
+        committed = false;
+      }
     } catch (err) {
       committed = false;
     }
-    if (!committed) applyFn(range);
+    if (!committed) applyDirect();
+  }
+
+  // Wendet eine Formatierung auf alle (bereits nach Zeilen getrennten)
+  // Teilbereiche an: Bereiche derselben Zeile werden in EINEM Schritt
+  // ersetzt, die Zeilen von hinten nach vorn - so verschieben frühere
+  // Ersetzungen weder Positionen noch Bereiche der noch folgenden Zeilen.
+  function applyFormatToRanges(ranges, body, applyFn) {
+    const groups = [];
+    for (const r of ranges) {
+      const unit = formatUnitOf(r, body);
+      const key = unit ? (unit.block ? `b${unit.i0}` : `r${unit.i0}-${unit.i1}`) : null;
+      const last = groups[groups.length - 1];
+      if (key && last && last.key === key) last.ranges.push(r);
+      else groups.push({ key, ranges: [r] });
+    }
+    for (let i = groups.length - 1; i >= 0; i--) applyFormatUndoable(groups[i].ranges, body, applyFn);
   }
 
   function withActiveSelection(fn) {
@@ -3333,10 +3511,8 @@
     }
     const { note, obj, objEl, body } = activeTextEdit;
     const ranges = splitRangeByLine(targetRange, body);
-    for (const range of ranges) {
-      expandRangeToElementBoundaries(range, body);
-      applyFormatUndoable(range, body, (r) => fn(r, note, obj, body));
-    }
+    for (const range of ranges) expandRangeToElementBoundaries(range, body);
+    applyFormatToRanges(ranges, body, (r) => fn(r, note, obj, body));
     saveTextObjContent(note, obj, body);
     updateTextEmptyState(body);
     growFreeTextToFit(obj, objEl, body);
@@ -3484,7 +3660,51 @@
     range.insertNode(mark);
   }
 
+  function closestMarker(node) {
+    let n = node.nodeType === Node.TEXT_NODE ? node.parentNode : node;
+    while (n && n.nodeType === Node.ELEMENT_NODE) {
+      if (n.tagName === 'MARK' && n.classList.contains('marker')) return n;
+      n = n.parentNode;
+    }
+    return null;
+  }
+
   function removeHighlightFromRange(range) {
+    // Liegt die Auswahl komplett INNERHALB einer einzelnen Markierung, bliebe
+    // der herausgelöste Text sonst wieder in ihr stehen - die Markierung wird
+    // daher rund um die Auswahl aufgespalten (Teil davor und danach bleibt
+    // markiert, nur der ausgewählte Teil nicht, wie in Word).
+    const startMark = closestMarker(range.startContainer);
+    if (startMark && startMark === closestMarker(range.endContainer)) {
+      const before = document.createRange();
+      before.setStart(startMark, 0);
+      before.setEnd(range.startContainer, range.startOffset);
+      const after = document.createRange();
+      after.setStart(range.endContainer, range.endOffset);
+      after.setEnd(startMark, startMark.childNodes.length);
+      const beforeFrag = before.cloneContents();
+      const midFrag = range.cloneContents();
+      const afterFrag = after.cloneContents();
+      const wrapIfNotEmpty = (frag) => {
+        if (!frag.textContent && !frag.querySelector('br, img')) return null;
+        const m = startMark.cloneNode(false);
+        m.appendChild(frag);
+        return m;
+      };
+      const parent = startMark.parentNode;
+      const beforeMark = wrapIfNotEmpty(beforeFrag);
+      const afterMark = wrapIfNotEmpty(afterFrag);
+      midFrag.querySelectorAll('mark.marker').forEach((markEl) => {
+        const p = markEl.parentNode;
+        while (markEl.firstChild) p.insertBefore(markEl.firstChild, markEl);
+        p.removeChild(markEl);
+      });
+      if (beforeMark) parent.insertBefore(beforeMark, startMark);
+      parent.insertBefore(midFrag, startMark);
+      if (afterMark) parent.insertBefore(afterMark, startMark);
+      parent.removeChild(startMark);
+      return;
+    }
     const frag = range.extractContents();
     frag.querySelectorAll('mark.marker').forEach((markEl) => {
       const parent = markEl.parentNode;
