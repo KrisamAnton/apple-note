@@ -2812,6 +2812,33 @@
     }
   }
 
+  // Beim Kopieren innerhalb von KrisNote hängt der Browser jedem Stück die
+  // berechneten Stile der Umgebung an (Standard-Textfarbe, 15px, weißer
+  // Editor-Hintergrund ...). Diese Werte sind nichts, was der Nutzer so
+  // formatiert hat, sondern nur der Normalzustand - übernommen verdecken sie
+  // aber später z. B. den Marker (opaker weißer Hintergrund im markierten
+  // Bereich, es blieben nur Streifen sichtbar) bzw. verhindern, dass Fett
+  // wirkt (font-weight: 400 fest eingetragen). Solche Normalwerte werden
+  // deshalb gar nicht erst übernommen.
+  const PASTE_DEFAULT_BACKGROUNDS = new Set([
+    'transparent', 'white', '#fff', '#ffffff', 'rgb(255, 255, 255)', 'rgba(255, 255, 255, 1)',
+    'rgba(0, 0, 0, 0)', 'rgb(36, 36, 38)', 'rgb(44, 44, 46)', 'rgb(250, 250, 248)', 'rgb(32, 32, 34)',
+  ]);
+  const PASTE_DEFAULT_COLORS = new Set(['rgb(28, 28, 30)', 'rgb(242, 242, 247)']);
+
+  function isDefaultPastedStyle(prop, value) {
+    const v = value.replace(/\s+/g, ' ').trim().toLowerCase();
+    switch (prop) {
+      case 'background-color': return PASTE_DEFAULT_BACKGROUNDS.has(v);
+      case 'color': return PASTE_DEFAULT_COLORS.has(v);
+      case 'font-weight': return v === '400' || v === 'normal';
+      case 'font-style': return v === 'normal';
+      case 'font-size': return v === '15px';
+      case 'font-family': return v.startsWith('calibri, -apple-system');
+      default: return false;
+    }
+  }
+
   function sanitizeStyleAttr(styleText) {
     const parts = [];
     for (const decl of styleText.split(';')) {
@@ -2821,6 +2848,7 @@
       const value = decl.slice(idx + 1).trim();
       if (!PASTE_ALLOWED_STYLE_PROPS.has(prop)) continue;
       if (!value || /expression|javascript:|url\(/i.test(value)) continue;
+      if (isDefaultPastedStyle(prop, value)) continue;
       parts.push(`${prop}: ${value}`);
     }
     return parts.join('; ');
@@ -3270,6 +3298,33 @@
     return range;
   }
 
+  // Wendet eine Formatierung so an, dass der Browser sie in seinen eigenen
+  // Rückgängig-Verlauf aufnimmt: Direkte DOM-Änderungen (extractContents/
+  // insertNode) kennt der Verlauf nicht - der Rückgängig-Knopf übersprang die
+  // Formatierung deshalb und machte stattdessen die davor getippte Änderung
+  // rückgängig. Hier wird die Änderung zuerst an einer losgelösten Kopie des
+  // Bereichs ausgeführt und das Ergebnis dann per insertHTML an die Stelle der
+  // Auswahl gesetzt (ein echter, rückgängig machbarer Browser-Schritt).
+  // Klappt das nicht, wird wie bisher direkt am echten DOM gearbeitet.
+  function applyFormatUndoable(range, body, applyFn) {
+    const tmp = document.createElement('div');
+    tmp.appendChild(range.cloneContents());
+    const tmpRange = document.createRange();
+    tmpRange.selectNodeContents(tmp);
+    let committed = false;
+    try {
+      applyFn(tmpRange);
+      const sel = window.getSelection();
+      body.focus({ preventScroll: true });
+      sel.removeAllRanges();
+      sel.addRange(range);
+      committed = document.execCommand('insertHTML', false, tmp.innerHTML);
+    } catch (err) {
+      committed = false;
+    }
+    if (!committed) applyFn(range);
+  }
+
   function withActiveSelection(fn) {
     const targetRange = currentFormatRange();
     if (!activeTextEdit || !targetRange) {
@@ -3280,7 +3335,7 @@
     const ranges = splitRangeByLine(targetRange, body);
     for (const range of ranges) {
       expandRangeToElementBoundaries(range, body);
-      fn(range, note, obj, body);
+      applyFormatUndoable(range, body, (r) => fn(r, note, obj, body));
     }
     saveTextObjContent(note, obj, body);
     updateTextEmptyState(body);
@@ -3406,6 +3461,25 @@
     mark.className = 'marker';
     mark.style.backgroundColor = hexToRgba(hex, alpha);
     const frag = range.extractContents();
+    // Ein neuer Marker ersetzt einen früheren (wie in Word) und darf nicht von
+    // einem Hintergrund eines inneren Elements überdeckt werden - ein
+    // deckender Hintergrund (z. B. von eingefügtem Text) ließe sonst nur die
+    // Ränder der Markierung sichtbar.
+    frag.querySelectorAll('mark.marker').forEach((markEl) => {
+      const parent = markEl.parentNode;
+      while (markEl.firstChild) parent.insertBefore(markEl.firstChild, markEl);
+      parent.removeChild(markEl);
+    });
+    frag.querySelectorAll('[style]').forEach((node) => {
+      if (!node.style.backgroundColor && !node.style.background) return;
+      node.style.background = '';
+      node.style.backgroundColor = '';
+      if (node.tagName === 'SPAN' && !node.getAttribute('style')) {
+        const parent = node.parentNode;
+        while (node.firstChild) parent.insertBefore(node.firstChild, node);
+        parent.removeChild(node);
+      }
+    });
     mark.appendChild(frag);
     range.insertNode(mark);
   }
