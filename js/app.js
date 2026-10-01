@@ -6887,7 +6887,11 @@
 
     let searchDebounce = null;
     el.searchInput.addEventListener('input', () => {
-      if (!realSearchEdit) {
+      // Ausnahme: Der eingebaute "x"-Knopf des Suchfelds löst ein "input" OHNE
+      // vorheriges "beforeinput" aus - ein leerer Wert ist aber nie eine
+      // Autofill-Fremdbefüllung (die setzt immer Text ein) und muss deshalb
+      // immer als echtes Löschen gelten.
+      if (!realSearchEdit && el.searchInput.value !== '') {
         el.searchInput.value = searchQuery;
         return;
       }
