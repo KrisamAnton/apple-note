@@ -1088,7 +1088,32 @@
         : selectedFolderId === TRASH_FOLDER_ID
           ? 'Papierkorb'
           : (state.folders.find((f) => f.id === selectedFolderId) || {}).name || '';
-    el.noteCount.textContent = notes.length > 0 ? `${label} (${notes.length})` : label;
+    // Bei aktiver Suche: Ist die geöffnete Notiz eine Unterseite, zeigt die
+    // Überschrift zusätzlich den Weg über ihre übergeordneten Seiten
+    // (z. B. "IT / Homelab › Server › Proxmox"), damit man bei einem
+    // Suchergebnis sieht, wo es eigentlich liegt.
+    let pathLabel = label;
+    if (searchQuery.trim() && notes.some((n) => n.id === selectedNoteId)) {
+      const parents = [];
+      let cur = findNote(selectedNoteId);
+      while (cur && cur.parentNoteId) {
+        cur = findNote(cur.parentNoteId);
+        if (cur) parents.unshift(cur.title || 'Ohne Titel');
+      }
+      if (parents.length > 0) pathLabel = `${label} › ${parents.join(' › ')}`;
+    }
+    el.noteCount.textContent = '';
+    const pathEl = document.createElement('span');
+    pathEl.className = 'note-count-path';
+    pathEl.textContent = pathLabel;
+    el.noteCount.appendChild(pathEl);
+    if (notes.length > 0) {
+      const countEl = document.createElement('span');
+      countEl.className = 'note-count-num';
+      countEl.textContent = ` (${notes.length})`;
+      el.noteCount.appendChild(countEl);
+    }
+    el.noteCount.title = pathLabel;
 
     if (notes.length === 0) {
       const empty = document.createElement('div');
@@ -1196,6 +1221,23 @@
       if (!isSearchMode && !isTrashView) wireNoteItemDrag(item, note);
       item.addEventListener('click', () => {
         if (noteDragSuppressClick) return;
+        // Bei der Suche springt die Hauptüberschrift (Ordner) mit zum Ordner
+        // der angeklickten Notiz - die Trefferliste selbst bleibt unverändert.
+        // Wird die Suche danach geleert, steht man gleich im richtigen Ordner.
+        if (isSearchMode && !isTrashView) {
+          const targetFolder = note.folderId || null;
+          if (targetFolder !== selectedFolderId) {
+            selectedFolderId = targetFolder;
+            renderFolders();
+          }
+          // Übergeordnete Seiten aufklappen, damit die Notiz nach dem Leeren
+          // der Suche nicht in einer zugeklappten Unterseiten-Gruppe versteckt ist.
+          let anc = note.parentNoteId ? findNote(note.parentNoteId) : null;
+          while (anc) {
+            collapsedNoteIds.delete(anc.id);
+            anc = anc.parentNoteId ? findNote(anc.parentNoteId) : null;
+          }
+        }
         selectNote(note.id);
       });
       el.noteList.appendChild(item);

@@ -525,11 +525,25 @@ textarea {
 }
 
 .note-count {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  white-space: pre;
   font-size: 12px;
   font-weight: 600;
   color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.02em;
+}
+
+.note-count-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.note-count-num {
+  flex: none;
 }
 
 .note-count-row-actions {
