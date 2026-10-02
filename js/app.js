@@ -2323,7 +2323,19 @@
       overlay.addEventListener('pointercancel', cleanup);
     });
 
-    body.addEventListener('blur', () => exitTextEdit(obj, body, overlay));
+    body.addEventListener('blur', () => {
+      // Öffnet sich das native Kontextmenü des Browsers (z. B. mit den
+      // Rechtschreibvorschlägen), verliert je nach Browser das ganze FENSTER
+      // kurz den Fokus - das Textfeld bekommt dabei ebenfalls ein "blur".
+      // Würde hier der Bearbeitungsmodus beendet (contentEditable aus), kann
+      // der Browser den angeklickten Vorschlag nicht mehr einsetzen, und die
+      // rote Markierung verschwindet. Verliert nur das Fenster den Fokus
+      // (document.hasFocus() ist dann false), bleibt das Textfeld deshalb
+      // im Bearbeitungsmodus - ein echter Klick woanders auf der Seite löst
+      // weiterhin ganz normal das Verlassen aus.
+      if (!document.hasFocus()) return;
+      exitTextEdit(obj, body, overlay);
+    });
     // Im Bearbeitungsmodus liegt kein Overlay mehr über dem Text (siehe
     // findInternalLinkAtPoint()) - ein Klick auf einen internen Link würde
     // ohne diesen Handler nur den Cursor an die Klickstelle setzen, statt
