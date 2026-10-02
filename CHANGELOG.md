@@ -4,6 +4,10 @@ Hier steht, was wann geändert wurde (neueste Einträge oben). Die Versionsnumme
 steht klein neben dem Benutzernamen; bei jeder Änderung erhöht sich die letzte
 Zahl (1.7.1 → 1.7.2 → …).
 
+## 1.7.2 - 02.10.2026
+
+- Rückgängig: Text, der in ein Textfeld eingefügt wurde (auch wenn dabei markierter Text ersetzt wurde), lässt sich jetzt wieder mit dem Rückgängig-Pfeil oder Strg+Z zurücknehmen.
+
 ## 1.7.1 - 02.10.2026
 
 - Neu: Versionsnummer klein neben dem Benutzernamen sichtbar.

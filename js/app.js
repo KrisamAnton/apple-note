@@ -2697,6 +2697,11 @@
   function insertPlainTextAtCaret(text) {
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0) return;
+    // Über den Editor-Befehl einfügen (nicht direkt per Range-API): Nur so
+    // landet das Einfügen - samt dem dabei ersetzten markierten Text - als
+    // eigener Schritt im Rückgängig-Verlauf des Browsers. Direkte DOM-Änderungen
+    // kennt er nicht, ein späteres Rückgängig (Pfeil/Strg+Z) wirkte dann gar nicht.
+    if (document.execCommand('insertText', false, text)) return;
     const range = sel.getRangeAt(0);
     range.deleteContents();
     range.insertNode(document.createTextNode(text));
@@ -2708,9 +2713,41 @@
   // Fügt bereinigtes HTML (siehe sanitizePastedHtml) an der Cursor-Position ein -
   // wie insertPlainTextAtCaret, nur für mehrere/verschachtelte Knoten statt eines
   // einzelnen Textknotens.
+  // Der Editor-Befehl "insertHTML" hängt an eingefügte Stellen gern Stil-Angaben
+  // wie "font-style: inherit; background-color: transparent" an, die nichts
+  // bewirken und das gespeicherte HTML nur aufblähen. Hier werden NUR diese
+  // wirkungslosen Angaben aus dem style-Attribut entfernt (Attribut-Änderung,
+  // keine Änderung der Knoten-Struktur) - die Knoten selbst bleiben stehen,
+  // damit das Rückgängig des Browsers das Einfügen weiterhin sauber zurücknimmt.
+  function stripInsertHtmlStyleNoise(fromNode) {
+    const body = fromNode && (fromNode.nodeType === Node.ELEMENT_NODE ? fromNode : fromNode.parentElement);
+    const root = body && body.closest ? body.closest('.canvas-text-body') : null;
+    if (!root) return;
+    root.querySelectorAll('[style]').forEach((node) => {
+      const kept = [];
+      for (const decl of node.getAttribute('style').split(';')) {
+        const d = decl.trim();
+        if (!d) continue;
+        const idx = d.indexOf(':');
+        const prop = d.slice(0, idx).trim().toLowerCase();
+        const value = d.slice(idx + 1).trim().toLowerCase();
+        if (value === 'inherit') continue;
+        if ((prop === 'background-color' || prop === 'background') && value === 'transparent') continue;
+        kept.push(d);
+      }
+      if (kept.length > 0) node.setAttribute('style', kept.join('; ') + ';');
+      else node.removeAttribute('style');
+    });
+  }
+
   function insertSanitizedHtmlAtCaret(html) {
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0) return;
+    // Siehe insertPlainTextAtCaret(): per Editor-Befehl, damit Rückgängig geht.
+    if (document.execCommand('insertHTML', false, html)) {
+      stripInsertHtmlStyleNoise(sel.anchorNode);
+      return;
+    }
     const range = sel.getRangeAt(0);
     range.deleteContents();
     const container = document.createElement('div');
