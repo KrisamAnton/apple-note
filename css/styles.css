@@ -408,6 +408,26 @@ textarea {
   gap: 8px;
 }
 
+.sidebar-user-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Versionsnummer neben dem Benutzernamen: klein, dünn, dezent. */
+.sidebar-version {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--sidebar-text);
+  opacity: 0.5;
+  white-space: nowrap;
+}
+
+.sidebar-version:empty {
+  display: none;
+}
+
 .sidebar-user-name {
   font-size: 13px;
   font-weight: 600;
@@ -2940,4 +2960,43 @@ textarea.popover-text-input {
    der Ordnerliste eine helle statt dunkle Farbe, sonst wäre er unsichtbar. */
 .folder-list::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.2);
+}
+
+/* Änderungsverlauf (schreibgeschützt) */
+.changelog-modal {
+  max-width: 520px;
+}
+
+.changelog-body {
+  max-height: 60vh;
+  overflow-y: auto;
+  margin-bottom: 14px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-primary);
+  user-select: text;
+}
+
+.changelog-version {
+  margin: 14px 0 6px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.changelog-version:first-child {
+  margin-top: 0;
+}
+
+.changelog-body p {
+  margin: 4px 0;
+  color: var(--text-secondary, var(--text-primary));
+}
+
+.changelog-body ul {
+  margin: 0 0 4px;
+  padding-left: 18px;
+}
+
+.changelog-body li {
+  margin: 3px 0;
 }

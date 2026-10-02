@@ -19,6 +19,12 @@ const {
 } = require('./auth');
 const { makeAttemptLimiter } = require('./rate-limit');
 
+// Einzige Quelle der Versionsnummer ist package.json (siehe CHANGELOG.md für
+// die Änderungen pro Version) - nirgends sonst noch einmal hart hinterlegt,
+// damit z. B. /api/version nie von der tatsächlich installierten Version
+// abweichen kann.
+const APP_VERSION = require('./package.json').version;
+
 const PROJECT_ROOT = path.join(__dirname, '..');
 const DATA_DIR = process.env.DATA_DIR || path.join(PROJECT_ROOT, 'data');
 // Alter, gemeinsamer Datenbestand aus der Zeit vor getrennten Benutzer-Konten
@@ -149,6 +155,7 @@ app.use(express.json({ limit: '25mb' }));
 const PUBLIC_PATHS = new Set([
   '/login.html',
   '/api/login',
+  '/api/version',
   '/api/change-password-public',
   '/api/register',
   '/icons/login-background.webp',
@@ -231,6 +238,19 @@ app.get('/api/auth-status', (req, res) => {
   res.json({
     setupMode: isSetupMode(),
     registrationAllowed: process.env.ALLOW_REGISTRATION === 'true',
+  });
+});
+
+app.get('/api/version', (req, res) => {
+  res.json({ version: APP_VERSION });
+});
+
+// Änderungsverlauf (CHANGELOG.md) für die schreibgeschützte Ansicht unter
+// Einstellungen - nur für angemeldete Benutzer (nicht in PUBLIC_PATHS).
+app.get('/api/changelog', (req, res) => {
+  fs.readFile(path.join(PROJECT_ROOT, 'CHANGELOG.md'), 'utf8', (err, text) => {
+    if (err) return res.status(404).json({ error: 'Kein Änderungsverlauf vorhanden' });
+    res.type('text/plain; charset=utf-8').send(text);
   });
 });
 

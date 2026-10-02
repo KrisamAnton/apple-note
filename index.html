@@ -41,7 +41,10 @@
       </nav>
 
       <div class="sidebar-footer">
-        <button class="sidebar-user-name" id="sidebarUserBtn" type="button">…</button>
+        <div class="sidebar-user-row">
+          <button class="sidebar-user-name" id="sidebarUserBtn" type="button">…</button>
+          <span class="sidebar-version" id="sidebarVersion"></span>
+        </div>
         <button class="sidebar-logout-btn" id="logoutBtn" type="button">Abmelden</button>
       </div>
     </aside>
@@ -353,6 +356,21 @@
       <button type="button" class="popover-item" id="openChangePasswordBtn">
         <span>Passwort ändern</span>
       </button>
+
+      <button type="button" class="popover-item" id="openChangelogBtn">
+        <span>Änderungsverlauf</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Änderungsverlauf: schreibgeschützte Ansicht (Inhalt aus CHANGELOG.md) -->
+  <div class="modal-backdrop" id="changelogModalBackdrop" hidden>
+    <div class="modal changelog-modal" id="changelogModal" role="dialog" aria-modal="true">
+      <p class="modal-title">Änderungsverlauf</p>
+      <div class="changelog-body" id="changelogBody"></div>
+      <div class="popover-form-actions">
+        <button type="button" class="popover-btn popover-btn-primary" id="changelogCloseBtn">Schließen</button>
+      </div>
     </div>
   </div>
 
