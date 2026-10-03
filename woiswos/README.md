@@ -9,21 +9,24 @@ Schritt besprochen und umgesetzt.
 
 ## Grundprinzip
 
-Es gibt nur **Einträge**. Ein Raum, ein Regal, eine Schachtel und ein
-Schalter sind alle derselbe Typ. Jeder Eintrag kann in einem anderen liegen
-und selbst etwas enthalten - beliebig tief:
+Es gibt nur **Einträge** in einer Tabelle, in zwei Typen:
+
+- **📦 Lagerplatz**: Raum, Regal, Fach, Schachtel, Box … - kann etwas enthalten
+- **🔹 Artikel**: der eigentliche Gegenstand mit Menge - liegt in einem Lagerplatz
+
+Lagerplätze lassen sich beliebig tief ineinander verschachteln:
 
     Schrankraum › Regal 1 › Schachtel A › Box blau › Schalter (3×)
 
 - Die Suche zeigt zu jedem Treffer den kompletten Pfad.
 - Wird eine Box verschoben, wandert ihr Inhalt automatisch mit.
 - Löschen entfernt den Eintrag samt Inhalt (mit Rückfrage und Anzahl).
-- Ein Eintrag kann nicht in sich selbst oder in seinen Inhalt verschoben werden.
+- Ein Eintrag kann nicht in sich selbst oder in seinen Inhalt verschoben werden; in einen Artikel kann nichts gelegt werden.
 - Jeder Eintrag hat einen festen Code (`W-000042`), der später für QR-Etiketten genutzt wird.
 
 ## Funktionen in Schritt 1
 
-- Einträge anlegen, bearbeiten (Name, Menge, Notiz), verschieben, löschen
+- Lagerplätze und Artikel anlegen (zwei getrennte Knöpfe), bearbeiten (Typ, Name, Menge, Notiz), verschieben („Ort ändern…“), löschen
 - Beliebig tiefe Verschachtelung mit Pfad-Navigation
 - Suche über Name und Notiz
 - Handyfreundliche Oberfläche, Hell/Dunkel automatisch

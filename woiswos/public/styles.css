@@ -29,10 +29,10 @@ button, .btn { font: inherit; padding: 10px 16px; border-radius: 8px; border: 1p
                background: var(--card); color: var(--text); cursor: pointer; }
 button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 button.danger { color: var(--danger); }
-.fab { position: fixed; right: 16px; bottom: 16px; padding: 14px 20px; border-radius: 999px;
-       box-shadow: 0 2px 8px rgba(0,0,0,.3); }
+.fabs { position: fixed; right: 16px; bottom: 16px; display: flex; gap: 8px; }
+.fabs button { padding: 14px 18px; border-radius: 999px; box-shadow: 0 2px 8px rgba(0,0,0,.3); }
 label { display: block; margin: 10px 0 4px; font-size: 14px; color: var(--muted); }
-input[type=text], input[type=number], textarea { width: 100%; padding: 10px; font: inherit;
+input[type=text], input[type=number], textarea, select { width: 100%; padding: 10px; font: inherit;
   border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); }
 dialog { width: min(94vw, 480px); border: 0; border-radius: 12px; padding: 18px; background: var(--card); color: var(--text); }
 dialog::backdrop { background: rgba(0,0,0,.45); }
