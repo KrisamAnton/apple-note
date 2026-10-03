@@ -3339,3 +3339,70 @@ textarea.popover-text-input {
   aspect-ratio: auto;
   border-radius: 10px;
 }
+
+/* Beschriftete Knöpfe in der Objekt-Leiste (z. B. "Transkript" an Sprachnotizen) */
+.object-toolbar-btn.object-toolbar-btn-labeled {
+  width: auto;
+  padding: 0 8px;
+  gap: 5px;
+}
+
+.object-toolbar-btn-text {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.object-toolbar-main .object-toolbar-btn.object-toolbar-btn-labeled .icon-wide,
+.object-toolbar-btn-labeled .icon-wide {
+  width: 24px;
+  height: 17px;
+}
+
+@media (pointer: coarse) {
+  .object-toolbar-btn.object-toolbar-btn-labeled,
+  .object-toolbar-main .object-toolbar-btn.object-toolbar-btn-labeled {
+    width: auto;
+    padding: 0 12px;
+  }
+
+  .object-toolbar-btn-text {
+    font-size: 14px;
+  }
+
+  .object-toolbar-main .object-toolbar-btn.object-toolbar-btn-labeled .icon-wide {
+    width: 30px;
+    height: 22px;
+  }
+}
+
+/* Laufende Umwandlung: kleiner Dreh-Kreis + Fortschrittsbalken */
+.audio-transcript-working {
+  display: flex;
+  align-items: center;
+  font-style: normal;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.audio-transcript-spinner {
+  display: inline-block;
+  flex: none;
+  width: 13px;
+  height: 13px;
+  margin-right: 4px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: audio-transcript-spin 0.9s linear infinite;
+}
+
+@keyframes audio-transcript-spin {
+  to { transform: rotate(360deg); }
+}
+
+.audio-transcript-hint {
+  margin-top: 4px;
+  font-size: 11px;
+}

@@ -33,6 +33,8 @@
     openFile: '<svg viewBox="0 0 20 20"><path d="M8 3H4.5A1.5 1.5 0 0 0 3 4.5v11A1.5 1.5 0 0 0 4.5 17h11a1.5 1.5 0 0 0 1.5-1.5V12h-1.5v3.5h-11v-11H8V3z" fill="currentColor"/><path d="M11 3h6v6h-1.5V5.6l-6.15 6.15-1.06-1.06L14.44 4.5H11V3z" fill="currentColor"/></svg>',
     mic: '<svg viewBox="0 0 20 20"><path d="M10 2.5a2.5 2.5 0 0 0-2.5 2.5v4a2.5 2.5 0 0 0 5 0V5A2.5 2.5 0 0 0 10 2.5z" fill="currentColor"/><path d="M5.5 9v.5a4.5 4.5 0 0 0 9 0V9H16v.5a6 6 0 0 1-5.25 5.95V17.5h-1.5v-2.05A6 6 0 0 1 4 9.5V9h1.5z" fill="currentColor"/></svg>',
     transcript: '<svg viewBox="0 0 20 20"><path d="M3 4h14v1.6H3V4zm0 4.2h14v1.6H3V8.2zm0 4.2h9v1.6H3v-1.6z" fill="currentColor"/></svg>',
+    // Sprache -> Text: links Schallwelle, Pfeil, rechts Textzeilen.
+    speechToText: '<svg viewBox="0 0 28 20" aria-hidden="true"><rect x="1" y="7" width="2" height="6" rx="1" fill="currentColor"/><rect x="4.5" y="3.5" width="2" height="13" rx="1" fill="currentColor"/><rect x="8" y="6" width="2" height="8" rx="1" fill="currentColor"/><path d="M12.5 10h4.6M15.3 7.7 17.6 10l-2.3 2.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><rect x="19.5" y="4.5" width="8" height="1.8" rx="0.9" fill="currentColor"/><rect x="19.5" y="9.1" width="8" height="1.8" rx="0.9" fill="currentColor"/><rect x="19.5" y="13.7" width="5" height="1.8" rx="0.9" fill="currentColor"/></svg>',
     rename: '<svg viewBox="0 0 20 20"><path d="M13.6 2.4a1.9 1.9 0 0 1 2.7 2.7L7.4 14 4 15l1-3.4 8.6-9.2z" fill="currentColor"/></svg>',
     key: '<svg viewBox="0 0 20 20"><path d="M8 2a4.5 4.5 0 0 0-4.24 6h-.01L1 10.75V15h1.5v-1.5H4V12h1.5v-1.5h1.28A4.5 4.5 0 1 0 8 2zm3.3 4.5a1.3 1.3 0 1 1 0-2.6 1.3 1.3 0 0 1 0 2.6z" fill="currentColor"/></svg>',
     restore: '<svg viewBox="0 0 20 20"><path d="M4 10a6 6 0 1 0 1.9-4.36" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4.2 3.8v3.6h3.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -1654,6 +1656,15 @@
     window.addEventListener('scroll', hide, true);
   }
 
+  // Wie makeToolbarBtn(), aber mit sichtbarer Beschriftung neben dem Symbol - für
+  // Funktionen, deren Symbol allein nichts aussagt (z. B. Sprache -> Text).
+  function makeToolbarLabelBtn(iconSvg, text, onClick, tooltip) {
+    const btn = makeToolbarBtn('', false, onClick, tooltip);
+    btn.classList.add('object-toolbar-btn-labeled');
+    btn.innerHTML = `${iconSvg.replace('<svg ', '<svg class="icon icon-wide" ')}<span class="object-toolbar-btn-text">${text}</span>`;
+    return btn;
+  }
+
   // Schaltet bei einem Text den sichtbaren Rahmen (hinterlegtes "Textfeld") an
   // oder aus ("freier Text"). Das Objekt wird dafür neu aufgebaut, weil sich
   // einige Eigenschaften (Überlauf-Anzeige, Zeilen-Ausrichtung, automatisches
@@ -1758,7 +1769,7 @@
       mainToolbar.appendChild(frameBtn);
     }
     if (obj.type === 'audio') {
-      mainToolbar.appendChild(makeToolbarBtn(ICONS.transcript, false, () => startTranscription(note, obj, objEl), 'In Text umwandeln'));
+      mainToolbar.appendChild(makeToolbarLabelBtn(ICONS.speechToText, 'Transkript', () => startTranscription(note, obj, objEl), 'Sprache in Text umwandeln (Transkript)'));
     }
     if (obj.type === 'credential') {
       mainToolbar.appendChild(makeToolbarBtn(ICONS.rename, false, () => openCredentialPopover(note, obj, mainToolbar), 'Bearbeiten'));
@@ -4932,8 +4943,16 @@
       area.innerHTML = '';
       const percent = Math.round((obj.transcriptProgress || 0) * 100);
       const label = document.createElement('div');
-      label.textContent = `Transkription läuft im Hintergrund … ${percent}% (kann bei langen Aufnahmen mehrere Stunden dauern)`;
+      label.className = 'audio-transcript-working';
+      const spinner = document.createElement('span');
+      spinner.className = 'audio-transcript-spinner';
+      label.appendChild(spinner);
+      label.appendChild(document.createTextNode(` Sprache wird in Text umgewandelt … ${percent} %`));
       area.appendChild(label);
+      const hint = document.createElement('div');
+      hint.className = 'audio-transcript-hint';
+      hint.textContent = 'Läuft im Hintergrund, bei langen Aufnahmen kann das mehrere Stunden dauern.';
+      area.appendChild(hint);
       const barTrack = document.createElement('div');
       barTrack.className = 'audio-transcript-progress-track';
       const barFill = document.createElement('div');
@@ -4963,11 +4982,15 @@
         area.appendChild(line);
       });
     }
-    // Fläche automatisch groß genug machen, damit das Transkript lesbar ist.
-    if (obj.transcriptStatus === 'done' && obj.h < 260) {
-      obj.h = 260;
+    // Das Feld wächst mit: Sobald die Umwandlung läuft (bzw. fehlgeschlagen ist)
+    // gerade so weit, dass man den Fortschritt/die Meldung sieht; ist das
+    // Transkript fertig, groß genug, um es zu lesen. Es schrumpft nie von selbst.
+    const minHeight = { processing: 190, error: 150, done: 260 }[obj.transcriptStatus];
+    if (minHeight && obj.h < minHeight) {
+      obj.h = minHeight;
       applyObjRect(objEl, obj);
       updateSurfaceSize(note);
+      schedulePersist();
     }
   }
 

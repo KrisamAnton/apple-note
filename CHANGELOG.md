@@ -4,6 +4,11 @@ Hier steht, was wann geändert wurde (neueste Einträge oben). Die Versionsnumme
 steht klein neben dem Benutzernamen; bei jeder Änderung erhöht sich die letzte
 Zahl (1.7.1 → 1.7.2 → …).
 
+## 1.7.10 - 03.10.2026
+
+- Sprachnotizen: Der unverständliche Knopf mit den drei Zeilen ist ersetzt durch „Transkript" mit einem Symbol aus Schallwelle, Pfeil und Textzeilen (Sprache wird zu Text). Er steht mit Beschriftung in der grauen Leiste über der Sprachnotiz.
+- Sprachnotizen: Sobald die Umwandlung läuft, wird das Feld automatisch größer und zeigt einen Dreh-Kreis, den Fortschritt in Prozent und einen Balken. Bei einem Fehler wächst es ebenfalls für die Meldung, und ist das Transkript fertig, ist genug Platz zum Lesen.
+
 ## 1.7.9 - 03.10.2026
 
 - Ordnerfarben: Statt 7 gibt es jetzt 15 Farben (neu: Pink, Indigo, Himmelblau, Türkis, Dunkelgrün, Limette, Braun, Bordeaux). Die Auswahl bleibt dieselbe einfache Farbtafel, jetzt in 3 Reihen zu je 5 mit etwas kleineren Kästchen - passt auch auf das Handy. Bereits gewählte Ordnerfarben bleiben unverändert.
