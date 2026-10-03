@@ -3000,3 +3000,73 @@ textarea.popover-text-input {
 .changelog-body li {
   margin: 3px 0;
 }
+
+/* ---------- Touch-Geräte (Handy/Tablet): große Treffer in den Objekt-Leisten ----------
+   Gilt nur, wenn das Hauptzeigegerät ein Finger ist ("pointer: coarse") - am PC
+   mit Maus bleibt alles unverändert. Die grauen Leisten über Dateien,
+   Sprachnotizen, Bildern usw. sind sonst nur 18px hoch (mit der Maus ok, mit
+   dem Finger kaum zu treffen); empfohlen sind für Finger mindestens ca. 40px. */
+@media (pointer: coarse) {
+  .object-toolbar-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+  }
+
+  .object-toolbar-btn .icon {
+    width: 22px;
+    height: 22px;
+  }
+
+  .object-toolbar:not(.object-toolbar-main) {
+    top: -58px;
+    gap: 6px;
+    padding: 4px;
+  }
+
+  .canvas-object.toolbar-below .object-toolbar:not(.object-toolbar-main) {
+    top: auto;
+    bottom: -58px;
+  }
+
+  .object-toolbar-main {
+    top: -40px;
+    height: 40px;
+    padding: 0 4px;
+    gap: 6px;
+    border-radius: 8px 8px 0 0;
+  }
+
+  .canvas-object.toolbar-below .object-toolbar-main {
+    top: auto;
+    bottom: -40px;
+    border-radius: 0 0 8px 8px;
+  }
+
+  .object-toolbar-main .object-toolbar-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+  }
+
+  .object-toolbar-main .object-toolbar-btn .icon {
+    width: 26px;
+    height: 26px;
+  }
+
+  .inline-pdf-chip-toolbar {
+    gap: 6px;
+    padding: 4px;
+  }
+
+  .inline-pdf-chip-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+  }
+
+  .inline-pdf-chip-btn .icon {
+    width: 22px;
+    height: 22px;
+  }
+}

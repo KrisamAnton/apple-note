@@ -5340,7 +5340,8 @@
     if (!toolbar || !objEl) return;
     const chipRect = chip.getBoundingClientRect();
     const objRect = objEl.getBoundingClientRect();
-    const TOOLBAR_HEIGHT = 34;
+    // Am PC 34px; auf Touch-Geräten sind die Knöpfe größer (siehe CSS "pointer: coarse").
+    const TOOLBAR_HEIGHT = Math.max(34, toolbar.offsetHeight || 0);
     // Wählt die Richtung mit mehr Platz (statt fest "oben, außer es passt
     // nicht") - bei einer sehr niedrigen Textbox reicht sonst z. B. weder
     // oben noch unten wirklich, aber "oben" kann trotzdem die deutlich
