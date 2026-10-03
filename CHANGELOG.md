@@ -4,6 +4,11 @@ Hier steht, was wann geändert wurde (neueste Einträge oben). Die Versionsnumme
 steht klein neben dem Benutzernamen; bei jeder Änderung erhöht sich die letzte
 Zahl (1.7.1 → 1.7.2 → …).
 
+## 1.7.7 - 03.10.2026
+
+- Der Knopf „Text" und die Abfrage „Textart" sind entfernt (am PC und am Handy). Text entsteht durch Tippen auf eine leere Stelle der Fläche.
+- Neu: In der grauen Leiste über jedem Text gibt es den Knopf „Rahmen an/aus". Damit wird aus freiem Text ein Textfeld mit Rahmen und Hintergrund und umgekehrt. Der Text bleibt dabei erhalten.
+
 ## 1.7.6 - 03.10.2026
 
 - Zeichnen am Handy: Die eigentliche Ursache der Verzögerung war die riesige Zeichen-Ebene (am Handy über 20 Millionen Pixel), die der Browser bei jeder Änderung komplett neu aufbereiten muss. Jetzt deckt sie am Handy nur noch den sichtbaren Ausschnitt plus Rand ab und wandert beim Scrollen mit; der Strich selbst erscheint beim Ziehen sofort als einfache Linie und wird erst beim Loslassen in die Zeichnung übernommen. Auch das Lasso zeichnet seine Linie so. Der Radierer zeigt beim Ziehen eine graue Spur, die beim Loslassen löscht. Am PC bleibt die Zeichen-Ebene unverändert.

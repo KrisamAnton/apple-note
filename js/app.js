@@ -18,6 +18,7 @@
   const ICONS = {
     allNotes: '<svg viewBox="0 0 20 20"><path d="M4 3a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6.41a1 1 0 0 0-.29-.71l-2.41-2.41A1 1 0 0 0 13.59 3H4zm2 4h8v1.5H6V7zm0 3h8v1.5H6V10zm0 3h5v1.5H6V13z"/></svg>',
     folder: '<svg viewBox="0 0 20 20"><path d="M2 5.5C2 4.67 2.67 4 3.5 4h4.13c.36 0 .7.14.96.4l1.2 1.2c.26.26.6.4.96.4H16.5c.83 0 1.5.67 1.5 1.5v7.6c0 .83-.67 1.5-1.5 1.5h-13C2.67 16.6 2 15.93 2 15.1V5.5z"/></svg>',
+    frame: '<svg viewBox="0 0 20 20"><rect x="3" y="4.5" width="14" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>',
     trash: '<svg viewBox="0 0 20 20"><path d="M6 2.5h8l.5 1.5H16v1.5H4V4h1.5L6 2.5zM5 7h10l-.7 10.1c-.05.7-.63 1.4-1.5 1.4H7.2c-.87 0-1.45-.7-1.5-1.4L5 7z"/></svg>',
     link: '<svg viewBox="0 0 20 20"><rect x="1" y="7" width="9" height="4.5" rx="2.25" transform="rotate(-45 5.5 9.25)" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="9.5" y="8.5" width="9" height="4.5" rx="2.25" transform="rotate(-45 14 10.75)" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
     unlink: '<svg viewBox="0 0 20 20"><rect x="1" y="7" width="9" height="4.5" rx="2.25" transform="rotate(-45 5.5 9.25)" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="9.5" y="8.5" width="9" height="4.5" rx="2.25" transform="rotate(-45 14 10.75)" fill="none" stroke="currentColor" stroke-width="1.6"/><line x1="3" y1="17" x2="17" y2="3" stroke="currentColor" stroke-width="1.8"/></svg>',
@@ -434,7 +435,6 @@
     popoverBackdrop: document.getElementById('popoverBackdrop'),
     movePopover: document.getElementById('movePopover'),
     movePopoverList: document.getElementById('movePopoverList'),
-    addTextBtn: document.getElementById('addTextBtn'),
     undoBtn: document.getElementById('undoBtn'),
     redoBtn: document.getElementById('redoBtn'),
     headingBtn: document.getElementById('headingBtn'),
@@ -455,8 +455,6 @@
     fontFamilyPopoverBackdrop: document.getElementById('fontFamilyPopoverBackdrop'),
     fontFamilyPopover: document.getElementById('fontFamilyPopover'),
     fontFamilyList: document.getElementById('fontFamilyList'),
-    textStylePopoverBackdrop: document.getElementById('textStylePopoverBackdrop'),
-    textStylePopover: document.getElementById('textStylePopover'),
     pdfModePopoverBackdrop: document.getElementById('pdfModePopoverBackdrop'),
     pdfModePopover: document.getElementById('pdfModePopover'),
     pdfInlineFileModeBtn: document.getElementById('pdfInlineFileModeBtn'),
@@ -1637,6 +1635,29 @@
     window.addEventListener('scroll', hide, true);
   }
 
+  // Schaltet bei einem Text den sichtbaren Rahmen (hinterlegtes "Textfeld") an
+  // oder aus ("freier Text"). Das Objekt wird dafür neu aufgebaut, weil sich
+  // einige Eigenschaften (Überlauf-Anzeige, Zeilen-Ausrichtung, automatisches
+  // Mitwachsen) je nach Textart unterscheiden.
+  function toggleTextFrame(note, obj, objEl) {
+    // Laufende Bearbeitung zuerst regulär beenden (speichert den Inhalt).
+    if (activeTextEdit && activeTextEdit.obj.id === obj.id) activeTextEdit.body.blur();
+    obj.style = obj.style === 'boxed' ? 'free' : 'boxed';
+    if (obj.style === 'boxed') {
+      obj.w = Math.max(obj.w, 180);
+      obj.h = Math.max(obj.h, 80);
+    }
+    note.updatedAt = Date.now();
+    schedulePersist();
+    const newEl = buildObjectEl(note, obj);
+    objEl.replaceWith(newEl);
+    // Das neue Element ist noch nicht als ausgewählt markiert, selectedObjectId
+    // zeigt aber schon auf dieses Objekt - erst zurücksetzen, damit neu gewählt wird.
+    selectedObjectId = null;
+    selectSingleObject(note, obj, newEl);
+    applyObjRect(newEl, obj);
+  }
+
   function makeToolbarBtn(icon, danger, onClick, label) {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -1711,6 +1732,11 @@
       mainToolbar.appendChild(
         makeToolbarBtn(ICONS.textCursor, false, () => convertFloatingPdfToInline(note, obj, objEl), 'An der Cursor-Stelle im Text platzieren')
       );
+    }
+    if (obj.type === 'text') {
+      const frameBtn = makeToolbarBtn(ICONS.frame, false, () => toggleTextFrame(note, obj, objEl), 'Rahmen an/aus');
+      frameBtn.classList.toggle('active', obj.style === 'boxed');
+      mainToolbar.appendChild(frameBtn);
     }
     if (obj.type === 'audio') {
       mainToolbar.appendChild(makeToolbarBtn(ICONS.transcript, false, () => startTranscription(note, obj, objEl), 'In Text umwandeln'));
@@ -5840,13 +5866,6 @@
 
   // ----- Objekte hinzufügen / löschen -----
 
-  function addTextObject(style) {
-    const note = currentNote();
-    if (!note) return;
-    const { x, y } = nextPlacement(note, 220, 120);
-    addTextObjectAt(note, x, y, style);
-  }
-
   // Erstellt sofort ein freies Textobjekt an der übergebenen Stelle und aktiviert
   // direkt den Bearbeitungsmodus – für das OneNote-artige "irgendwo hinklicken und
   // lostippen". Bleibt das Objekt leer, entfernt exitTextEdit() es beim Verlassen
@@ -6343,21 +6362,6 @@
     realignFreeLinesForNote(note);
     schedulePersist();
     closeBackgroundPopover();
-  }
-
-  // ---------- Textart-Popover ----------
-
-  function openTextStylePopover() {
-    const btnRect = el.addTextBtn.getBoundingClientRect();
-    el.textStylePopoverBackdrop.hidden = false;
-    const popoverWidth = 320; // entspricht max-width in .popover-wide
-    const left = Math.min(Math.max(8, btnRect.left), window.innerWidth - popoverWidth - 8);
-    el.textStylePopover.style.top = `${btnRect.bottom + 6}px`;
-    el.textStylePopover.style.left = `${Math.max(8, left)}px`;
-  }
-
-  function closeTextStylePopover() {
-    el.textStylePopoverBackdrop.hidden = true;
   }
 
   // ---------- Zugangsdaten-Popover (anlegen/bearbeiten) ----------
@@ -6941,7 +6945,6 @@
   // hier gar nichts.
   const MOBILE_RIBBON_QUERY = '(max-width: 780px) and (pointer: coarse)';
   const MOBILE_BAR_ITEMS = [
-    ['addTextBtn', 'Text'],
     ['drawModeBtn', 'Zeichnen'],
     ['addImageBtn', 'Bild'],
     ['addPdfBtn', 'PDF'],
@@ -7288,7 +7291,6 @@
       if (e.target === el.popoverBackdrop) closeMovePopover();
     });
 
-    el.addTextBtn.addEventListener('click', openTextStylePopover);
     wireRibbonBtn(el.undoBtn, () => applyUndoRedo('undo'));
     wireRibbonBtn(el.redoBtn, () => applyUndoRedo('redo'));
     wireRibbonBtn(el.headingBtn, () => openHeadingPopover(el.headingBtn));
@@ -7632,17 +7634,6 @@
     el.backgroundPopover.addEventListener('click', (e) => {
       const item = e.target.closest('.popover-item');
       if (item) setBackground(item.dataset.bg);
-    });
-
-    el.textStylePopoverBackdrop.addEventListener('click', (e) => {
-      if (e.target === el.textStylePopoverBackdrop) closeTextStylePopover();
-    });
-    el.textStylePopover.addEventListener('click', (e) => {
-      const item = e.target.closest('.popover-item-rich');
-      if (item) {
-        closeTextStylePopover();
-        addTextObject(item.dataset.style);
-      }
     });
 
     el.pdfModePopoverBackdrop.addEventListener('click', (e) => {

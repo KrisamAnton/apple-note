@@ -3268,3 +3268,9 @@ textarea.popover-text-input {
     bottom: auto !important;
   }
 }
+
+/* "Rahmen an/aus" an Texten: aktiv = Text hat gerade einen Rahmen. */
+.object-toolbar-btn.active {
+  background: var(--hover-bg);
+  color: var(--accent);
+}
