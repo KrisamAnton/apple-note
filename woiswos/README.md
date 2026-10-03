@@ -2,45 +2,60 @@
 
 Private Lagerverwaltung ("Wo is was?") für Werkzeug, Bastelmaterial und alles
 andere, was man zu Hause aufbewahrt. Läuft als kleine Web-App, die man am
-Handy im Browser bedient.
+Handy im Browser bedient. Aufgebaut nach dem Prinzip klassischer
+Lagerverwaltungen (z. B. Microsoft Dynamics AX): Lagerplätze mit Nummern,
+Artikelstamm, Bestand pro Lagerplatz und ein Buchungsprotokoll.
 
-**Status:** Schritt 1 von mehreren. Weitere Funktionen werden Schritt für
+**Status:** Laufende Weiterentwicklung. Weitere Funktionen werden Schritt für
 Schritt besprochen und umgesetzt.
 
 ## Grundprinzip
 
-Es gibt nur **Einträge** in einer Tabelle, in drei Typen:
+- **Lagerplatz** - hat eine **Nummer** (frei wählbar, auch mit Leerzeichen, z. B.
+  `100 01 03` = Regal 100, Ebene 01, Fach 03) oder eine automatisch
+  fortlaufende (`LP-0001`, bei Boxen `BOX-0001`). Zwei Arten:
+  - 🗄️ **Fester Lagerplatz**: Raum, Regal, Schublade, Fach … - bleibt, wo er ist
+  - 📦 **Variabler Lagerplatz (Box)**: Box, Kiste, Schachtel … - lässt sich umlagern, mit
+    allem, was darin liegt
+- **Artikel** - Stammdaten (Artikelnummer, Name, Einheit, Foto, Notiz), **einmal** pro
+  Artikel. Nummer frei wählbar oder automatisch (`ART-0001`).
+- **Bestand** - wie viel von einem Artikel auf welchem Lagerplatz liegt. Derselbe
+  Artikel kann an mehreren Plätzen liegen (12 Stk im Fach, 5 Stk in der Kiste).
+- **Buchungen** - Einlagern, Umlagern (auch Teilmengen), Ausbuchen. Jede Buchung
+  steht im Verlauf des Artikels.
 
-- **🗄️ Fester Lagerplatz**: Raum, Regal, Schublade, Fach … - bleibt, wo er ist
-- **📦 Variabler Lagerplatz (Box)**: Box, Kiste, Schachtel, Beutel … - lässt sich umlagern
-- **🔹 Artikel**: der eigentliche Gegenstand mit Menge
+Lagerplätze verschachteln sich beliebig tief:
 
-Plätze und Boxen können etwas enthalten und sich beliebig tief verschachteln:
+    Elektrowerkstatt › 100 01 03 › Kiste blau › (Taster rot, 5 Stk)
 
-    Schrankraum › Regal 1 › Schachtel A › Box blau › Schalter (3×)
+Regel: Ein fester Lagerplatz liegt nie in einer Box. Eine Box darf in einer Box liegen.
 
-Regel: Ein fester Lagerplatz liegt nie in einer Box. Jeder Eintrag kann ein
-**Foto** bekommen (am Handy direkt mit der Kamera), das als Miniatur in den
-Listen und bei der Lagerplatz-Auswahl erscheint.
+## Funktionen
 
-- Die Suche zeigt zu jedem Treffer den kompletten Pfad.
-- Wird eine Box verschoben, wandert ihr Inhalt automatisch mit.
-- Löschen entfernt den Eintrag samt Inhalt (mit Rückfrage und Anzahl).
-- Ein Eintrag kann nicht in sich selbst oder in seinen Inhalt verschoben werden; in einen Artikel kann nichts gelegt werden.
-- Jeder Eintrag hat einen festen Code (`W-000042`), der später für QR-Etiketten genutzt wird.
+- Lagerplätze und Artikel anlegen, bearbeiten, verschieben, löschen
+- Nummern frei vergeben oder automatisch fortlaufend; Nummern sind eindeutig
+  (Groß-/Kleinschreibung und mehrfache Leerzeichen werden ignoriert)
+- Bestand einlagern / umlagern / ausbuchen, mit Notiz und Verlauf
+- Fotos für Lagerplätze und Artikel (am Handy direkt mit der Kamera), Miniaturen in
+  Listen, Suche und Lagerplatz-Auswahl
+- Suche über Nummer, Name und Notiz bei Lagerplätzen und Artikeln; zeigt den Pfad
+- **QR-Etiketten drucken** für Lagerplätze (einzeln, mit allen Unterplätzen oder alle)
+  und Artikel: Formate 62 × 29 mm, 50 × 30 mm, 100 × 50 mm (Etikettendrucker) und
+  A4-Bögen (70 × 37 mm, 105 × 57 mm). Der QR-Code enthält `P:<Nummer>` (Lagerplatz)
+  bzw. `A:<Nummer>` (Artikel); die Nummer steht zusätzlich als Klartext auf dem Etikett.
 
-## Funktionen in Schritt 1
+**Noch nicht enthalten** (kommt in späteren Schritten): Scannen mit der Handykamera,
+Verleih-Verwaltung, Login/Passwort.
+Bis es einen Login gibt, die App **nur im Heimnetz** betreiben und nicht ins
+Internet freigeben.
 
-- Lagerplätze und Artikel anlegen (zwei getrennte Knöpfe), bearbeiten (Typ, Name, Menge, Notiz, Foto), verschieben („Ort ändern…“), löschen
-- Fotos: Aufnahme oder Auswahl, automatische Verkleinerung, Miniatur in Listen und Ortsauswahl
-- Beliebig tiefe Verschachtelung mit Pfad-Navigation
-- Suche über Name und Notiz
-- Handyfreundliche Oberfläche, Hell/Dunkel automatisch
+## Update von einer älteren Version
 
-**Noch nicht enthalten** (kommt in späteren Schritten): Verleih-Verwaltung,
-QR-/Barcode-Etiketten und Scannen, Login/Passwort.
-Bis es einen Login gibt, die App **nur im Heimnetz** betreiben und nicht
-ins Internet freigeben.
+Beim ersten Start mit dieser Version wird eine bestehende Datenbank automatisch
+umgewandelt: bisherige Lagerplätze und Boxen bekommen automatische Nummern, jeder
+bisherige Artikel wird ein Artikel mit Bestand an seinem bisherigen Platz, Fotos
+bleiben erhalten. Die alten Tabellen bleiben unverändert als `legacy_*` in der
+Datenbank (zusätzliches Backup). Vorher trotzdem den Ordner `data/` kopieren.
 
 ## Starten
 
@@ -63,3 +78,8 @@ Die Datenbank liegt dann in `woiswos/data/` und bleibt bei Updates erhalten.
 ## Tests
 
     npm test
+
+## Drittanbieter
+
+QR-Codes erzeugt [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator)
+von Kazuhiko Arase (MIT-Lizenz), eingebunden als `public/vendor/qrcode.js`.

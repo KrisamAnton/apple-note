@@ -16,7 +16,7 @@ header input { flex: 1; min-width: 0; padding: 8px 12px; border: 0; border-radiu
 #crumbs { padding: 10px 16px 0; color: var(--muted); font-size: 14px; }
 #crumbs a { color: var(--accent); text-decoration: none; }
 #crumbs span { margin: 0 4px; }
-main { padding: 12px 16px 96px; max-width: 720px; margin: 0 auto; }
+main { padding: 12px 16px 150px; max-width: 720px; margin: 0 auto; }
 h2 { margin: 8px 0; font-size: 20px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; }
 .row { display: flex; align-items: center; gap: 10px; padding: 12px 14px; color: inherit; text-decoration: none; }
@@ -29,7 +29,7 @@ button, .btn { font: inherit; padding: 10px 16px; border-radius: 8px; border: 1p
                background: var(--card); color: var(--text); cursor: pointer; }
 button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 button.danger { color: var(--danger); }
-.fabs { position: fixed; right: 16px; bottom: 16px; display: flex; gap: 8px; }
+.fabs { position: fixed; right: 16px; bottom: 68px; display: flex; gap: 8px; }
 .fabs button { padding: 14px 18px; border-radius: 999px; box-shadow: 0 2px 8px rgba(0,0,0,.3); }
 label { display: block; margin: 10px 0 4px; font-size: 14px; color: var(--muted); }
 input[type=text], input[type=number], textarea, select { width: 100%; padding: 10px; font: inherit;
@@ -47,4 +47,42 @@ dialog h3 { margin: 0 0 6px; }
 .photo { width: 100%; max-height: 260px; object-fit: cover; border-radius: 12px; margin-top: 4px; }
 .photobox { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .photobox img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; }
+
+#tabs { position: fixed; left: 0; right: 0; bottom: 0; display: flex; background: var(--card);
+        border-top: 1px solid var(--line); z-index: 3; }
+#tabs a { flex: 1; text-align: center; padding: 14px 0; color: var(--muted); text-decoration: none; font-weight: 600; }
+#tabs a.on { color: var(--accent); box-shadow: inset 0 3px 0 var(--accent); }
+h3.sec { margin: 18px 0 6px; font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.code { font-family: ui-monospace, Menlo, Consolas, monospace; background: var(--bg); border: 1px solid var(--line);
+        border-radius: 6px; padding: 1px 7px; font-size: 14px; white-space: pre; }
+.row .qty { font-weight: 700; white-space: nowrap; }
+.line { display: flex; align-items: center; gap: 10px; padding: 10px 14px; }
+.line .name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.line button { padding: 6px 10px; font-size: 14px; }
+.hist { font-size: 14px; color: var(--muted); margin: 4px 0; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
+.chips button { padding: 6px 12px; font-size: 14px; }
+.found { max-height: 36vh; overflow: auto; margin-top: 8px; }
+.hint { font-size: 13px; color: var(--muted); margin: 4px 0 0; }
+
+/* ---- Etikettendruck ---- */
+.labels-ctl { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; margin: 8px 0 14px; }
+.labels-ctl > div { flex: 1; min-width: 150px; }
+.sheet { display: flex; flex-wrap: wrap; gap: 6px; background: #ddd; padding: 8px; border-radius: 8px; }
+.label { background: #fff; color: #000; display: flex; align-items: center; gap: 2mm; padding: 1.5mm;
+         overflow: hidden; box-sizing: border-box; break-inside: avoid; }
+.label .qr { flex: none; height: 100%; aspect-ratio: 1; }
+.label .qr svg { width: 100%; height: 100%; display: block; }
+.label .txt { min-width: 0; flex: 1; line-height: 1.15; }
+.label .big { font-weight: 800; font-family: ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap;
+              overflow-wrap: anywhere; }
+.label .small { font-size: 8pt; overflow: hidden; }
+.label .path { font-size: 6.5pt; color: #333; overflow: hidden; }
+@media print {
+  header, #crumbs, #tabs, .no-print, .fabs { display: none !important; }
+  body { background: #fff; }
+  main { padding: 0; max-width: none; }
+  .sheet { background: none; padding: 0; gap: 0; }
+  .label { border: 0; }
+}
 [hidden] { display: none !important; }

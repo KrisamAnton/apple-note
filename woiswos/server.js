@@ -40,12 +40,16 @@ function readJson(req, limit = 100 * 1024) {
 }
 
 function send(res, status, body) {
-  const json = JSON.stringify(body);
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
   });
-  res.end(json);
+  res.end(JSON.stringify(body));
+}
+
+function sendImage(res, buf) {
+  res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=86400' });
+  res.end(buf);
 }
 
 function parseId(s) {
@@ -55,37 +59,68 @@ function parseId(s) {
 }
 
 function makeServer(store) {
+  // Routen: [Methode, Pfad-Muster, Handler]. ":id" steht für eine Zahl.
+  const PHOTO_LIMIT = 4 * 1024 * 1024;
+  const routes = [];
+  const route = (method, pattern, handler, limit) => {
+    const keys = [];
+    const re = new RegExp('^' + pattern.replace(/:(\w+)/g, (_, k) => (keys.push(k), '([^/]+)')) + '$');
+    routes.push({ method, re, keys, handler, limit });
+  };
+
+  // Lagerplätze
+  route('GET', '/api/places', ({ query }) => {
+    const p = query.get('parent');
+    return store.listPlace(p == null || p === '' ? null : parseId(p));
+  });
+  route('POST', '/api/places', ({ body }) => [201, store.createPlace(body)]);
+  route('GET', '/api/places/by-code', ({ query }) => store.placeByCode(query.get('code')));
+  route('GET', '/api/places/:id', ({ params }) => store.getPlace(parseId(params.id)));
+  route('PATCH', '/api/places/:id', ({ params, body }) => store.updatePlace(parseId(params.id), body));
+  route('DELETE', '/api/places/:id', ({ params }) => store.removePlace(parseId(params.id)));
+  // Artikel
+  route('GET', '/api/articles', ({ query }) => store.listArticles(query.get('q')));
+  route('POST', '/api/articles', ({ body }) => [201, store.createArticle(body)]);
+  route('GET', '/api/articles/by-code', ({ query }) => store.articleByCode(query.get('code')));
+  route('GET', '/api/articles/:id', ({ params }) => store.getArticle(parseId(params.id)));
+  route('PATCH', '/api/articles/:id', ({ params, body }) => store.updateArticle(parseId(params.id), body));
+  route('DELETE', '/api/articles/:id', ({ params }) => store.removeArticle(parseId(params.id)));
+  // Bestand
+  route('POST', '/api/stock/put', ({ body }) => store.put(body));
+  route('POST', '/api/stock/move', ({ body }) => store.move(body));
+  route('POST', '/api/stock/remove', ({ body }) => store.remove(body));
+  // Suche und Etiketten
+  route('GET', '/api/search', ({ query }) => store.search(query.get('q')));
+  route('GET', '/api/labels', ({ query }) => {
+    if (query.get('all')) return store.allPlaceLabels();
+    if (query.get('article')) return store.articleLabel(parseId(query.get('article')));
+    return store.placeLabels(parseId(query.get('place')), query.get('deep') === '1');
+  });
+  // Fotos (entity = places | articles)
+  for (const [seg, entity] of [['places', 'place'], ['articles', 'article']]) {
+    route('GET', `/api/${seg}/:id/photo`, ({ params, query, res }) =>
+      sendImage(res, store.getPhoto(entity, parseId(params.id), query.get('size'))));
+    route('PUT', `/api/${seg}/:id/photo`, ({ params, body }) => store.setPhoto(entity, parseId(params.id), body), PHOTO_LIMIT);
+    route('DELETE', `/api/${seg}/:id/photo`, ({ params }) => store.removePhoto(entity, parseId(params.id)));
+  }
+
   async function handleApi(req, res, url) {
-    const parts = url.pathname.split('/').filter(Boolean).slice(1); // ohne "api"
-    const method = req.method;
-
-    if (parts[0] === 'search' && method === 'GET') {
-      return send(res, 200, store.search(url.searchParams.get('q')));
+    let pathMatched = false;
+    for (const r of routes) {
+      const m = r.re.exec(url.pathname);
+      if (!m) continue;
+      pathMatched = true;
+      if (r.method !== req.method) continue;
+      const params = {};
+      r.keys.forEach((k, i) => { params[k] = decodeURIComponent(m[i + 1]); });
+      const needsBody = r.method === 'POST' || r.method === 'PATCH' || r.method === 'PUT';
+      const body = needsBody ? await readJson(req, typeof r.limit === 'number' ? r.limit : undefined) : {};
+      const out = await r.handler({ params, query: url.searchParams, body, res });
+      if (res.writableEnded) return;
+      if (Array.isArray(out) && typeof out[0] === 'number') return send(res, out[0], out[1]);
+      return send(res, 200, out);
     }
-    if (parts[0] !== 'items') throw new HttpError(404, 'Unbekannte API');
-
-    if (parts.length === 1) {
-      if (method === 'GET') {
-        const p = url.searchParams.get('parent');
-        return send(res, 200, store.list(p == null || p === '' ? null : parseId(p)));
-      }
-      if (method === 'POST') return send(res, 201, store.create(await readJson(req)));
-    } else if (parts.length === 3 && parts[2] === 'photo') {
-      const id = parseId(parts[1]);
-      if (method === 'GET') {
-        const buf = store.getPhoto(id, url.searchParams.get('size'));
-        res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=86400' });
-        return res.end(buf);
-      }
-      if (method === 'PUT') return send(res, 200, store.setPhoto(id, await readJson(req, 4 * 1024 * 1024)));
-      if (method === 'DELETE') return send(res, 200, store.removePhoto(id));
-    } else if (parts.length === 2) {
-      const id = parseId(parts[1]);
-      if (method === 'GET') return send(res, 200, store.get(id));
-      if (method === 'PATCH') return send(res, 200, store.update(id, await readJson(req)));
-      if (method === 'DELETE') return send(res, 200, store.remove(id));
-    }
-    throw new HttpError(405, 'Methode nicht erlaubt');
+    throw new HttpError(pathMatched ? 405 : 404, pathMatched ? 'Methode nicht erlaubt' : 'Unbekannte API');
   }
 
   function serveStatic(req, res, url) {

@@ -6,128 +6,203 @@ const path = require('path');
 const { openStore } = require('./db');
 const { makeServer } = require('./server');
 
-test('Verschachtelung, Pfad, Verschieben, Löschen', () => {
+const JPEG = 'data:image/jpeg;base64,' + Buffer.from('fakejpegdata').toString('base64');
+
+test('Lagerplätze: Nummern, Verschachtelung, Regeln', () => {
   const s = openStore(':memory:');
-  const regal = s.create({ name: 'Regal 1', kind: 'place' });
-  const schachtel = s.create({ name: 'Schachtel A', kind: 'place', parent_id: regal.id });
-  const box = s.create({ name: 'Box blau', kind: 'place', parent_id: schachtel.id });
-  const schalter = s.create({ name: 'Schalter', parent_id: box.id, quantity: 3 });
-
-  const got = s.get(schalter.id);
-  assert.deepStrictEqual(got.path.map((p) => p.name), ['Regal 1', 'Schachtel A', 'Box blau']);
-  assert.strictEqual(got.quantity, 3);
-  assert.strictEqual(got.code, 'W-' + String(schalter.id).padStart(6, '0'));
-  assert.strictEqual(s.get(regal.id).descendant_count, 3);
-
-  // Box umlagern nimmt den Inhalt mit
-  const regal2 = s.create({ name: 'Regal 2', kind: 'place' });
-  s.update(box.id, { parent_id: regal2.id });
-  assert.deepStrictEqual(s.get(schalter.id).path.map((p) => p.name), ['Regal 2', 'Box blau']);
-
-  // Zyklen verboten
-  assert.throws(() => s.update(regal2.id, { parent_id: box.id }), /nicht in sich selbst/);
-  assert.throws(() => s.update(regal2.id, { parent_id: regal2.id }), /nicht in sich selbst/);
-
-  // Suche zeigt den ganzen Pfad
-  const hit = s.search('schalt');
-  assert.strictEqual(hit.length, 1);
-  assert.deepStrictEqual(hit[0].path.map((p) => p.name), ['Regal 2', 'Box blau']);
-  assert.strictEqual(s.search('%').length, 0);
-
-  // Löschen kaskadiert
-  assert.strictEqual(s.remove(regal2.id).deleted, 3);
-  assert.throws(() => s.get(schalter.id), /nicht gefunden/);
-  assert.strictEqual(s.list(null).children.length, 1);
-});
-
-test('Lagerplatz und Artikel', () => {
-  const s = openStore(':memory:');
-  const regal = s.create({ name: 'Regal', kind: 'place' });
-  const haken = s.create({ name: 'Haken', parent_id: regal.id });
-  assert.strictEqual(haken.kind, 'item'); // Standard ist Artikel
-  // In einen Artikel kann nichts gelegt werden
-  assert.throws(() => s.create({ name: 'x', parent_id: haken.id }), /kein Lagerplatz/);
-  assert.throws(() => s.update(regal.id, { parent_id: haken.id }), /kein Lagerplatz/);
-  // Lagerplätze stehen in der Liste vor Artikeln
-  s.create({ name: 'Aaa Artikel', parent_id: regal.id });
-  s.create({ name: 'Zzz Fach', kind: 'place', parent_id: regal.id });
-  assert.deepStrictEqual(s.list(regal.id).children.map((c) => c.name), ['Zzz Fach', 'Aaa Artikel', 'Haken']);
-  // Gefüllter Lagerplatz kann kein Artikel werden
-  assert.throws(() => s.update(regal.id, { kind: 'item' }), /enthält noch etwas/);
-  assert.strictEqual(s.update(haken.id, { kind: 'place' }).kind, 'place');
-  assert.throws(() => s.create({ name: 'x', kind: 'foo' }), /Typ/);
-});
-
-test('Feste Lagerplätze und variable Boxen', () => {
-  const s = openStore(':memory:');
-  const regal = s.create({ name: 'Regal', kind: 'place' });
-  const fach = s.create({ name: 'Fach 1', kind: 'place', parent_id: regal.id });
-  const box = s.create({ name: 'Kiste', kind: 'box', parent_id: fach.id });
-  const inner = s.create({ name: 'Beutel', kind: 'box', parent_id: box.id });
-  s.create({ name: 'Schalter', parent_id: inner.id });
-  // Box darf in Box, fester Platz aber nicht in eine Box
-  assert.throws(() => s.create({ name: 'Fach X', kind: 'place', parent_id: box.id }), /nicht in einer Box/);
-  const regal2 = s.create({ name: 'Regal 2', kind: 'place' });
-  assert.throws(() => s.update(regal2.id, { parent_id: inner.id }), /nicht in einer Box/);
-  // Box darf auf oberster Ebene liegen und umgelagert werden
-  const moved = s.update(box.id, { parent_id: null });
-  assert.strictEqual(moved.path.length, 0);
-  assert.deepStrictEqual(s.search('Schalter')[0].path.map((p) => p.name), ['Kiste', 'Beutel']);
-  assert.deepStrictEqual(s.search('Schalter')[0].path.map((p) => p.kind), ['box', 'box']);
-  // Feste Plätze zuerst, dann Boxen, dann Artikel
-  s.create({ name: 'AAA Ding', parent_id: fach.id });
-  s.create({ name: 'ZZZ Box', kind: 'box', parent_id: fach.id });
-  s.create({ name: 'MMM Platz', kind: 'place', parent_id: fach.id });
-  assert.deepStrictEqual(s.list(fach.id).children.map((c) => c.name), ['MMM Platz', 'ZZZ Box', 'AAA Ding']);
+  const lager = s.createPlace({ code: 'ELW', name: 'Elektrowerkstatt' });
+  // Freie Nummer mit Leerzeichen (Regal / Ebene / Fach), Mehrfach-Leerzeichen werden zusammengefasst
+  const fach = s.createPlace({ code: '  100   01  03 ', parent_id: lager.id });
+  assert.strictEqual(fach.code, '100 01 03');
+  assert.strictEqual(fach.payload, 'P:100 01 03');
+  // Automatisch fortlaufend, getrennt für Plätze und Boxen
+  const a1 = s.createPlace({ parent_id: lager.id });
+  const a2 = s.createPlace({ parent_id: lager.id });
+  assert.deepStrictEqual([a1.code, a2.code], ['LP-0001', 'LP-0002']);
+  const box = s.createPlace({ kind: 'box', name: 'Kiste blau', parent_id: fach.id });
+  assert.strictEqual(box.code, 'BOX-0001');
+  // Eindeutigkeit (ohne Beachtung von Groß/Klein und Leerzeichen-Menge)
+  assert.throws(() => s.createPlace({ code: '100 01 03' }), /schon vergeben/);
+  assert.throws(() => s.createPlace({ code: 'elw' }), /schon vergeben/);
+  assert.throws(() => s.createPlace({ code: '100  01 03' }), /schon vergeben/);
+  assert.throws(() => s.createPlace({ code: 'Ä1' }), /nur Buchstaben/);
+  // Automatische Nummer überspringt bereits von Hand vergebene
+  s.createPlace({ code: 'LP-0003' });
+  assert.strictEqual(s.createPlace({}).code, 'LP-0004');
+  // Regel: fester Platz nie in einer Box; Box darf in Box und auf oberste Ebene
+  assert.throws(() => s.createPlace({ parent_id: box.id }), /nicht in einer Box/);
+  const inner = s.createPlace({ kind: 'box', parent_id: box.id });
+  assert.strictEqual(s.updatePlace(box.id, { parent_id: null }).path.length, 0);
+  assert.deepStrictEqual(s.getPlace(inner.id).path.map((p) => p.code), ['BOX-0001']);
+  // Zyklus
+  assert.throws(() => s.updatePlace(box.id, { parent_id: inner.id }), /nicht in sich selbst/);
+  assert.throws(() => s.updatePlace(lager.id, { parent_id: lager.id }), /nicht in sich selbst/);
   // Platz mit festen Unterplätzen kann keine Box werden
-  assert.throws(() => s.update(fach.id, { kind: 'box' }), /feste Lagerplätze/);
+  assert.throws(() => s.updatePlace(lager.id, { kind: 'box' }), /feste Lagerplätze/);
+  // Bearbeiten: leere Nummer = unverändert, eigene Nummer ist kein Duplikat
+  assert.strictEqual(s.updatePlace(fach.id, { code: '', name: 'Taster' }).code, '100 01 03');
+  assert.strictEqual(s.updatePlace(fach.id, { code: '100 01 03' }).name, 'Taster');
+  assert.strictEqual(s.updatePlace(fach.id, { code: '100 01 04' }).code, '100 01 04');
+});
+
+test('Artikel und Bestand: einlagern, umlagern, ausbuchen, Protokoll', () => {
+  const s = openStore(':memory:');
+  const regal = s.createPlace({ code: '100 01 03' });
+  const box = s.createPlace({ kind: 'box', code: 'BX 7' });
+  const art = s.createArticle({ name: 'Taster', unit: '' });
+  assert.strictEqual(art.code, 'ART-0001');
+  assert.strictEqual(art.unit, 'Stk');
+  assert.strictEqual(s.createArticle({ name: 'Haken', code: 'H1' }).code, 'H1');
+  assert.throws(() => s.createArticle({ name: 'x', code: 'h1' }), /schon vergeben/);
+
+  s.put({ article_id: art.id, place_id: regal.id, quantity: 10 });
+  s.put({ article_id: art.id, place_id: regal.id, quantity: 2 });
+  let a = s.getArticle(art.id);
+  assert.strictEqual(a.total, 12);
+  assert.strictEqual(a.stock.length, 1);
+  assert.strictEqual(a.stock[0].quantity, 12);
+
+  // Teilmenge umlagern: der gleiche Artikel liegt dann an zwei Orten
+  s.move({ article_id: art.id, from_place_id: regal.id, to_place_id: box.id, quantity: 5 });
+  a = s.getArticle(art.id);
+  assert.deepStrictEqual(a.stock.map((x) => [x.code, x.quantity]), [['100 01 03', 7], ['BX 7', 5]]);
+  // Alles umlagern lässt keine leere Zeile zurück
+  s.move({ article_id: art.id, from_place_id: regal.id, to_place_id: box.id, quantity: 7 });
+  assert.deepStrictEqual(s.getArticle(art.id).stock.map((x) => [x.code, x.quantity]), [['BX 7', 12]]);
+
+  assert.throws(() => s.move({ article_id: art.id, from_place_id: regal.id, to_place_id: box.id, quantity: 1 }), /nur 0/);
+  assert.throws(() => s.move({ article_id: art.id, from_place_id: box.id, to_place_id: box.id, quantity: 1 }), /derselbe/);
+  assert.throws(() => s.put({ article_id: art.id, place_id: box.id, quantity: 0 }), /Menge/);
+  assert.throws(() => s.remove({ article_id: art.id, place_id: box.id, quantity: 13 }), /nur 12/);
+  s.remove({ article_id: art.id, place_id: box.id, quantity: 2, note: 'verbraucht' });
+  a = s.getArticle(art.id);
+  assert.strictEqual(a.total, 10);
+  assert.deepStrictEqual(a.history.map((h) => h.type), ['remove', 'move', 'move', 'put', 'put']);
+  assert.strictEqual(a.history[0].note, 'verbraucht');
+  assert.strictEqual(a.history[1].from_place, '100 01 03');
+
+  // Box umlagern: Inhalt bleibt in der Box, der Pfad ändert sich automatisch
+  s.updatePlace(box.id, { parent_id: regal.id });
+  assert.deepStrictEqual(s.getArticle(art.id).stock[0].path.map((p) => p.code), ['100 01 03', 'BX 7']);
+});
+
+test('Löschen von Plätzen und Artikeln', () => {
+  const s = openStore(':memory:');
+  const lager = s.createPlace({ code: 'L' });
+  const box = s.createPlace({ kind: 'box', code: 'B', parent_id: lager.id });
+  const art = s.createArticle({ name: 'Schalter' });
+  s.put({ article_id: art.id, place_id: box.id, quantity: 3 });
+  s.setPhoto('place', box.id, { full: JPEG, thumb: JPEG });
+  s.setPhoto('article', art.id, { full: JPEG, thumb: JPEG });
+  const res = s.removePlace(lager.id);
+  assert.deepStrictEqual(res, { deleted_places: 2, deleted_stock_lines: 1 });
+  // Artikel bleibt (ohne Bestand), Foto des Platzes ist weg, Protokoll vermerkt das Löschen
+  const a = s.getArticle(art.id);
+  assert.strictEqual(a.total, 0);
+  assert.strictEqual(a.has_photo, true);
+  assert.strictEqual(a.history[0].note, 'Lagerplatz gelöscht');
+  assert.strictEqual(s.db.prepare("SELECT COUNT(*) AS n FROM photos WHERE entity='place'").get().n, 0);
+  s.removeArticle(art.id);
+  assert.strictEqual(s.db.prepare('SELECT COUNT(*) AS n FROM photos').get().n, 0);
+  assert.strictEqual(s.db.prepare('SELECT COUNT(*) AS n FROM movements WHERE article_id IS NULL').get().n, 2);
+});
+
+test('Liste, Suche und Etiketten', () => {
+  const s = openStore(':memory:');
+  const lager = s.createPlace({ code: 'ELW', name: 'Elektrowerkstatt' });
+  const fach = s.createPlace({ code: '100 01 03', parent_id: lager.id });
+  const art = s.createArticle({ name: 'Taster rot' });
+  s.put({ article_id: art.id, place_id: fach.id, quantity: 4 });
+
+  const root = s.listPlace(null);
+  assert.deepStrictEqual(root.children.map((c) => c.code), ['ELW']);
+  assert.strictEqual(root.children[0].child_count, 1);
+  const inner = s.listPlace(fach.id);
+  assert.strictEqual(inner.stock[0].name, 'Taster rot');
+  assert.deepStrictEqual(inner.path.map((p) => p.code), ['ELW', '100 01 03']);
+
+  const r = s.search('100 01');
+  assert.strictEqual(r.places.length, 1);
+  const r2 = s.search('taster');
+  assert.strictEqual(r2.articles[0].where[0].path.map((p) => p.name || p.code).join('|'), 'Elektrowerkstatt|100 01 03');
+  assert.deepStrictEqual(s.search('%'), { places: [], articles: [] }); // % ist kein Platzhalter
+
+  assert.strictEqual(s.listArticles('')[0].total, 4);
+  assert.strictEqual(s.listArticles('rot').length, 1);
+  assert.strictEqual(s.listArticles('xyz').length, 0);
+
+  const one = s.placeLabels(fach.id, false);
+  assert.deepStrictEqual(one.map((l) => l.payload), ['P:100 01 03']);
+  assert.strictEqual(one[0].path, 'Elektrowerkstatt');
+  assert.deepStrictEqual(s.placeLabels(lager.id, true).map((l) => l.code), ['100 01 03', 'ELW']);
+  assert.strictEqual(s.allPlaceLabels().length, 2);
+  assert.strictEqual(s.articleLabel(art.id)[0].payload, 'A:ART-0001');
+  assert.strictEqual(s.placeByCode('100  01 03').id, fach.id);
+  assert.strictEqual(s.articleByCode('art-0001').id, art.id);
+  assert.throws(() => s.placeByCode('nope'), /Kein Lagerplatz/);
 });
 
 test('Fotos', () => {
   const s = openStore(':memory:');
-  const box = s.create({ name: 'Kiste', kind: 'box' });
+  const box = s.createPlace({ kind: 'box' });
+  const art = s.createArticle({ name: 'A' });
   assert.strictEqual(box.has_photo, false);
-  const jpeg = 'data:image/jpeg;base64,' + Buffer.from('fakejpegdata').toString('base64');
-  const withPhoto = s.setPhoto(box.id, { full: jpeg, thumb: jpeg });
-  assert.strictEqual(withPhoto.has_photo, true);
-  assert.strictEqual(withPhoto.photo_v, 1);
-  assert.strictEqual(s.setPhoto(box.id, { full: jpeg, thumb: jpeg }).photo_v, 2);
-  assert.strictEqual(Buffer.from(s.getPhoto(box.id, 'thumb')).toString(), 'fakejpegdata');
-  assert.strictEqual(s.list(null).children[0].has_photo, true);
-  assert.throws(() => s.setPhoto(box.id, { full: 'data:image/png;base64,AAAA', thumb: jpeg }), /JPEG/);
-  assert.throws(() => s.setPhoto(9999, { full: jpeg, thumb: jpeg }), /nicht gefunden/);
-  assert.strictEqual(s.removePhoto(box.id).has_photo, false);
-  assert.throws(() => s.getPhoto(box.id), /Kein Foto/);
-  // Foto verschwindet mit dem Eintrag
-  s.setPhoto(box.id, { full: jpeg, thumb: jpeg });
-  s.remove(box.id);
-  assert.strictEqual(s.db.prepare('SELECT COUNT(*) AS n FROM photos').get().n, 0);
+  assert.strictEqual(s.setPhoto('place', box.id, { full: JPEG, thumb: JPEG }).photo_v, 1);
+  assert.strictEqual(s.setPhoto('place', box.id, { full: JPEG, thumb: JPEG }).photo_v, 2);
+  assert.strictEqual(s.getArticle(art.id).has_photo, false); // gleiche ID, anderer Typ
+  assert.strictEqual(Buffer.from(s.getPhoto('place', box.id, 'thumb')).toString(), 'fakejpegdata');
+  assert.throws(() => s.setPhoto('place', box.id, { full: 'data:image/png;base64,AAAA', thumb: JPEG }), /JPEG/);
+  assert.throws(() => s.setPhoto('article', 9999, { full: JPEG, thumb: JPEG }), /nicht gefunden/);
+  assert.strictEqual(s.removePhoto('place', box.id).has_photo, false);
+  assert.throws(() => s.getPhoto('place', box.id), /Kein Foto/);
 });
 
-test('Migration einer Datenbank aus Schritt 1', () => {
+test('Migration einer Datenbank aus Schritt 2 (items-Tabelle)', () => {
   const { DatabaseSync } = require('node:sqlite');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'woiswos-'));
   const file = path.join(dir, 'alt.db');
   const old = new DatabaseSync(file);
-  old.exec(`CREATE TABLE items (id INTEGER PRIMARY KEY AUTOINCREMENT,
-    parent_id INTEGER REFERENCES items(id) ON DELETE CASCADE, name TEXT NOT NULL,
-    quantity INTEGER NOT NULL DEFAULT 1, notes TEXT NOT NULL DEFAULT '',
-    created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
-    INSERT INTO items (name) VALUES ('Regal');
-    INSERT INTO items (name, parent_id) VALUES ('Schalter', 1);`);
+  old.exec(`PRAGMA foreign_keys = ON;
+    CREATE TABLE items (id INTEGER PRIMARY KEY AUTOINCREMENT,
+      parent_id INTEGER REFERENCES items(id) ON DELETE CASCADE, name TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'item', quantity INTEGER NOT NULL DEFAULT 1, notes TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
+    CREATE TABLE photos (item_id INTEGER PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
+      full BLOB NOT NULL, thumb BLOB NOT NULL, version INTEGER NOT NULL DEFAULT 1);
+    INSERT INTO items (id, name, kind, parent_id) VALUES (1, 'Schrankraum', 'place', NULL);
+    INSERT INTO items (id, name, kind, parent_id) VALUES (2, 'Regal 1', 'place', 1);
+    INSERT INTO items (id, name, kind, parent_id) VALUES (3, 'Box blau', 'box', 2);
+    INSERT INTO items (id, name, kind, parent_id, quantity, notes) VALUES (4, 'Schalter', 'item', 3, 3, 'weiß');
+    INSERT INTO items (id, name, kind, parent_id, quantity) VALUES (5, 'Haken', 'item', 2, 20);
+    INSERT INTO items (id, name, kind, parent_id, quantity) VALUES (6, 'Lose Sache', 'item', NULL, 1);
+    INSERT INTO photos (item_id, full, thumb) VALUES (3, x'01', x'02');
+    INSERT INTO photos (item_id, full, thumb) VALUES (4, x'03', x'04');`);
   old.close();
-  const s = openStore(file);
-  assert.strictEqual(s.get(1).kind, 'place'); // enthält etwas
-  assert.strictEqual(s.get(2).kind, 'item');
+
+  let s = openStore(file);
+  const root = s.listPlace(null);
+  assert.deepStrictEqual(root.children.map((c) => [c.id, c.code, c.name]), [[1, 'LP-0001', 'Schrankraum']]);
+  const box = s.getPlace(3);
+  assert.strictEqual(box.kind, 'box');
+  assert.strictEqual(box.code, 'BOX-0001');
+  assert.strictEqual(box.has_photo, true);
+  assert.deepStrictEqual(box.path.map((p) => p.name), ['Schrankraum', 'Regal 1']);
+  const list = s.listArticles('');
+  assert.deepStrictEqual(list.map((a) => [a.name, a.total]), [['Haken', 20], ['Lose Sache', 0], ['Schalter', 3]]);
+  const schalter = s.getArticle(list.find((a) => a.name === 'Schalter').id);
+  assert.strictEqual(schalter.notes, 'weiß');
+  assert.strictEqual(schalter.has_photo, true);
+  assert.strictEqual(schalter.stock[0].code, 'BOX-0001');
+  // Neue automatische Nummern machen dort weiter
+  assert.strictEqual(s.createPlace({}).code, 'LP-0003');
+  assert.strictEqual(s.createArticle({ name: 'neu' }).code, 'ART-0004');
+  // Alte Daten bleiben als Backup, zweites Öffnen migriert nicht erneut
+  assert.strictEqual(s.db.prepare('SELECT COUNT(*) AS n FROM legacy_items_v2').get().n, 6);
+  s.db.close();
+  s = openStore(file);
+  assert.strictEqual(s.listArticles('').length, 4);
   s.db.close();
   fs.rmSync(dir, { recursive: true });
-});
-
-test('Validierung', () => {
-  const s = openStore(':memory:');
-  assert.throws(() => s.create({ name: '  ' }), /Name/);
-  assert.throws(() => s.create({ name: 'x', quantity: -1 }), /Menge/);
-  assert.throws(() => s.create({ name: 'x', parent_id: 999 }), /Zielort/);
 });
 
 test('HTTP-API', async () => {
@@ -143,19 +218,33 @@ test('HTTP-API', async () => {
     return { status: r.status, body: await r.json() };
   };
   try {
-    const a = await call('POST', '/api/items', { name: 'Keller', kind: 'place' });
-    assert.strictEqual(a.status, 201);
-    const b = await call('POST', '/api/items', { name: 'Kiste', kind: 'place', parent_id: a.body.id });
-    const l = await call('GET', '/api/items?parent=' + a.body.id);
-    assert.strictEqual(l.body.children[0].name, 'Kiste');
-    assert.strictEqual((await call('GET', '/api/items')).body.children[0].child_count, 1);
-    assert.strictEqual((await call('GET', '/api/search?q=kist')).body[0].path[0].name, 'Keller');
-    assert.strictEqual((await call('PATCH', '/api/items/' + b.body.id, { parent_id: null })).body.path.length, 0);
-    assert.strictEqual((await call('DELETE', '/api/items/' + a.body.id)).body.deleted, 1);
-    assert.strictEqual((await call('GET', '/api/items/abc')).status, 400);
-    assert.strictEqual((await call('GET', '/api/items/9999')).status, 404);
-    const page = await fetch(base + '/');
-    assert.strictEqual(page.status, 200);
+    const lp = await call('POST', '/api/places', { code: '100 01 03', name: 'Fach' });
+    assert.strictEqual(lp.status, 201);
+    assert.strictEqual((await call('POST', '/api/places', { code: '100 01 03' })).status, 409);
+    const art = await call('POST', '/api/articles', { name: 'Taster' });
+    assert.strictEqual(art.status, 201);
+    const put = await call('POST', '/api/stock/put', { article_id: art.body.id, place_id: lp.body.id, quantity: 5 });
+    assert.strictEqual(put.body.total, 5);
+    assert.strictEqual((await call('POST', '/api/stock/remove', { article_id: art.body.id, place_id: lp.body.id, quantity: 9 })).status, 400);
+    assert.strictEqual((await call('GET', '/api/places?parent=' + lp.body.id)).body.stock[0].quantity, 5);
+    assert.strictEqual((await call('GET', '/api/places/by-code?code=100%2001%2003')).body.id, lp.body.id);
+    assert.strictEqual((await call('GET', '/api/search?q=taster')).body.articles[0].where[0].quantity, 5);
+    assert.strictEqual((await call('GET', '/api/labels?place=' + lp.body.id)).body[0].payload, 'P:100 01 03');
+    assert.strictEqual((await call('GET', '/api/labels?article=' + art.body.id)).body[0].payload, 'A:ART-0001');
+    assert.strictEqual((await call('PATCH', '/api/articles/' + art.body.id, { name: 'Taster rot' })).body.name, 'Taster rot');
+    // Foto hoch- und runterladen
+    const up = await call('PUT', `/api/articles/${art.body.id}/photo`, { full: JPEG, thumb: JPEG });
+    assert.strictEqual(up.body.has_photo, true);
+    const img = await fetch(`${base}/api/articles/${art.body.id}/photo?size=thumb`);
+    assert.strictEqual(img.headers.get('content-type'), 'image/jpeg');
+    assert.strictEqual(Buffer.from(await img.arrayBuffer()).toString(), 'fakejpegdata');
+    assert.strictEqual((await call('DELETE', `/api/articles/${art.body.id}/photo`)).body.has_photo, false);
+    assert.strictEqual((await call('DELETE', '/api/places/' + lp.body.id)).body.deleted_stock_lines, 1);
+    assert.strictEqual((await call('GET', '/api/places/abc')).status, 400);
+    assert.strictEqual((await call('GET', '/api/places/9999')).status, 404);
+    assert.strictEqual((await call('GET', '/api/nope')).status, 404);
+    assert.strictEqual((await call('PUT', '/api/places')).status, 405);
+    assert.strictEqual((await fetch(base + '/')).status, 200);
     assert.strictEqual((await fetch(base + '/..%2fserver.js')).status, 403);
   } finally {
     server.close();
