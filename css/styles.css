@@ -1435,16 +1435,16 @@ textarea {
    Ereignis-Weitergabe selbst, lösen also kein Verschieben aus. */
 .object-toolbar-main {
   box-sizing: border-box;
-  top: -18px;
+  top: -28px;
   left: 0;
   right: 0;
-  height: 18px;
-  padding: 0 2px;
-  gap: 2px;
+  height: 28px;
+  padding: 0 3px;
+  gap: 4px;
   justify-content: flex-end;
   background: var(--titlebar-bg);
   border: none;
-  border-radius: 4px 4px 0 0;
+  border-radius: 5px 5px 0 0;
   box-shadow: none;
   cursor: grab;
   touch-action: none;
@@ -1455,22 +1455,19 @@ textarea {
 }
 
 .object-toolbar-main .object-toolbar-btn {
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
+  width: 28px;
+  height: 28px;
+  border-radius: 5px;
 }
 
 .object-toolbar-main .object-toolbar-btn .icon {
-  /* Absichtlich größer als der 18px hohe Balken selbst - übersteht dessen
-     Rand sichtbar nach oben/unten, statt durch die Zeilenhöhe begrenzt zu
-     werden (die soll ja gleich bleiben). Kein overflow:hidden am Button,
-     das Icon wird also nicht abgeschnitten. */
-  width: 24px;
-  height: 24px;
+  /* Das Symbol füllt den Knopf fast aus (Balken 28px hoch). */
+  width: 22px;
+  height: 22px;
 }
 
 .canvas-object.toolbar-below .object-toolbar-main {
-  bottom: -18px;
+  bottom: -28px;
   border-radius: 0 0 4px 4px;
 }
 
@@ -3068,5 +3065,187 @@ textarea.popover-text-input {
   .inline-pdf-chip-btn .icon {
     width: 22px;
     height: 22px;
+  }
+}
+
+/* ---------- Handy: untere Werkzeugleiste mit "Format" und "Mehr" ----------
+   Am PC (und überall, wo nicht "Touch + schmaler Bildschirm" gilt) bleibt das
+   komplett ausgeblendet. Die Knöpfe selbst sind dieselben wie im oberen Band -
+   sie werden am Handy von setupMobileRibbon() nur hierher verschoben. */
+.mobile-bottom,
+.mobile-sheet-backdrop {
+  display: none;
+}
+
+@media (max-width: 780px) and (pointer: coarse) {
+  .editor {
+    position: relative;
+  }
+
+  /* Oberes Band: nur noch Zurück + Rückgängig/Wiederholen, alles andere liegt
+     unten. Größere Treffer für die verbliebenen Knöpfe. */
+  .editor-toolbar.ribbon {
+    overflow: visible;
+    padding: 6px 10px;
+  }
+
+  .editor-toolbar.ribbon .ribbon-divider,
+  .editor-toolbar.ribbon .ribbon-group:not(:first-of-type) {
+    display: none;
+  }
+
+  .editor-toolbar.ribbon .toolbar-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+  }
+
+  .editor-toolbar.ribbon .toolbar-btn .icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .mobile-bottom {
+    display: block;
+    position: relative;
+    flex: none;
+    background: var(--bg-elevated);
+    border-top: 1px solid var(--border);
+  }
+
+  .mobile-bar {
+    display: flex;
+    padding: 4px 4px calc(4px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .mobile-sheet-backdrop:not([hidden]) {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 8000;
+    background: rgba(0, 0, 0, 0.25);
+  }
+
+  .mobile-sheet {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    z-index: 8100;
+    display: grid;
+    gap: 6px;
+    padding: 10px 8px;
+    background: var(--bg-elevated);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.14);
+    border-radius: 14px 14px 0 0;
+  }
+
+  .mobile-sheet[hidden] {
+    display: none;
+  }
+
+  .mobile-sheet-format {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .mobile-sheet-more {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  /* Alle Knöpfe in Leiste und Fenstern: Symbol oben, Beschriftung darunter. */
+  .mobile-bar .toolbar-btn,
+  .mobile-sheet .toolbar-btn {
+    flex-direction: column;
+    gap: 3px;
+    width: auto;
+    height: 56px;
+    padding: 2px;
+    border-radius: 10px;
+    min-width: 0;
+  }
+
+  .mobile-bar .toolbar-btn {
+    flex: 1 1 0;
+  }
+
+  .mobile-sheet .toolbar-btn {
+    height: 64px;
+    background: var(--hover-bg);
+  }
+
+  .mobile-sheet .toolbar-btn:disabled {
+    opacity: 0.4;
+  }
+
+  .mobile-bar .toolbar-btn .icon,
+  .mobile-sheet .toolbar-btn .icon {
+    width: 26px;
+    height: 26px;
+  }
+
+  .mobile-bar .toolbar-btn .icon-emoji,
+  .mobile-sheet .toolbar-btn .icon-emoji {
+    width: auto;
+    height: auto;
+    font-size: 24px;
+  }
+
+  .mobile-bar .toolbar-btn::after,
+  .mobile-sheet .toolbar-btn::after {
+    content: attr(data-mlabel);
+    font-size: 10px;
+    line-height: 1.1;
+    color: var(--text-secondary, var(--text-primary));
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  .mobile-bar .mobile-toggle-btn.active {
+    background: var(--hover-bg);
+    color: var(--accent);
+  }
+
+  .mobile-sheet .toolbar-select-btn {
+    width: auto;
+    padding: 2px 4px;
+  }
+
+  .mobile-sheet .toolbar-select-btn .select-label {
+    font-size: 13px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mobile-sheet .toolbar-btn[hidden] {
+    display: none;
+  }
+
+  /* Popover-Fenster (Schriftart, Größe, Farbe, Markieren, Überschrift,
+     Hintergrund, Ordner ...) hängen sonst an der Position ihres Knopfes - der
+     sitzt jetzt unten bzw. in einem Fenster. Am Handy stattdessen einheitlich
+     über der unteren Leiste andocken, mit voller Breite. */
+  .popover-backdrop .popover:not(.settings-popover) {
+    position: fixed;
+    left: 8px !important;
+    right: 8px;
+    top: auto !important;
+    bottom: calc(80px + env(safe-area-inset-bottom, 0px)) !important;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+
+  /* Fenster mit Eingabefeldern: oben statt unten, damit sie nicht unter der
+     Bildschirmtastatur landen. */
+  #credentialPopover,
+  #reminderPopover {
+    top: 8px !important;
+    bottom: auto !important;
   }
 }

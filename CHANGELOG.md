@@ -4,6 +4,11 @@ Hier steht, was wann geändert wurde (neueste Einträge oben). Die Versionsnumme
 steht klein neben dem Benutzernamen; bei jeder Änderung erhöht sich die letzte
 Zahl (1.7.1 → 1.7.2 → …).
 
+## 1.7.4 - 03.10.2026
+
+- Handy (Touch + schmaler Bildschirm): Die Werkzeugleiste ist neu. Unten gibt es eine feste Leiste mit Text, Zeichnen, Bild, PDF, Sprache, Datei sowie „Format" und „Mehr". „Format" öffnet alle Textformate (Überschrift, Schriftart, Größe, Fett, Kursiv, Farbe, Markieren, Listen …) als große Knöpfe, „Mehr" die selteneren (Zugangsdaten, Erinnerung, Link, Hintergrund, Verschieben). Oben bleiben Zurück, Rückgängig und Wiederholen. Auswahlfenster (Farbe, Größe, Hintergrund …) erscheinen einheitlich über der unteren Leiste. Am PC ändert sich nichts.
+- Die graue Leiste über Dateien, Sprachnotizen, Bildern und Zugangsdaten ist jetzt auch am PC etwas größer (28 statt 18 Pixel).
+
 ## 1.7.3 - 03.10.2026
 
 - Handy/Tablet: Die graue Leiste über Dateien, Sprachnotizen, Bildern, Zugangsdaten usw. (mit Öffnen, Umbenennen, Löschen) ist jetzt deutlich größer und mit dem Finger gut zu treffen. Am PC mit Maus ändert sich nichts.

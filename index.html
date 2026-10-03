@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, minimum-scale=0.1, maximum-scale=4, user-scalable=yes" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, minimum-scale=0.1, maximum-scale=4, user-scalable=yes, interactive-widget=resizes-content" />
   <title>KrisNote</title>
 
   <meta name="theme-color" content="#f2f0e9" media="(prefers-color-scheme: light)" />
@@ -244,6 +244,16 @@
               <canvas id="inkLayer" class="ink-layer"></canvas>
             </div>
           </div>
+        </div>
+      
+        <!-- Handy-Bedienung (nur bei Touch + schmalem Bildschirm, siehe setupMobileRibbon()):
+             untere Leiste mit den wichtigsten Knöpfen und zwei ausklappbare Fenster
+             (Format / Mehr). Am PC bleibt alles ausgeblendet und leer. -->
+        <div class="mobile-sheet-backdrop" id="mobileSheetBackdrop" hidden></div>
+        <div class="mobile-bottom" id="mobileBottom">
+          <div class="mobile-sheet mobile-sheet-format" id="mobileSheetFormat" hidden></div>
+          <div class="mobile-sheet mobile-sheet-more" id="mobileSheetMore" hidden></div>
+          <nav class="mobile-bar" id="mobileBar" aria-label="Werkzeuge"></nav>
         </div>
       </article>
     </main>

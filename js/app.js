@@ -6717,6 +6717,185 @@
     document.querySelector('.editor-toolbar').prepend(editorBack);
   }
 
+  // ---------- Handy: untere Werkzeugleiste ("Format" / "Mehr") ----------
+  //
+  // Am Handy (Touch + schmaler Bildschirm) wären die rund 30 Knöpfe des oberen
+  // Bandes eine endlos zur Seite zu wischende Reihe. Stattdessen werden die
+  // vorhandenen Knöpfe hierher verschoben (nicht kopiert - Ereignis-Handler,
+  // Aktiv/Inaktiv-Zustand und Popover-Anbindung bleiben dadurch unverändert):
+  // unten die häufigsten (Text, Zeichnen, Bild, PDF, Sprache, Datei) plus zwei
+  // Knöpfe, die ein Fenster mit allen Formatierungs- bzw. den selteneren
+  // Einfüge-Knöpfen öffnen. Ändert sich die Bildschirmart (z. B. Tablet wird
+  // gedreht), wandert alles an den ursprünglichen Platz zurück. Am PC passiert
+  // hier gar nichts.
+  const MOBILE_RIBBON_QUERY = '(max-width: 780px) and (pointer: coarse)';
+  const MOBILE_BAR_ITEMS = [
+    ['addTextBtn', 'Text'],
+    ['drawModeBtn', 'Zeichnen'],
+    ['addImageBtn', 'Bild'],
+    ['addPdfBtn', 'PDF'],
+    ['addAudioBtn', 'Sprache'],
+    ['addFileBtn', 'Datei'],
+  ];
+  const MOBILE_FORMAT_ITEMS = [
+    ['headingBtn', 'Überschrift'],
+    ['ribbonFontFamilyBtn', 'Schriftart'],
+    ['ribbonFontSizeBtn', 'Größe'],
+    ['boldBtn', 'Fett'],
+    ['italicBtn', 'Kursiv'],
+    ['underlineBtn', 'Unterstrichen'],
+    ['strikeBtn', 'Durchgestr.'],
+    ['superscriptBtn', 'Hochgestellt'],
+    ['subscriptBtn', 'Tiefgestellt'],
+    ['ribbonColorBtn', 'Textfarbe'],
+    ['ribbonMarkerBtn', 'Markieren'],
+    ['bulletListBtn', 'Liste'],
+    ['numberedListBtn', 'Nummerierung'],
+  ];
+  const MOBILE_MORE_ITEMS = [
+    ['addCredentialBtn', 'Zugangsdaten'],
+    ['addReminderBtn', 'Erinnerung'],
+    ['addNoteLinkBtn', 'Link'],
+    ['objectPasteBtn', 'Einfügen'],
+    ['backgroundBtn', 'Hintergrund'],
+    ['moveNoteBtn', 'Verschieben'],
+  ];
+  // Diese Knöpfe öffnen ein eigenes Auswahlfenster - das Format-Fenster
+  // schließt sich dann, damit es nicht darunter im Weg steht.
+  const MOBILE_POPOVER_OPENER_IDS = new Set([
+    'headingBtn', 'ribbonFontFamilyBtn', 'ribbonFontSizeBtn', 'ribbonColorBtn', 'ribbonMarkerBtn',
+  ]);
+
+  function setupMobileRibbon() {
+    const bar = document.getElementById('mobileBar');
+    const sheetFormat = document.getElementById('mobileSheetFormat');
+    const sheetMore = document.getElementById('mobileSheetMore');
+    const backdrop = document.getElementById('mobileSheetBackdrop');
+    if (!bar || !sheetFormat || !sheetMore || !backdrop) return;
+    const mq = window.matchMedia(MOBILE_RIBBON_QUERY);
+    let moved = []; // { btn, placeholder }
+    let formatToggle = null;
+    let moreToggle = null;
+    let observer = null;
+
+    function closeSheets() {
+      sheetFormat.hidden = true;
+      sheetMore.hidden = true;
+      backdrop.hidden = true;
+      if (formatToggle) formatToggle.classList.remove('active');
+      if (moreToggle) moreToggle.classList.remove('active');
+    }
+
+    function openSheet(which) {
+      const isFormat = which === 'format';
+      const wasOpen = isFormat ? !sheetFormat.hidden : !sheetMore.hidden;
+      closeSheets();
+      if (wasOpen) return;
+      closeAllFormatPopovers();
+      if (isFormat) {
+        sheetFormat.hidden = false;
+        formatToggle.classList.add('active');
+      } else {
+        sheetMore.hidden = false;
+        moreToggle.classList.add('active');
+        backdrop.hidden = false;
+      }
+    }
+
+    function moveInto(container, items) {
+      for (const [id, label] of items) {
+        const btn = document.getElementById(id);
+        if (!btn) continue;
+        const placeholder = document.createComment('mobile-ribbon');
+        btn.parentNode.insertBefore(placeholder, btn);
+        btn.dataset.mlabel = label;
+        container.appendChild(btn);
+        moved.push({ btn, placeholder });
+      }
+    }
+
+    function makeToggle(id, label, glyph) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.id = id;
+      btn.className = 'toolbar-btn mobile-toggle-btn';
+      btn.dataset.mlabel = label;
+      btn.setAttribute('aria-label', label);
+      btn.innerHTML = `<span class="icon icon-emoji" aria-hidden="true">${glyph}</span>`;
+      return btn;
+    }
+
+    function enable() {
+      moveInto(bar, MOBILE_BAR_ITEMS);
+      formatToggle = makeToggle('mobileFormatBtn', 'Format', '<b>Aa</b>');
+      moreToggle = makeToggle('mobileMoreBtn', 'Mehr', '⋯');
+      bar.appendChild(formatToggle);
+      bar.appendChild(moreToggle);
+      moveInto(sheetFormat, MOBILE_FORMAT_ITEMS);
+      moveInto(sheetMore, MOBILE_MORE_ITEMS);
+      formatToggle.addEventListener('click', () => openSheet('format'));
+      moreToggle.addEventListener('click', () => openSheet('more'));
+      // Der Format-Knopf ist (wie die Formatierungs-Knöpfe selbst) nur nutzbar,
+      // solange ein Text bearbeitet wird - wird "Fett" aktiv/inaktiv, folgt er.
+      const boldBtn = document.getElementById('boldBtn');
+      const syncFormatToggle = () => {
+        const off = !boldBtn || boldBtn.disabled;
+        formatToggle.disabled = off;
+        if (off) {
+          sheetFormat.hidden = true;
+          formatToggle.classList.remove('active');
+        }
+      };
+      syncFormatToggle();
+      if (boldBtn) {
+        observer = new MutationObserver(syncFormatToggle);
+        observer.observe(boldBtn, { attributes: true, attributeFilter: ['disabled'] });
+      }
+    }
+
+    function disable() {
+      closeSheets();
+      if (observer) { observer.disconnect(); observer = null; }
+      for (const { btn, placeholder } of moved.reverse()) {
+        delete btn.dataset.mlabel;
+        if (placeholder.parentNode) placeholder.parentNode.replaceChild(btn, placeholder);
+      }
+      moved = [];
+      bar.textContent = '';
+      formatToggle = null;
+      moreToggle = null;
+    }
+
+    // Ein Fingertipp auf die untere Leiste/Fenster darf den Fokus nicht aus dem
+    // Textfeld nehmen (sonst ginge die Textauswahl für Fett/Farbe usw. verloren).
+    for (const container of [bar, sheetFormat, sheetMore]) {
+      container.addEventListener('pointerdown', (e) => e.preventDefault());
+    }
+    // Nach einer Aktion schließt sich das "Mehr"-Fenster; das Format-Fenster
+    // bleibt offen (mehrere Formate hintereinander), außer bei Knöpfen, die ein
+    // eigenes Auswahlfenster öffnen.
+    sheetMore.addEventListener('click', (e) => {
+      if (e.target.closest('button')) setTimeout(closeSheets, 0);
+    });
+    sheetFormat.addEventListener('click', (e) => {
+      const btn = e.target.closest('button');
+      if (btn && MOBILE_POPOVER_OPENER_IDS.has(btn.id)) setTimeout(closeSheets, 0);
+    });
+    bar.addEventListener('click', (e) => {
+      const btn = e.target.closest('button');
+      if (btn && !btn.classList.contains('mobile-toggle-btn')) closeSheets();
+    });
+    backdrop.addEventListener('click', closeSheets);
+
+    const apply = () => {
+      if (mq.matches && !moved.length) enable();
+      else if (!mq.matches && moved.length) disable();
+    };
+    apply();
+    if (mq.addEventListener) mq.addEventListener('change', apply);
+    else if (mq.addListener) mq.addListener(apply);
+  }
+
   // ---------- Spaltentrenner (manuell verschiebbar) ----------
 
   const LAYOUT_STORAGE_KEY = 'appleNotesPwa.layout.v1';
@@ -6791,6 +6970,7 @@
 
   async function init() {
     setupBackButtons();
+    setupMobileRibbon();
     initColumnResizers();
     wireIconTooltips();
     document.addEventListener('selectionchange', rememberActiveSelectionRange);
