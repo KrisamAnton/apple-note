@@ -72,6 +72,14 @@
     { hex: '#34c759', name: 'Grün' },
     { hex: '#ffcc00', name: 'Gelb' },
     { hex: '#6e6e73', name: 'Grau' },
+    { hex: '#ff2d92', name: 'Pink' },
+    { hex: '#5856d6', name: 'Indigo' },
+    { hex: '#5ac8fa', name: 'Himmelblau' },
+    { hex: '#30b0c7', name: 'Türkis' },
+    { hex: '#1f8a4c', name: 'Dunkelgrün' },
+    { hex: '#9acd32', name: 'Limette' },
+    { hex: '#a2845e', name: 'Braun' },
+    { hex: '#a2203a', name: 'Bordeaux' },
   ];
 
   // Echte Punktgrößen wie in Word/OneNote (Umrechnung 1pt = 1.333px), nicht

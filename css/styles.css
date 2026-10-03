@@ -3323,3 +3323,19 @@ textarea.popover-text-input {
     user-select: none;
   }
 }
+
+/* Ordnerfarben: 15 Farben in 3 Reihen zu je 5, die Kästchen etwas kleiner und
+   immer gleich groß (auch am Handy, wo das Fenster sonst über die ganze
+   Breite ginge). */
+#folderColorGrid {
+  grid-template-columns: repeat(5, 40px);
+  gap: 10px;
+  justify-content: center;
+}
+
+#folderColorGrid .format-swatch {
+  width: 40px;
+  height: 40px;
+  aspect-ratio: auto;
+  border-radius: 10px;
+}

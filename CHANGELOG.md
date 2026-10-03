@@ -4,6 +4,10 @@ Hier steht, was wann geändert wurde (neueste Einträge oben). Die Versionsnumme
 steht klein neben dem Benutzernamen; bei jeder Änderung erhöht sich die letzte
 Zahl (1.7.1 → 1.7.2 → …).
 
+## 1.7.9 - 03.10.2026
+
+- Ordnerfarben: Statt 7 gibt es jetzt 15 Farben (neu: Pink, Indigo, Himmelblau, Türkis, Dunkelgrün, Limette, Braun, Bordeaux). Die Auswahl bleibt dieselbe einfache Farbtafel, jetzt in 3 Reihen zu je 5 mit etwas kleineren Kästchen - passt auch auf das Handy. Bereits gewählte Ordnerfarben bleiben unverändert.
+
 ## 1.7.8 - 03.10.2026
 
 - Handy/Tablet: Ordner lassen sich jetzt umbenennen. Neben jedem Ordner gibt es einen Stift-Knopf; ein Tipp darauf öffnet das Namensfeld mit Tastatur. Ein normales Antippen des Namens öffnet wie bisher nur den Ordner, ohne Tastatur und ohne die Kopieren-Auswahl.
