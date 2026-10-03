@@ -14,13 +14,13 @@ const MIME = {
   '.png': 'image/png',
 };
 
-function readJson(req) {
+function readJson(req, limit = 100 * 1024) {
   return new Promise((resolve, reject) => {
     let size = 0;
     const chunks = [];
     req.on('data', (c) => {
       size += c.length;
-      if (size > 100 * 1024) {
+      if (size > limit) {
         reject(new HttpError(413, 'Anfrage zu groß'));
         req.destroy();
       } else chunks.push(c);
@@ -70,6 +70,15 @@ function makeServer(store) {
         return send(res, 200, store.list(p == null || p === '' ? null : parseId(p)));
       }
       if (method === 'POST') return send(res, 201, store.create(await readJson(req)));
+    } else if (parts.length === 3 && parts[2] === 'photo') {
+      const id = parseId(parts[1]);
+      if (method === 'GET') {
+        const buf = store.getPhoto(id, url.searchParams.get('size'));
+        res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=86400' });
+        return res.end(buf);
+      }
+      if (method === 'PUT') return send(res, 200, store.setPhoto(id, await readJson(req, 4 * 1024 * 1024)));
+      if (method === 'DELETE') return send(res, 200, store.removePhoto(id));
     } else if (parts.length === 2) {
       const id = parseId(parts[1]);
       if (method === 'GET') return send(res, 200, store.get(id));

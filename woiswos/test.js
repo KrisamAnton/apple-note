@@ -58,6 +58,52 @@ test('Lagerplatz und Artikel', () => {
   assert.throws(() => s.create({ name: 'x', kind: 'foo' }), /Typ/);
 });
 
+test('Feste Lagerplätze und variable Boxen', () => {
+  const s = openStore(':memory:');
+  const regal = s.create({ name: 'Regal', kind: 'place' });
+  const fach = s.create({ name: 'Fach 1', kind: 'place', parent_id: regal.id });
+  const box = s.create({ name: 'Kiste', kind: 'box', parent_id: fach.id });
+  const inner = s.create({ name: 'Beutel', kind: 'box', parent_id: box.id });
+  s.create({ name: 'Schalter', parent_id: inner.id });
+  // Box darf in Box, fester Platz aber nicht in eine Box
+  assert.throws(() => s.create({ name: 'Fach X', kind: 'place', parent_id: box.id }), /nicht in einer Box/);
+  const regal2 = s.create({ name: 'Regal 2', kind: 'place' });
+  assert.throws(() => s.update(regal2.id, { parent_id: inner.id }), /nicht in einer Box/);
+  // Box darf auf oberster Ebene liegen und umgelagert werden
+  const moved = s.update(box.id, { parent_id: null });
+  assert.strictEqual(moved.path.length, 0);
+  assert.deepStrictEqual(s.search('Schalter')[0].path.map((p) => p.name), ['Kiste', 'Beutel']);
+  assert.deepStrictEqual(s.search('Schalter')[0].path.map((p) => p.kind), ['box', 'box']);
+  // Feste Plätze zuerst, dann Boxen, dann Artikel
+  s.create({ name: 'AAA Ding', parent_id: fach.id });
+  s.create({ name: 'ZZZ Box', kind: 'box', parent_id: fach.id });
+  s.create({ name: 'MMM Platz', kind: 'place', parent_id: fach.id });
+  assert.deepStrictEqual(s.list(fach.id).children.map((c) => c.name), ['MMM Platz', 'ZZZ Box', 'AAA Ding']);
+  // Platz mit festen Unterplätzen kann keine Box werden
+  assert.throws(() => s.update(fach.id, { kind: 'box' }), /feste Lagerplätze/);
+});
+
+test('Fotos', () => {
+  const s = openStore(':memory:');
+  const box = s.create({ name: 'Kiste', kind: 'box' });
+  assert.strictEqual(box.has_photo, false);
+  const jpeg = 'data:image/jpeg;base64,' + Buffer.from('fakejpegdata').toString('base64');
+  const withPhoto = s.setPhoto(box.id, { full: jpeg, thumb: jpeg });
+  assert.strictEqual(withPhoto.has_photo, true);
+  assert.strictEqual(withPhoto.photo_v, 1);
+  assert.strictEqual(s.setPhoto(box.id, { full: jpeg, thumb: jpeg }).photo_v, 2);
+  assert.strictEqual(Buffer.from(s.getPhoto(box.id, 'thumb')).toString(), 'fakejpegdata');
+  assert.strictEqual(s.list(null).children[0].has_photo, true);
+  assert.throws(() => s.setPhoto(box.id, { full: 'data:image/png;base64,AAAA', thumb: jpeg }), /JPEG/);
+  assert.throws(() => s.setPhoto(9999, { full: jpeg, thumb: jpeg }), /nicht gefunden/);
+  assert.strictEqual(s.removePhoto(box.id).has_photo, false);
+  assert.throws(() => s.getPhoto(box.id), /Kein Foto/);
+  // Foto verschwindet mit dem Eintrag
+  s.setPhoto(box.id, { full: jpeg, thumb: jpeg });
+  s.remove(box.id);
+  assert.strictEqual(s.db.prepare('SELECT COUNT(*) AS n FROM photos').get().n, 0);
+});
+
 test('Migration einer Datenbank aus Schritt 1', () => {
   const { DatabaseSync } = require('node:sqlite');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'woiswos-'));

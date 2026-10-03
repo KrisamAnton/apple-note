@@ -6,8 +6,11 @@ const { DatabaseSync } = require('node:sqlite');
 
 // Grundprinzip: Es gibt nur EINE Tabelle. Lagerplätze (Raum, Regal, Fach,
 // Schachtel, Box) und Artikel (Schalter, Schaukelhaken) sind alle "Einträge".
-// kind = 'place' (Lagerplatz, kann etwas enthalten) oder 'item' (Artikel).
-// Jeder Eintrag liegt über parent_id in einem Lagerplatz.
+// kind = 'place' (fester Lagerplatz: Raum, Regal, Schublade),
+//        'box'   (variabler Lagerplatz: Box, Kiste, Schachtel - lässt sich umlagern) oder
+//        'item'  (Artikel). Plätze und Boxen können etwas enthalten.
+// Jeder Eintrag liegt über parent_id in einem Lagerplatz oder einer Box.
+// Regel: Ein fester Lagerplatz liegt nie in einer Box.
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS items (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -21,6 +24,13 @@ CREATE TABLE IF NOT EXISTS items (
 );
 CREATE INDEX IF NOT EXISTS idx_items_parent ON items(parent_id);
 CREATE INDEX IF NOT EXISTS idx_items_name   ON items(name COLLATE NOCASE);
+-- Foto pro Eintrag: verkleinertes Vollbild + Miniatur (beides JPEG)
+CREATE TABLE IF NOT EXISTS photos (
+  item_id INTEGER PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
+  full    BLOB    NOT NULL,
+  thumb   BLOB    NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1
+);
 `;
 
 class HttpError extends Error {
@@ -53,15 +63,23 @@ function openStore(file) {
     children: db.prepare(`
       SELECT i.*, (SELECT COUNT(*) FROM items c WHERE c.parent_id = i.id) AS child_count
       FROM items i WHERE i.parent_id IS ?
-      ORDER BY (i.kind = 'place') DESC, i.name COLLATE NOCASE`),
+      ORDER BY (i.kind = 'item'), (i.kind = 'box'), i.name COLLATE NOCASE`),
     path: db.prepare(`
-      WITH RECURSIVE up(id, parent_id, name, depth) AS (
-        SELECT id, parent_id, name, 0 FROM items WHERE id = ?
+      WITH RECURSIVE up(id, parent_id, name, kind, depth) AS (
+        SELECT id, parent_id, name, kind, 0 FROM items WHERE id = ?
         UNION ALL
-        SELECT i.id, i.parent_id, i.name, up.depth + 1
+        SELECT i.id, i.parent_id, i.name, i.kind, up.depth + 1
         FROM items i JOIN up ON i.id = up.parent_id
       )
-      SELECT id, name FROM up ORDER BY depth DESC`),
+      SELECT id, name, kind FROM up ORDER BY depth DESC`),
+    photoInfo: db.prepare('SELECT version FROM photos WHERE item_id = ?'),
+    photoGet: db.prepare('SELECT full, thumb, version FROM photos WHERE item_id = ?'),
+    photoSet: db.prepare(`
+      INSERT INTO photos (item_id, full, thumb) VALUES (?, ?, ?)
+      ON CONFLICT(item_id) DO UPDATE SET full = excluded.full, thumb = excluded.thumb,
+        version = version + 1`),
+    photoDel: db.prepare('DELETE FROM photos WHERE item_id = ?'),
+    placeChildren: db.prepare("SELECT COUNT(*) AS n FROM items WHERE parent_id = ? AND kind = 'place'"),
     descendantCount: db.prepare(`
       WITH RECURSIVE down(id) AS (
         SELECT id FROM items WHERE parent_id = ?
@@ -81,7 +99,11 @@ function openStore(file) {
     remove: db.prepare('DELETE FROM items WHERE id = ?'),
   };
 
-  const decorate = (row) => (row ? { ...row, code: codeFor(row.id) } : row);
+  const decorate = (row) => {
+    if (!row) return row;
+    const ph = q.photoInfo.get(row.id);
+    return { ...row, code: codeFor(row.id), has_photo: !!ph, photo_v: ph ? ph.version : 0 };
+  };
   const pathOf = (id) => (id == null ? [] : q.path.all(id));
 
   function cleanName(v) {
@@ -91,8 +113,31 @@ function openStore(file) {
     return name;
   }
   function cleanKind(v) {
-    if (v !== 'place' && v !== 'item') throw new HttpError(400, 'Typ muss "place" (Lagerplatz) oder "item" (Artikel) sein');
+    if (v !== 'place' && v !== 'box' && v !== 'item') {
+      throw new HttpError(400, 'Typ muss "place" (fester Lagerplatz), "box" (variabler Lagerplatz) oder "item" (Artikel) sein');
+    }
     return v;
+  }
+  // Liefert die Zeile des Zielortes (oder null für die oberste Ebene).
+  function cleanParent(v) {
+    if (v == null || v === '') return null;
+    const id = Number(v);
+    const row = Number.isInteger(id) ? q.get.get(id) : null;
+    if (!row) throw new HttpError(400, 'Zielort existiert nicht');
+    if (row.kind === 'item') throw new HttpError(400, 'Das Ziel ist ein Artikel, kein Lagerplatz');
+    return row;
+  }
+  function checkPlacement(kind, parentRow) {
+    if (kind === 'place' && parentRow && parentRow.kind !== 'place') {
+      throw new HttpError(400, 'Ein fester Lagerplatz kann nicht in einer Box liegen');
+    }
+  }
+  function parseJpeg(dataUrl, maxBytes, what) {
+    const m = typeof dataUrl === 'string' && dataUrl.match(/^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/);
+    if (!m) throw new HttpError(400, what + ' muss ein JPEG-Bild sein');
+    const buf = Buffer.from(m[1], 'base64');
+    if (!buf.length || buf.length > maxBytes) throw new HttpError(400, what + ' ist zu groß');
+    return buf;
   }
   function cleanQuantity(v) {
     const n = Number(v);
@@ -106,15 +151,6 @@ function openStore(file) {
     if (notes.length > 5000) throw new HttpError(400, 'Notiz ist zu lang (max. 5000 Zeichen)');
     return notes;
   }
-  function cleanParent(v) {
-    if (v == null || v === '') return null;
-    const id = Number(v);
-    const row = Number.isInteger(id) ? q.get.get(id) : null;
-    if (!row) throw new HttpError(400, 'Zielort existiert nicht');
-    if (row.kind !== 'place') throw new HttpError(400, 'Das Ziel ist ein Artikel, kein Lagerplatz');
-    return id;
-  }
-
   return {
     db,
 
@@ -140,10 +176,12 @@ function openStore(file) {
 
     create(data) {
       const parent = cleanParent(data.parent_id);
+      const kind = data.kind === undefined ? 'item' : cleanKind(data.kind);
+      checkPlacement(kind, parent);
       const res = q.insert.run(
-        parent,
+        parent ? parent.id : null,
         cleanName(data.name),
-        data.kind === undefined ? 'item' : cleanKind(data.kind),
+        kind,
         data.quantity === undefined ? 1 : cleanQuantity(data.quantity),
         cleanNotes(data.notes));
       return this.get(Number(res.lastInsertRowid));
@@ -152,23 +190,46 @@ function openStore(file) {
     update(id, data) {
       const cur = q.get.get(id);
       if (!cur) throw new HttpError(404, 'Eintrag nicht gefunden');
-      const parent = 'parent_id' in data ? cleanParent(data.parent_id) : cur.parent_id;
+      const parent = 'parent_id' in data ? cleanParent(data.parent_id) : (cur.parent_id == null ? null : q.get.get(cur.parent_id));
       // Zyklus verhindern: ein Eintrag darf nicht in sich selbst oder in
       // einem seiner eigenen Unterelemente landen.
-      if (parent != null && pathOf(parent).some((p) => p.id === id)) {
+      if (parent != null && pathOf(parent.id).some((p) => p.id === id)) {
         throw new HttpError(400, 'Ein Eintrag kann nicht in sich selbst oder seinen Inhalt verschoben werden');
       }
       const kind = 'kind' in data ? cleanKind(data.kind) : cur.kind;
-      if (kind === 'item' && cur.kind === 'place' && q.descendantCount.get(id).n > 0) {
+      if (kind === 'item' && cur.kind !== 'item' && q.descendantCount.get(id).n > 0) {
         throw new HttpError(400, 'Dieser Lagerplatz enthält noch etwas und kann kein Artikel werden');
       }
+      if (kind === 'box' && cur.kind === 'place' && q.placeChildren.get(id).n > 0) {
+        throw new HttpError(400, 'Dieser Lagerplatz enthält feste Lagerplätze und kann keine Box werden');
+      }
+      checkPlacement(kind, parent);
       q.update.run(
-        parent,
+        parent ? parent.id : null,
         'name' in data ? cleanName(data.name) : cur.name,
         kind,
         'quantity' in data ? cleanQuantity(data.quantity) : cur.quantity,
         'notes' in data ? cleanNotes(data.notes) : cur.notes,
         id);
+      return this.get(id);
+    },
+
+    // ---- Fotos ----
+    setPhoto(id, data) {
+      if (!q.get.get(id)) throw new HttpError(404, 'Eintrag nicht gefunden');
+      const full = parseJpeg(data.full, 2 * 1024 * 1024, 'Foto');
+      const thumb = parseJpeg(data.thumb, 100 * 1024, 'Miniatur');
+      q.photoSet.run(id, full, thumb);
+      return this.get(id);
+    },
+    getPhoto(id, size) {
+      const row = q.photoGet.get(id);
+      if (!row) throw new HttpError(404, 'Kein Foto vorhanden');
+      return size === 'thumb' ? row.thumb : row.full;
+    },
+    removePhoto(id) {
+      if (!q.get.get(id)) throw new HttpError(404, 'Eintrag nicht gefunden');
+      q.photoDel.run(id);
       return this.get(id);
     },
 
