@@ -1,0 +1,14 @@
+{
+  "name": "woiswos",
+  "version": "0.1.0",
+  "description": "Woiswos - private Lagerverwaltung mit beliebig verschachtelten Lagerplätzen",
+  "private": true,
+  "main": "server.js",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  }
+}

@@ -15,6 +15,10 @@ Features werden Schritt für Schritt besprochen und umgesetzt.
 > Medikamentenerinnerungs-App (inspiriert von MyTherapy) – siehe die
 > README dort für Details und Einrichtung.
 
+> Außerdem enthält dieses Repository **Woiswos** im Ordner
+> [`woiswos/`](woiswos/README.md), eine private Lagerverwaltung mit
+> beliebig verschachtelten Lagerplätzen (Raum › Regal › Schachtel › Box).
+
 ## Funktionen
 
 - Notizen erstellen, bearbeiten und löschen
