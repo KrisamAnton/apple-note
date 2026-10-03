@@ -4,6 +4,11 @@ Hier steht, was wann geändert wurde (neueste Einträge oben). Die Versionsnumme
 steht klein neben dem Benutzernamen; bei jeder Änderung erhöht sich die letzte
 Zahl (1.7.1 → 1.7.2 → …).
 
+## 1.7.8 - 03.10.2026
+
+- Handy/Tablet: Ordner lassen sich jetzt umbenennen. Neben jedem Ordner gibt es einen Stift-Knopf; ein Tipp darauf öffnet das Namensfeld mit Tastatur. Ein normales Antippen des Namens öffnet wie bisher nur den Ordner, ohne Tastatur und ohne die Kopieren-Auswahl.
+- Handy/Tablet: Der Löschen-Knopf (Mülleimer) ist neben jedem Ordner dauerhaft sichtbar und springt nicht mehr beim Antippen auf; Löschen fragt wie bisher nach. Am PC ändert sich nichts (Umbenennen per Doppelklick).
+
 ## 1.7.7 - 03.10.2026
 
 - Der Knopf „Text" und die Abfrage „Textart" sind entfernt (am PC und am Handy). Text entsteht durch Tippen auf eine leere Stelle der Fläche.

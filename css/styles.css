@@ -3274,3 +3274,52 @@ textarea.popover-text-input {
   background: var(--hover-bg);
   color: var(--accent);
 }
+
+/* Ordner umbenennen: Der Stift-Knopf gibt es nur auf Touch-Geräten (am PC
+   weiterhin Doppelklick auf den Namen). Dort ist der Name außerdem nicht
+   markierbar, solange er nicht bearbeitet wird - sonst öffnete ein langes
+   Drücken nur die Kopieren-Auswahl ohne Tastatur. */
+.folder-rename {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .folder-rename {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    margin: -6px -4px -6px 0;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--sidebar-text-muted);
+  }
+
+  .folder-item.active .folder-rename {
+    color: rgba(255, 255, 255, 0.85);
+  }
+
+  /* Auch "Löschen" dauerhaft sichtbar (statt erst beim Überfahren): Ein
+     Antippen löst auf dem Handy sonst ein "Überfahren" aus, wodurch der
+     Löschen-Knopf plötzlich auftaucht, die Zeile verschiebt und der Finger
+     statt des Stifts den Mülleimer trifft. Das Löschen fragt wie bisher nach. */
+  .folder-delete {
+    display: flex;
+    width: 36px;
+    height: 36px;
+    margin: -6px -4px -6px 0;
+  }
+
+  .folder-item.active .folder-delete {
+    color: rgba(255, 255, 255, 0.85);
+  }
+
+  .folder-name[readonly] {
+    pointer-events: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}

@@ -847,6 +847,9 @@
         <button class="folder-color-dot" type="button" style="background:${folder.color || '#8e8e93'}" title="Ordnerfarbe ändern" aria-label="Ordnerfarbe ändern"></button>
         <input class="folder-name" value="${escapeHtml(folder.name)}" readonly />
         <span class="folder-count">${count}</span>
+        <button class="folder-rename" type="button" aria-label="Ordner umbenennen" title="Ordner umbenennen">
+          <svg viewBox="0 0 20 20" class="icon" style="width:18px;height:18px">${ICONS.rename}</svg>
+        </button>
         <button class="folder-delete" type="button" aria-label="Ordner löschen" title="Ordner löschen">
           <svg viewBox="0 0 20 20" class="icon" style="width:14px;height:14px">${ICONS.trash}</svg>
         </button>
@@ -861,9 +864,17 @@
         nameInput.focus();
         nameInput.select();
       }
+      // Nur auf Touch-Geräten sichtbar (siehe CSS): Dort springt schon das erste
+      // Antippen des Namens in die Notizliste, ein Doppeltipp zum Umbenennen ist
+      // daher nicht möglich. Der Stift-Knopf ist ein echter Klick - nur dabei
+      // zeigt der Browser zuverlässig die Tastatur an.
+      item.querySelector('.folder-rename').addEventListener('click', (e) => {
+        e.stopPropagation();
+        enterFolderRename();
+      });
       item.addEventListener('click', (e) => {
         if (e.target === nameInput && nameInput.readOnly === false) return;
-        if (e.target.closest('.folder-delete') || e.target.closest('.folder-color-dot')) return;
+        if (e.target.closest('.folder-delete') || e.target.closest('.folder-rename') || e.target.closest('.folder-color-dot')) return;
         if (e.target === nameInput || e.target.closest('.folder-name')) {
           const now = Date.now();
           if (lastFolderTapId === folder.id && now - lastFolderTapAt < 400) {
