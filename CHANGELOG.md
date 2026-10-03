@@ -4,6 +4,10 @@ Hier steht, was wann geändert wurde (neueste Einträge oben). Die Versionsnumme
 steht klein neben dem Benutzernamen; bei jeder Änderung erhöht sich die letzte
 Zahl (1.7.1 → 1.7.2 → …).
 
+## 1.7.6 - 03.10.2026
+
+- Zeichnen am Handy: Die eigentliche Ursache der Verzögerung war die riesige Zeichen-Ebene (am Handy über 20 Millionen Pixel), die der Browser bei jeder Änderung komplett neu aufbereiten muss. Jetzt deckt sie am Handy nur noch den sichtbaren Ausschnitt plus Rand ab und wandert beim Scrollen mit; der Strich selbst erscheint beim Ziehen sofort als einfache Linie und wird erst beim Loslassen in die Zeichnung übernommen. Auch das Lasso zeichnet seine Linie so. Der Radierer zeigt beim Ziehen eine graue Spur, die beim Loslassen löscht. Am PC bleibt die Zeichen-Ebene unverändert.
+
 ## 1.7.5 - 03.10.2026
 
 - Zeichnen: Ein Strich erscheint jetzt sofort unter dem Finger. Vorher wurde bei jeder Bewegung die ganze Zeichenfläche komplett neu gemalt, was am Handy zwei bis drei Sekunden Verzögerung verursachte. Jetzt wird nur der Bereich des neuen Stücks aktualisiert.

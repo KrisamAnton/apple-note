@@ -1227,6 +1227,25 @@ textarea {
   height: 100%;
   z-index: 5000;
   pointer-events: none;
+  /* Eigene Compositing-Ebene, damit Änderungen anderswo (z. B. die Live-Linie
+     beim Zeichnen) diese riesige Ebene nicht jedes Mal mit neu aufbereiten. */
+  will-change: transform;
+}
+
+/* Live-Vorschau des Strichs, der gerade gezeichnet wird (Vektor, siehe
+   startInkStroke() in app.js) - liegt über der Tinten-Ebene, fängt keine
+   Eingaben ab. */
+.ink-live {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 5001;
+  pointer-events: none;
+  overflow: visible;
+  /* Eigene Compositing-Ebene: Ändert sich die Live-Linie, darf der Browser nicht
+     die riesige Tinten-Ebene darunter mit neu aufbereiten. */
+  will-change: transform;
 }
 
 .canvas-surface.draw-mode .ink-layer {

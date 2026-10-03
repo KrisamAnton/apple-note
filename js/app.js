@@ -510,6 +510,8 @@
     objectContextMenu: document.getElementById('objectContextMenu'),
     objectPasteBtn: document.getElementById('objectPasteBtn'),
     inkLayer: document.getElementById('inkLayer'),
+    inkLive: document.getElementById('inkLive'),
+    inkLivePath: document.getElementById('inkLivePath'),
     drawToolbar: document.getElementById('drawToolbar'),
     drawPenToolBtn: document.getElementById('drawPenToolBtn'),
     drawSelectToolBtn: document.getElementById('drawSelectToolBtn'),
@@ -1511,7 +1513,7 @@
     clearStrokeSelection();
     selectedObjectId = null;
     for (const child of [...el.canvasSurface.children]) {
-      if (child !== el.inkLayer) child.remove();
+      if (child !== el.inkLayer && child !== el.inkLive) child.remove();
     }
     if (!note) {
       lastRenderedCanvasNoteId = undefined;
@@ -1527,6 +1529,7 @@
       el.canvasSurface.insertBefore(buildObjectEl(note, obj), el.inkLayer);
     }
     updateSurfaceSize(note, true);
+    scheduleInkWindowCheck();
     if (note.id !== lastRenderedCanvasNoteId) {
       el.canvasWorkspace.scrollLeft = 0;
       el.canvasWorkspace.scrollTop = 0;
@@ -4016,11 +4019,91 @@
     return 2.5;
   }
 
+  // Die Tinten-Ebene (Canvas) deckt bei kleinen Pixelzahlen die ganze Fläche ab.
+  // Wird sie dagegen riesig (Handy: Pixeldichte 2-3 -> weit über 10 Millionen
+  // Pixel, teils größer als die Texturgrenze der Grafikkarte), muss der Browser
+  // sie bei jeder Bildschirm-Aktualisierung komplett neu aufbereiten - das
+  // machte das Zeichnen am Handy unbenutzbar langsam. Dann deckt der Canvas
+  // nur den sichtbaren Ausschnitt plus einen Rand ab ("Fenster") und wandert
+  // beim Scrollen mit (siehe checkInkWindow()). Am PC mit normaler
+  // Pixeldichte bleibt alles wie bisher (ein Canvas für die ganze Fläche).
+  const INK_FULL_MAX_PIXELS = 6e6;
+  const INK_WINDOW_MARGIN = 160;
+  let inkWin = { x: 0, y: 0, w: 0, h: 0, dpr: 1, windowed: false };
+
+  function visibleSurfaceRect() {
+    const ws = el.canvasWorkspace.getBoundingClientRect();
+    const sf = el.canvasSurface.getBoundingClientRect();
+    const left = Math.max(ws.left, sf.left);
+    const top = Math.max(ws.top, sf.top);
+    const right = Math.min(ws.right, sf.right);
+    const bottom = Math.min(ws.bottom, sf.bottom);
+    if (right <= left || bottom <= top) return null;
+    return {
+      x0: (left - sf.left) / workspaceZoom,
+      y0: (top - sf.top) / workspaceZoom,
+      x1: (right - sf.left) / workspaceZoom,
+      y1: (bottom - sf.top) / workspaceZoom,
+    };
+  }
+
   function sizeInkLayer() {
-    const dpr = window.devicePixelRatio || 1;
-    el.inkLayer.width = Math.round(SURFACE_W * dpr);
-    el.inkLayer.height = Math.round(SURFACE_H * dpr);
-    el.inkLayer.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
+    // Auf Touch-Geräten (Handy) reichen zwei Pixel pro Punkt für Handschrift.
+    const rawDpr = window.devicePixelRatio || 1;
+    const dpr = window.matchMedia('(pointer: coarse)').matches ? Math.min(rawDpr, 2) : rawDpr;
+    const windowed = SURFACE_W * SURFACE_H * dpr * dpr > INK_FULL_MAX_PIXELS;
+    let x = 0, y = 0, w = SURFACE_W, h = SURFACE_H;
+    const vis = windowed ? visibleSurfaceRect() : null;
+    if (windowed) {
+      const v = vis || { x0: 0, y0: 0, x1: 1, y1: 1 };
+      x = Math.max(0, Math.floor(v.x0 - INK_WINDOW_MARGIN));
+      y = Math.max(0, Math.floor(v.y0 - INK_WINDOW_MARGIN));
+      w = Math.min(SURFACE_W, Math.ceil(v.x1 + INK_WINDOW_MARGIN)) - x;
+      h = Math.min(SURFACE_H, Math.ceil(v.y1 + INK_WINDOW_MARGIN)) - y;
+    }
+    const canvas = el.inkLayer;
+    canvas.width = Math.max(1, Math.round(w * dpr));
+    canvas.height = Math.max(1, Math.round(h * dpr));
+    if (windowed) {
+      canvas.style.inset = 'auto';
+      canvas.style.left = `${x}px`;
+      canvas.style.top = `${y}px`;
+      canvas.style.width = `${w}px`;
+      canvas.style.height = `${h}px`;
+    } else {
+      canvas.style.inset = '';
+      canvas.style.left = '';
+      canvas.style.top = '';
+      canvas.style.width = '';
+      canvas.style.height = '';
+    }
+    canvas.getContext('2d').setTransform(dpr, 0, 0, dpr, -x * dpr, -y * dpr);
+    inkWin = { x, y, w, h, dpr, windowed };
+  }
+
+  // Prüft (nach Scrollen/Zoomen), ob der sichtbare Ausschnitt noch im Fenster
+  // der Tinten-Ebene liegt - sonst wird das Fenster neu um ihn gelegt.
+  let inkWindowFrame = 0;
+  function scheduleInkWindowCheck() {
+    if (!inkWin.windowed || inkWindowFrame) return;
+    inkWindowFrame = requestAnimationFrame(() => {
+      inkWindowFrame = 0;
+      checkInkWindow();
+    });
+  }
+
+  function checkInkWindow() {
+    if (!inkWin.windowed || inkStrokeState || lassoPoints) return;
+    const vis = visibleSurfaceRect();
+    if (!vis) return;
+    const slack = INK_WINDOW_MARGIN / 3;
+    const lacksLeft = inkWin.x > 0 && vis.x0 < inkWin.x + slack;
+    const lacksTop = inkWin.y > 0 && vis.y0 < inkWin.y + slack;
+    const lacksRight = inkWin.x + inkWin.w < SURFACE_W && vis.x1 > inkWin.x + inkWin.w - slack;
+    const lacksBottom = inkWin.y + inkWin.h < SURFACE_H && vis.y1 > inkWin.y + inkWin.h - slack;
+    if (!(lacksLeft || lacksTop || lacksRight || lacksBottom)) return;
+    sizeInkLayer();
+    redrawInk(currentNote());
   }
 
   // Lässt die Fläche mitwachsen, wenn ein Objekt (z. B. eine vielseitige PDF)
@@ -4112,20 +4195,27 @@
   function redrawInk(note, region) {
     const ctx = el.inkLayer.getContext('2d');
     ctx.save();
-    let rx0 = 0, ry0 = 0, rx1 = SURFACE_W, ry1 = SURFACE_H;
+    // Grenzen des Canvas selbst (ganze Fläche oder nur das Fenster, siehe
+    // sizeInkLayer()) - alles außerhalb wird weder gelöscht noch gemalt.
+    let rx0 = inkWin.windowed ? inkWin.x : 0;
+    let ry0 = inkWin.windowed ? inkWin.y : 0;
+    let rx1 = inkWin.windowed ? inkWin.x + inkWin.w : SURFACE_W;
+    let ry1 = inkWin.windowed ? inkWin.y + inkWin.h : SURFACE_H;
     if (region) {
-      rx0 = Math.max(0, Math.floor(region.x0));
-      ry0 = Math.max(0, Math.floor(region.y0));
-      rx1 = Math.min(SURFACE_W, Math.ceil(region.x1));
-      ry1 = Math.min(SURFACE_H, Math.ceil(region.y1));
+      rx0 = Math.max(rx0, Math.floor(region.x0));
+      ry0 = Math.max(ry0, Math.floor(region.y0));
+      rx1 = Math.min(rx1, Math.ceil(region.x1));
+      ry1 = Math.min(ry1, Math.ceil(region.y1));
+    }
+    if (region || inkWin.windowed) {
       ctx.beginPath();
-      ctx.rect(rx0, ry0, rx1 - rx0, ry1 - ry0);
+      ctx.rect(rx0, ry0, Math.max(0, rx1 - rx0), Math.max(0, ry1 - ry0));
       ctx.clip();
     }
-    ctx.clearRect(rx0, ry0, rx1 - rx0, ry1 - ry0);
-    for (const stroke of (note.ink && note.ink.strokes) || []) {
+    ctx.clearRect(rx0, ry0, Math.max(0, rx1 - rx0), Math.max(0, ry1 - ry0));
+    for (const stroke of (note && note.ink && note.ink.strokes) || []) {
       const pts = strokeAbsolutePoints(note, stroke);
-      if (region && !strokeTouchesRegion(pts, rx0, ry0, rx1, ry1)) continue;
+      if ((region || inkWin.windowed) && !strokeTouchesRegion(pts, rx0, ry0, rx1, ry1)) continue;
       drawStrokeAbs(ctx, stroke, pts);
     }
     if (lassoPoints && lassoPoints.length > 1) drawLassoPath(ctx, lassoPoints);
@@ -4161,31 +4251,48 @@
     return { x0: x0 - pad, y0: y0 - pad, x1: x1 + pad, y1: y1 + pad };
   }
 
-  // Sammelt die seit dem letzten Bild geänderten Bereiche und malt sie höchstens
-  // einmal pro Bildschirm-Aktualisierung (statt bei jedem einzelnen
-  // Bewegungs-Ereignis, von denen am Handy mehrere pro Bild eintreffen).
-  let inkPendingRegion = null;
-  let inkPendingNote = null;
-  let inkFrame = 0;
+  // Live-Vorschau beim Zeichnen: Der Strich wird während des Ziehens als
+  // schlanke Vektor-Linie (SVG) über der Fläche angezeigt und erst beim
+  // Loslassen einmal in die Tinten-Ebene (Canvas) übernommen. Grund: Jede
+  // Änderung der riesigen Canvas-Ebene kostet den Browser pro Bild Dutzende bis
+  // hunderte Millisekunden (er muss die ganze Ebene neu aufbereiten), egal wie
+  // klein der geänderte Bereich ist - am Handy erschien der Strich dadurch erst
+  // nach Sekunden. Eine SVG-Linie dagegen kostet praktisch nichts.
+  let liveD = '';
+  let liveWidth = 1;
+  let liveFrame = 0;
 
-  function queueInkRedraw(note, region) {
-    inkPendingNote = note;
-    if (!inkPendingRegion) inkPendingRegion = { ...region };
-    else {
-      inkPendingRegion.x0 = Math.min(inkPendingRegion.x0, region.x0);
-      inkPendingRegion.y0 = Math.min(inkPendingRegion.y0, region.y0);
-      inkPendingRegion.x1 = Math.max(inkPendingRegion.x1, region.x1);
-      inkPendingRegion.y1 = Math.max(inkPendingRegion.y1, region.y1);
-    }
-    if (!inkFrame) inkFrame = requestAnimationFrame(flushInkRedraw);
+  function liveStart(stroke) {
+    const p = stroke.points[0];
+    const path = el.inkLivePath;
+    path.setAttribute('stroke', stroke.eraser ? 'rgba(120, 120, 120, 0.4)' : stroke.color);
+    path.setAttribute('fill', 'none');
+    path.removeAttribute('stroke-dasharray');
+    path.setAttribute('stroke-linecap', 'round');
+    path.setAttribute('stroke-linejoin', 'round');
+    liveD = `M ${p.x} ${p.y} l 0.01 0`;
+    liveWidth = p.width;
+    liveRender();
   }
 
-  function flushInkRedraw() {
-    if (inkFrame) cancelAnimationFrame(inkFrame);
-    inkFrame = 0;
-    if (inkPendingRegion && inkPendingNote) redrawInk(inkPendingNote, inkPendingRegion);
-    inkPendingRegion = null;
-    inkPendingNote = null;
+  function liveAppend(point) {
+    liveD += ` L ${point.x} ${point.y}`;
+    liveWidth = point.width; // wie beim endgültigen Malen zählt die Breite des letzten Punktes
+    if (!liveFrame) liveFrame = requestAnimationFrame(liveRender);
+  }
+
+  function liveRender() {
+    if (liveFrame) cancelAnimationFrame(liveFrame);
+    liveFrame = 0;
+    el.inkLivePath.setAttribute('d', liveD);
+    el.inkLivePath.setAttribute('stroke-width', String(liveWidth));
+  }
+
+  function liveClear() {
+    if (liveFrame) cancelAnimationFrame(liveFrame);
+    liveFrame = 0;
+    liveD = '';
+    el.inkLivePath.setAttribute('d', '');
   }
 
   function startInkStroke(e) {
@@ -4209,7 +4316,7 @@
     el.inkLayer.addEventListener('pointermove', onInkMove);
     el.inkLayer.addEventListener('pointerup', onInkEnd);
     el.inkLayer.addEventListener('pointercancel', onInkEnd);
-    redrawInk(note, inkRegionOf(stroke.points));
+    liveStart(stroke);
   }
 
   function onInkMove(e) {
@@ -4218,14 +4325,9 @@
     const rect = el.canvasSurface.getBoundingClientRect();
     const widthPx = widthForPointer(e.pointerType, e.pressure, drawIsEraser);
     const stroke = note.ink.strokes[note.ink.strokes.length - 1];
-    const prev = stroke.points[stroke.points.length - 1];
     const next = { x: (e.clientX - rect.left) / workspaceZoom, y: (e.clientY - rect.top) / workspaceZoom, width: widthPx };
     stroke.points.push(next);
-    // Der ganze Strich wird mit der Breite seines letzten Punktes gemalt (siehe
-    // drawStrokeAbs) - ändert sich die Breite (Stift mit Druck), muss daher der
-    // ganze Strich neu gemalt werden, sonst genügt das neue Teilstück.
-    const region = prev && prev.width === next.width ? inkRegionOf([prev, next]) : inkRegionOf(stroke.points);
-    queueInkRedraw(note, region);
+    liveAppend(next);
   }
 
   function onInkEnd() {
@@ -4236,8 +4338,10 @@
     const { note } = inkStrokeState;
     inkStrokeState = null;
     const stroke = note.ink.strokes[note.ink.strokes.length - 1];
-    if (stroke) queueInkRedraw(note, inkRegionOf(stroke.points));
-    flushInkRedraw();
+    // Beim Loslassen: Strich einmalig in die Tinten-Ebene übernehmen (nur sein
+    // Bereich wird neu gemalt) und die Live-Vorschau im selben Bild ausblenden.
+    if (stroke) redrawInk(note, inkRegionOf(stroke.points));
+    requestAnimationFrame(liveClear);
     schedulePersist();
   }
 
@@ -4378,13 +4482,33 @@
     el.inkLayer.addEventListener('pointerup', onLassoEnd);
     el.inkLayer.addEventListener('pointercancel', onLassoCancel);
     redrawInk(note);
+    lassoLiveRender();
+  }
+
+  // Lasso-Linie während des Ziehens ebenfalls als SVG-Vorschau (siehe
+  // liveStart()) statt die ganze Tinten-Ebene bei jeder Bewegung neu zu malen.
+  function lassoLiveRender() {
+    const path = el.inkLivePath;
+    path.setAttribute('stroke', 'rgba(0, 122, 255, 0.9)');
+    path.setAttribute('stroke-width', '1.5');
+    path.setAttribute('stroke-dasharray', '5 4');
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke-linecap', 'butt');
+    path.setAttribute('d', lassoPoints && lassoPoints.length > 1
+      ? 'M ' + lassoPoints.map((q) => `${q.x} ${q.y}`).join(' L ')
+      : '');
+  }
+
+  function lassoLiveClear() {
+    el.inkLivePath.removeAttribute('stroke-dasharray');
+    liveClear();
   }
 
   function onLassoMove(e) {
     if (!lassoPoints) return;
     const rect = el.canvasSurface.getBoundingClientRect();
     lassoPoints.push({ x: (e.clientX - rect.left) / workspaceZoom, y: (e.clientY - rect.top) / workspaceZoom });
-    redrawInk(currentNote());
+    if (!liveFrame) liveFrame = requestAnimationFrame(() => { liveFrame = 0; lassoLiveRender(); });
   }
 
   function onLassoEnd() {
@@ -4397,6 +4521,7 @@
     lassoPoints = null;
     if (note && lasso.length > 2) selectStrokesInLasso(note, lasso);
     redrawInk(note);
+    lassoLiveClear();
   }
 
   function onLassoCancel() {
@@ -4405,6 +4530,7 @@
     el.inkLayer.removeEventListener('pointercancel', onLassoCancel);
     lassoPoints = null;
     redrawInk(currentNote());
+    lassoLiveClear();
   }
 
   function selectStrokesInLasso(note, lasso) {
@@ -7059,6 +7185,8 @@
     initColumnResizers();
     wireIconTooltips();
     document.addEventListener('selectionchange', rememberActiveSelectionRange);
+    el.canvasWorkspace.addEventListener('scroll', scheduleInkWindowCheck, { passive: true });
+    window.addEventListener('resize', () => { sizeInkLayer(); redrawInk(currentNote()); scheduleInkWindowCheck(); });
     goToView(isMobileLayout() ? 'folders' : 'notes');
 
     // Manche Browser füllen das Suchfeld trotz autocomplete="off" schon beim
@@ -7413,6 +7541,7 @@
       const dist = touchDist(e.touches[0], e.touches[1]);
       workspaceZoom = clamp(workspacePinch.startZoom * (dist / workspacePinch.startDist), 0.4, 2.5);
       el.canvasSurface.style.zoom = workspaceZoom;
+      scheduleInkWindowCheck();
       const rect = el.canvasWorkspace.getBoundingClientRect();
       const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
       const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;

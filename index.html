@@ -242,6 +242,8 @@
 
             <div class="canvas-surface" id="canvasSurface">
               <canvas id="inkLayer" class="ink-layer"></canvas>
+              <!-- Live-Vorschau des gerade gezeichneten Strichs (siehe startInkStroke()) -->
+              <svg id="inkLive" class="ink-live" aria-hidden="true"><path id="inkLivePath" d=""></path></svg>
             </div>
           </div>
         </div>
