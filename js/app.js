@@ -4102,15 +4102,90 @@
     ctx.restore();
   }
 
-  function redrawInk(note) {
+  // Zeichnet die Tinten-Ebene neu. Ohne "region" komplett; mit region
+  // ({x0, y0, x1, y1} in Flächen-Koordinaten) nur diesen Ausschnitt - Striche,
+  // die den Ausschnitt gar nicht berühren, werden übersprungen. Während des
+  // Zeichnens ist das entscheidend: Die Ebene ist so groß wie die ganze Fläche
+  // (am Handy mehrere Millionen Pixel), sie bei jeder Fingerbewegung komplett zu
+  // löschen und alle Striche neu zu malen dauerte pro Bewegung Dutzende
+  // Millisekunden - der Strich erschien dadurch erst nach Sekunden.
+  function redrawInk(note, region) {
     const ctx = el.inkLayer.getContext('2d');
     ctx.save();
-    ctx.clearRect(0, 0, SURFACE_W, SURFACE_H);
+    let rx0 = 0, ry0 = 0, rx1 = SURFACE_W, ry1 = SURFACE_H;
+    if (region) {
+      rx0 = Math.max(0, Math.floor(region.x0));
+      ry0 = Math.max(0, Math.floor(region.y0));
+      rx1 = Math.min(SURFACE_W, Math.ceil(region.x1));
+      ry1 = Math.min(SURFACE_H, Math.ceil(region.y1));
+      ctx.beginPath();
+      ctx.rect(rx0, ry0, rx1 - rx0, ry1 - ry0);
+      ctx.clip();
+    }
+    ctx.clearRect(rx0, ry0, rx1 - rx0, ry1 - ry0);
     for (const stroke of (note.ink && note.ink.strokes) || []) {
-      drawStrokeAbs(ctx, stroke, strokeAbsolutePoints(note, stroke));
+      const pts = strokeAbsolutePoints(note, stroke);
+      if (region && !strokeTouchesRegion(pts, rx0, ry0, rx1, ry1)) continue;
+      drawStrokeAbs(ctx, stroke, pts);
     }
     if (lassoPoints && lassoPoints.length > 1) drawLassoPath(ctx, lassoPoints);
     ctx.restore();
+  }
+
+  // Grober Test (Umrandungsrechteck + Strichbreite), ob ein Strich in den
+  // Ausschnitt hineinreicht.
+  function strokeTouchesRegion(pts, rx0, ry0, rx1, ry1) {
+    if (!pts || pts.length === 0) return false;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, maxW = 0;
+    for (const pt of pts) {
+      if (pt.x < minX) minX = pt.x;
+      if (pt.x > maxX) maxX = pt.x;
+      if (pt.y < minY) minY = pt.y;
+      if (pt.y > maxY) maxY = pt.y;
+      if (pt.width > maxW) maxW = pt.width;
+    }
+    const pad = maxW / 2 + 2;
+    return maxX + pad >= rx0 && minX - pad <= rx1 && maxY + pad >= ry0 && minY - pad <= ry1;
+  }
+
+  function inkRegionOf(pts) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, maxW = 0;
+    for (const pt of pts) {
+      if (pt.x < x0) x0 = pt.x;
+      if (pt.x > x1) x1 = pt.x;
+      if (pt.y < y0) y0 = pt.y;
+      if (pt.y > y1) y1 = pt.y;
+      if (pt.width > maxW) maxW = pt.width;
+    }
+    const pad = maxW / 2 + 3;
+    return { x0: x0 - pad, y0: y0 - pad, x1: x1 + pad, y1: y1 + pad };
+  }
+
+  // Sammelt die seit dem letzten Bild geänderten Bereiche und malt sie höchstens
+  // einmal pro Bildschirm-Aktualisierung (statt bei jedem einzelnen
+  // Bewegungs-Ereignis, von denen am Handy mehrere pro Bild eintreffen).
+  let inkPendingRegion = null;
+  let inkPendingNote = null;
+  let inkFrame = 0;
+
+  function queueInkRedraw(note, region) {
+    inkPendingNote = note;
+    if (!inkPendingRegion) inkPendingRegion = { ...region };
+    else {
+      inkPendingRegion.x0 = Math.min(inkPendingRegion.x0, region.x0);
+      inkPendingRegion.y0 = Math.min(inkPendingRegion.y0, region.y0);
+      inkPendingRegion.x1 = Math.max(inkPendingRegion.x1, region.x1);
+      inkPendingRegion.y1 = Math.max(inkPendingRegion.y1, region.y1);
+    }
+    if (!inkFrame) inkFrame = requestAnimationFrame(flushInkRedraw);
+  }
+
+  function flushInkRedraw() {
+    if (inkFrame) cancelAnimationFrame(inkFrame);
+    inkFrame = 0;
+    if (inkPendingRegion && inkPendingNote) redrawInk(inkPendingNote, inkPendingRegion);
+    inkPendingRegion = null;
+    inkPendingNote = null;
   }
 
   function startInkStroke(e) {
@@ -4134,7 +4209,7 @@
     el.inkLayer.addEventListener('pointermove', onInkMove);
     el.inkLayer.addEventListener('pointerup', onInkEnd);
     el.inkLayer.addEventListener('pointercancel', onInkEnd);
-    redrawInk(note);
+    redrawInk(note, inkRegionOf(stroke.points));
   }
 
   function onInkMove(e) {
@@ -4143,8 +4218,14 @@
     const rect = el.canvasSurface.getBoundingClientRect();
     const widthPx = widthForPointer(e.pointerType, e.pressure, drawIsEraser);
     const stroke = note.ink.strokes[note.ink.strokes.length - 1];
-    stroke.points.push({ x: (e.clientX - rect.left) / workspaceZoom, y: (e.clientY - rect.top) / workspaceZoom, width: widthPx });
-    redrawInk(note);
+    const prev = stroke.points[stroke.points.length - 1];
+    const next = { x: (e.clientX - rect.left) / workspaceZoom, y: (e.clientY - rect.top) / workspaceZoom, width: widthPx };
+    stroke.points.push(next);
+    // Der ganze Strich wird mit der Breite seines letzten Punktes gemalt (siehe
+    // drawStrokeAbs) - ändert sich die Breite (Stift mit Druck), muss daher der
+    // ganze Strich neu gemalt werden, sonst genügt das neue Teilstück.
+    const region = prev && prev.width === next.width ? inkRegionOf([prev, next]) : inkRegionOf(stroke.points);
+    queueInkRedraw(note, region);
   }
 
   function onInkEnd() {
@@ -4152,7 +4233,11 @@
     el.inkLayer.removeEventListener('pointermove', onInkMove);
     el.inkLayer.removeEventListener('pointerup', onInkEnd);
     el.inkLayer.removeEventListener('pointercancel', onInkEnd);
+    const { note } = inkStrokeState;
     inkStrokeState = null;
+    const stroke = note.ink.strokes[note.ink.strokes.length - 1];
+    if (stroke) queueInkRedraw(note, inkRegionOf(stroke.points));
+    flushInkRedraw();
     schedulePersist();
   }
 
