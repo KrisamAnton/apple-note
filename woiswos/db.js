@@ -27,12 +27,19 @@ CREATE TABLE IF NOT EXISTS places (
 );
 CREATE INDEX IF NOT EXISTS idx_places_parent ON places(parent_id);
 
+-- Artikelgruppen (Kleinteile, Handwerkzeug, ...): frei erweiterbar, für Artikel optional
+CREATE TABLE IF NOT EXISTS categories (
+  id   INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT    NOT NULL UNIQUE COLLATE NOCASE
+);
+
 CREATE TABLE IF NOT EXISTS articles (
-  id         INTEGER PRIMARY KEY AUTOINCREMENT,
-  code       TEXT    NOT NULL UNIQUE COLLATE NOCASE,
-  name       TEXT    NOT NULL,
-  unit       TEXT    NOT NULL DEFAULT 'Stk',
-  notes      TEXT    NOT NULL DEFAULT '',
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  code        TEXT    NOT NULL UNIQUE COLLATE NOCASE,
+  name        TEXT    NOT NULL,
+  unit        TEXT    NOT NULL DEFAULT 'Stk',
+  category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
+  notes       TEXT    NOT NULL DEFAULT '',
   created_at TEXT    NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
 );
@@ -83,6 +90,13 @@ CREATE TABLE IF NOT EXISTS counters (
 `;
 
 const PREFIX = { place: 'LP-', box: 'BOX-', article: 'ART-' };
+
+// Vorschlag für die Artikelgruppen beim ersten Start (danach frei änderbar).
+const DEFAULT_CATEGORIES = [
+  'Kleinteile', 'Elektronik-Bauteile', 'Kabel & Leitungen', 'Lötzubehör', 'Befestigung (Schrauben, Dübel)',
+  'Handwerkzeug', 'Elektrowerkzeug', 'Druckluftwerkzeug', 'Messgeräte', 'Maschinen',
+  'Verbrauchsmaterial', 'Bastelmaterial', 'Sonstiges',
+];
 
 class HttpError extends Error {
   constructor(status, message) {
@@ -163,11 +177,22 @@ function openStore(file) {
   db.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;');
   migrateFromItems(db);
   db.exec(SCHEMA);
+  // Migration: ältere Datenbanken kennen die Artikelgruppe noch nicht.
+  if (!db.prepare('PRAGMA table_info(articles)').all().some((c) => c.name === 'category_id')) {
+    db.exec('ALTER TABLE articles ADD COLUMN category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL');
+  }
+  // Standard-Gruppen nur ein einziges Mal anlegen - gelöschte kommen nicht wieder.
+  if (!db.prepare("SELECT 1 FROM counters WHERE name = 'categories_seeded'").get()) {
+    const ins = db.prepare('INSERT OR IGNORE INTO categories (name) VALUES (?)');
+    DEFAULT_CATEGORIES.forEach((n) => ins.run(n));
+    db.prepare("INSERT INTO counters (name, next) VALUES ('categories_seeded', 1)").run();
+  }
 
   const q = {
     place: db.prepare('SELECT * FROM places WHERE id = ?'),
     placeByCode: db.prepare('SELECT * FROM places WHERE code = ?'),
-    article: db.prepare('SELECT * FROM articles WHERE id = ?'),
+    article: db.prepare(`SELECT a.*, c.name AS category FROM articles a
+      LEFT JOIN categories c ON c.id = a.category_id WHERE a.id = ?`),
     articleByCode: db.prepare('SELECT * FROM articles WHERE code = ?'),
     childPlaces: db.prepare(`
       SELECT p.*,
@@ -226,15 +251,25 @@ function openStore(file) {
     updPlace: db.prepare(`UPDATE places SET code = ?, name = ?, kind = ?, parent_id = ?, notes = ?,
       updated_at = datetime('now') WHERE id = ?`),
     delPlace: db.prepare('DELETE FROM places WHERE id = ?'),
-    insArticle: db.prepare('INSERT INTO articles (code, name, unit, notes) VALUES (?, ?, ?, ?)'),
-    updArticle: db.prepare(`UPDATE articles SET code = ?, name = ?, unit = ?, notes = ?,
+    insArticle: db.prepare('INSERT INTO articles (code, name, unit, category_id, notes) VALUES (?, ?, ?, ?, ?)'),
+    updArticle: db.prepare(`UPDATE articles SET code = ?, name = ?, unit = ?, category_id = ?, notes = ?,
       updated_at = datetime('now') WHERE id = ?`),
+    category: db.prepare('SELECT * FROM categories WHERE id = ?'),
+    categoryByName: db.prepare('SELECT * FROM categories WHERE name = ?'),
+    listCategories: db.prepare(`
+      SELECT c.*, (SELECT COUNT(*) FROM articles a WHERE a.category_id = c.id) AS article_count
+      FROM categories c ORDER BY c.name COLLATE NOCASE`),
+    insCategory: db.prepare('INSERT INTO categories (name) VALUES (?)'),
+    updCategory: db.prepare('UPDATE categories SET name = ? WHERE id = ?'),
+    delCategory: db.prepare('DELETE FROM categories WHERE id = ?'),
     delArticle: db.prepare('DELETE FROM articles WHERE id = ?'),
     listArticles: db.prepare(`
-      SELECT a.*, COALESCE((SELECT SUM(quantity) FROM stock WHERE article_id = a.id), 0) AS total,
+      SELECT a.*, c.name AS category,
+        COALESCE((SELECT SUM(quantity) FROM stock WHERE article_id = a.id), 0) AS total,
         (SELECT COUNT(*) FROM stock WHERE article_id = a.id) AS lines
-      FROM articles a
+      FROM articles a LEFT JOIN categories c ON c.id = a.category_id
       WHERE (? = '' OR a.name LIKE ? ESCAPE '\\' OR a.code LIKE ? ESCAPE '\\' OR a.notes LIKE ? ESCAPE '\\')
+        AND (? = '' OR (? = 'none' AND a.category_id IS NULL) OR CAST(a.category_id AS TEXT) = ?)
       ORDER BY a.name COLLATE NOCASE LIMIT 500`),
     searchPlaces: db.prepare(`
       SELECT * FROM places
@@ -326,6 +361,18 @@ function openStore(file) {
     if (!u) return 'Stk';
     if (u.length > 12) throw new HttpError(400, 'Einheit ist zu lang (max. 12 Zeichen)');
     return u;
+  }
+  function cleanCategoryName(v) {
+    const n = typeof v === 'string' ? v.trim().replace(/\s+/g, ' ') : '';
+    if (!n) throw new HttpError(400, 'Name der Gruppe darf nicht leer sein');
+    if (n.length > 40) throw new HttpError(400, 'Name der Gruppe ist zu lang (max. 40 Zeichen)');
+    return n;
+  }
+  function cleanCategoryId(v) {
+    if (v == null || v === '') return null;
+    const id = Number(v);
+    if (!Number.isInteger(id) || !q.category.get(id)) throw new HttpError(400, 'Artikelgruppe existiert nicht');
+    return id;
   }
   function cleanQty(v) {
     const n = Number(v);
@@ -471,10 +518,12 @@ function openStore(file) {
     },
 
     // ================= Artikel =================
-    listArticles(text) {
+    // category: '' = alle, 'none' = ohne Gruppe, sonst die ID der Gruppe
+    listArticles(text, category) {
       const term = String(text || '').trim();
       const like = '%' + term.replace(/[\\%_]/g, (c) => '\\' + c) + '%';
-      return q.listArticles.all(term, like, like, like).map(decorateArticle);
+      const cat = String(category || '');
+      return q.listArticles.all(term, like, like, like, cat, cat, cat).map(decorateArticle);
     },
 
     getArticle(id) {
@@ -500,10 +549,11 @@ function openStore(file) {
     createArticle(data) {
       const name = cleanName(data.name, true);
       const unit = cleanUnit(data.unit);
+      const category = cleanCategoryId(data.category_id);
       const notes = cleanNotes(data.notes);
       return tx(() => {
         const code = resolveCode('article', data.code, null);
-        const res = q.insArticle.run(code, name, unit, notes);
+        const res = q.insArticle.run(code, name, unit, category, notes);
         return this.getArticle(Number(res.lastInsertRowid));
       });
     },
@@ -515,6 +565,7 @@ function openStore(file) {
         code,
         'name' in data ? cleanName(data.name, true) : cur.name,
         'unit' in data ? cleanUnit(data.unit) : cur.unit,
+        'category_id' in data ? cleanCategoryId(data.category_id) : cur.category_id,
         'notes' in data ? cleanNotes(data.notes) : cur.notes,
         id);
       return this.getArticle(id);
@@ -524,6 +575,32 @@ function openStore(file) {
       const info = this.getArticle(id);
       q.delArticle.run(id);
       return { deleted_stock_lines: info.stock.length };
+    },
+
+    // ================= Artikelgruppen =================
+    listCategories() {
+      return q.listCategories.all();
+    },
+    createCategory(data) {
+      const name = cleanCategoryName(data.name);
+      if (q.categoryByName.get(name)) throw new HttpError(409, `Die Gruppe „${name}“ gibt es schon.`);
+      const res = q.insCategory.run(name);
+      return { ...q.category.get(Number(res.lastInsertRowid)), article_count: 0 };
+    },
+    updateCategory(id, data) {
+      if (!q.category.get(id)) throw new HttpError(404, 'Artikelgruppe nicht gefunden');
+      const name = cleanCategoryName(data.name);
+      const hit = q.categoryByName.get(name);
+      if (hit && hit.id !== id) throw new HttpError(409, `Die Gruppe „${name}“ gibt es schon.`);
+      q.updCategory.run(name, id);
+      return q.listCategories.all().find((c) => c.id === id);
+    },
+    // Artikel der Gruppe bleiben erhalten und stehen danach "ohne Gruppe".
+    removeCategory(id) {
+      const cat = q.listCategories.all().find((c) => c.id === id);
+      if (!cat) throw new HttpError(404, 'Artikelgruppe nicht gefunden');
+      q.delCategory.run(id);
+      return { unassigned_articles: cat.article_count };
     },
 
     // ================= Bestand / Buchungen =================

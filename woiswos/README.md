@@ -19,6 +19,11 @@ Schritt besprochen und umgesetzt.
     allem, was darin liegt
 - **Artikel** - Stammdaten (Artikelnummer, Name, Einheit, Foto, Notiz), **einmal** pro
   Artikel. Nummer frei wählbar oder automatisch (`ART-0001`).
+- **Artikelgruppe** (freiwillig) - zum Ordnen der Artikel. Beim ersten Start gibt es Vorschläge
+  (Kleinteile, Elektronik-Bauteile, Kabel & Leitungen, Lötzubehör, Befestigung, Handwerkzeug,
+  Elektrowerkzeug, Druckluftwerkzeug, Messgeräte, Maschinen, Verbrauchsmaterial, Bastelmaterial,
+  Sonstiges). Unter ⚙️ Einstellungen lassen sie sich umbenennen, löschen und erweitern; beim
+  Anlegen eines Artikels geht das auch direkt im Auswahlfeld („＋ Neue Gruppe anlegen…“).
 - **Bestand** - wie viel von einem Artikel auf welchem Lagerplatz liegt. Derselbe
   Artikel kann an mehreren Plätzen liegen (12 Stk im Fach, 5 Stk in der Kiste).
 - **Buchungen** - Einlagern, Umlagern (auch Teilmengen), Ausbuchen. Jede Buchung
@@ -35,7 +40,9 @@ Regel: Ein fester Lagerplatz liegt nie in einer Box. Eine Box darf in einer Box 
 - Lagerplätze und Artikel anlegen, bearbeiten, verschieben, löschen
 - Nummern frei vergeben oder automatisch fortlaufend; Nummern sind eindeutig
   (Groß-/Kleinschreibung und mehrfache Leerzeichen werden ignoriert)
-- Bestand einlagern / umlagern / ausbuchen, mit Notiz und Verlauf
+- Bestand einlagern / umlagern / ausbuchen, mit Notiz und Verlauf; ein neu angelegter Artikel führt
+  gleich zum Einlagern, der zuletzt benutzte Lagerplatz wird vorgeschlagen
+- Artikelliste nach Gruppe filtern
 - Fotos für Lagerplätze und Artikel (am Handy startet „Foto aufnehmen“ direkt die hintere Kamera, „Aus Galerie“ wählt ein vorhandenes Bild), Miniaturen in
   Listen, Suche und Lagerplatz-Auswahl
 - Suche über Nummer, Name und Notiz bei Lagerplätzen und Artikeln; zeigt den Pfad

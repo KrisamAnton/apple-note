@@ -79,12 +79,17 @@ function makeServer(store) {
   route('PATCH', '/api/places/:id', ({ params, body }) => store.updatePlace(parseId(params.id), body));
   route('DELETE', '/api/places/:id', ({ params }) => store.removePlace(parseId(params.id)));
   // Artikel
-  route('GET', '/api/articles', ({ query }) => store.listArticles(query.get('q')));
+  route('GET', '/api/articles', ({ query }) => store.listArticles(query.get('q'), query.get('category')));
   route('POST', '/api/articles', ({ body }) => [201, store.createArticle(body)]);
   route('GET', '/api/articles/by-code', ({ query }) => store.articleByCode(query.get('code')));
   route('GET', '/api/articles/:id', ({ params }) => store.getArticle(parseId(params.id)));
   route('PATCH', '/api/articles/:id', ({ params, body }) => store.updateArticle(parseId(params.id), body));
   route('DELETE', '/api/articles/:id', ({ params }) => store.removeArticle(parseId(params.id)));
+  // Artikelgruppen
+  route('GET', '/api/categories', () => store.listCategories());
+  route('POST', '/api/categories', ({ body }) => [201, store.createCategory(body)]);
+  route('PATCH', '/api/categories/:id', ({ params, body }) => store.updateCategory(parseId(params.id), body));
+  route('DELETE', '/api/categories/:id', ({ params }) => store.removeCategory(parseId(params.id)));
   // Bestand
   route('POST', '/api/stock/put', ({ body }) => store.put(body));
   route('POST', '/api/stock/move', ({ body }) => store.move(body));

@@ -89,3 +89,14 @@ h3.sec { margin: 18px 0 6px; font-size: 14px; color: var(--muted); text-transfor
   .label { border: 0; }
 }
 [hidden] { display: none !important; }
+
+#gear { font-size: 22px; text-decoration: none; line-height: 1; padding: 4px; }
+.catrow { display: flex; align-items: center; gap: 8px; padding: 10px 14px; }
+.catrow .name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.catrow button { padding: 6px 10px; font-size: 14px; }
+.addrow { display: flex; gap: 8px; margin-top: 10px; }
+.addrow input { flex: 1; min-width: 0; }
+.filterrow { display: flex; gap: 8px; margin-bottom: 8px; }
+.filterrow select, .filterrow input { flex: 1; min-width: 0; }
+.catrow .sub { display: block; color: var(--muted); font-size: 13px; }
+.catrow button { min-width: 44px; }

@@ -94,6 +94,21 @@ function subview(render) {
   });
 }
 
+// Kleine Texteingabe (z. B. Gruppenname). Funktioniert mit und ohne bereits offenen Dialog.
+// Ergebnis: eingegebener Text oder undefined bei Abbruch.
+function askText(title, value) {
+  const wasOpen = dlg.open;
+  if (!wasOpen) { dlg.innerHTML = ''; dlg.showModal(); }
+  return subview((box, done) => {
+    box.innerHTML = `<form id="askf"><h3>${esc(title)}</h3>
+      <input type="text" id="askv" maxlength="40" value="${esc(value || '')}" autocomplete="off">
+      <div class="bar"><button class="primary" type="submit">OK</button><button type="button" id="askno">Abbrechen</button></div></form>`;
+    box.querySelector('#askf').onsubmit = (e) => { e.preventDefault(); done(box.querySelector('#askv').value); };
+    box.querySelector('#askno').onclick = () => done(undefined);
+    box.querySelector('#askv').focus();
+  }).then((v) => { if (!wasOpen) dlg.close(); return v; });
+}
+
 // Lagerplatz auswählen. movingId: dieser Platz wird verschoben (er selbst und sein Inhalt sind gesperrt).
 // onlyFixed: nur feste Lagerplätze (ein fester Platz liegt nie in einer Box).
 // allowRoot: "oberste Ebene" ist erlaubt. Ergebnis: {id, kind, path} oder undefined.
@@ -239,19 +254,28 @@ async function showPlace(id) {
 async function showArticles() {
   setTab('articles');
   renderCrumbs([], 'Artikel');
+  const cats = await api('GET', '/api/categories');
+  let filter = store.get('woiswos.catFilter') || '';
+  if (filter && filter !== 'none' && !cats.some((c) => String(c.id) === filter)) filter = '';
   main.innerHTML = `<h2>Artikel</h2>
+    <div class="filterrow">
+      <select id="cf"><option value="">Alle Gruppen</option><option value="none">Ohne Gruppe</option>
+        ${cats.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select>
+    </div>
     <input type="text" id="aq" placeholder="Artikel filtern…" autocomplete="off">
     <div id="alist" style="margin-top:10px"></div>
     <div class="fabs"><button class="primary" data-act="add">+ Neuer Artikel</button></div>`;
+  $('#cf').value = filter;
   let timer;
   async function load() {
-    const items = await api('GET', '/api/articles?q=' + encodeURIComponent($('#aq').value));
+    const items = await api('GET', '/api/articles?q=' + encodeURIComponent($('#aq').value) + '&category=' + encodeURIComponent($('#cf').value));
     $('#alist').innerHTML = items.map((a) => `<div class="card"><a class="row" href="#/a/${a.id}">${articleThumb(a)}
-      <span class="name">${esc(a.name)}<span class="sub">${esc(a.code)}${a.lines > 1 ? ` · an ${a.lines} Plätzen` : ''}</span></span>
+      <span class="name">${esc(a.name)}<span class="sub">${esc(a.code)}${a.category ? ' · ' + esc(a.category) : ''}${a.lines > 1 ? ` · an ${a.lines} Plätzen` : ''}</span></span>
       <span class="qty">${a.total} ${esc(a.unit)}</span></a></div>`).join('')
       || '<div class="empty">Keine Artikel.</div>';
   }
   $('#aq').oninput = () => { clearTimeout(timer); timer = setTimeout(() => load().catch(showError), 200); };
+  $('#cf').onchange = () => { store.set('woiswos.catFilter', $('#cf').value); load().catch(showError); };
   main.querySelector('[data-act=add]').onclick = () => articleDialog(null);
   await load();
 }
@@ -263,7 +287,7 @@ async function showArticle(id) {
   renderCrumbs([], a.name);
   main.innerHTML = `${a.has_photo ? `<img class="photo" alt="" src="${photoUrl('articles', a, 'full')}">` : ''}
     <h2>${ICON.article} ${esc(a.name)}</h2>
-    <div class="where">Artikelnr. <span class="code">${esc(a.code)}</span> · Einheit ${esc(a.unit)}</div>
+    <div class="where">Artikelnr. <span class="code">${esc(a.code)}</span> · Einheit ${esc(a.unit)}${a.category ? ' · Gruppe ' + esc(a.category) : ''}</div>
     ${a.notes ? `<p>${esc(a.notes)}</p>` : ''}
     <div class="chips"><button data-act="edit">Bearbeiten</button><button data-act="label">🏷️ Etikett</button></div>
     <h3 class="sec">Bestand: ${a.total} ${esc(a.unit)}</h3>
@@ -306,6 +330,38 @@ async function showSearch(text) {
         <span class="qty">${a.total} ${esc(a.unit)}</span></a></div>`).join('')
     : '<div class="empty">Kein Artikel gefunden.</div>');
   main.innerHTML = html;
+}
+
+// ---- Ansicht: Einstellungen (Artikelgruppen) -----------------------------------------
+async function showSettings() {
+  setTab('');
+  renderCrumbs([], 'Einstellungen');
+  const cats = await api('GET', '/api/categories');
+  main.innerHTML = `<h2>⚙️ Einstellungen</h2>
+    <h3 class="sec">Artikelgruppen</h3>
+    <p class="hint">Mit Gruppen ordnest du Artikel (z. B. Kleinteile, Lötzubehör, Handwerkzeug). Im Artikel ist die Gruppe
+    freiwillig. Löschst du eine Gruppe, bleiben die Artikel erhalten und stehen danach „ohne Gruppe“.</p>
+    ${cats.map((c) => `<div class="card"><div class="catrow"><span class="name">${esc(c.name)}
+        <span class="sub">${c.article_count} Artikel</span></span>
+        <button data-act="rename" data-id="${c.id}" aria-label="Umbenennen" title="Umbenennen">✏️</button>
+        <button class="danger" data-act="del" data-id="${c.id}" aria-label="Löschen" title="Löschen">🗑️</button></div></div>`).join('')}
+    <div class="addrow"><input type="text" id="newcat" maxlength="40" placeholder="Neue Gruppe, z. B. Pneumatik" autocomplete="off">
+      <button class="primary" id="addcat">+ Hinzufügen</button></div>`;
+  const byId = (b) => cats.find((c) => c.id === Number(b.dataset.id));
+  const run = async (fn) => { try { await fn(); await showSettings(); } catch (ex) { alert(ex.message); } };
+  main.querySelectorAll('[data-act=rename]').forEach((b) => { b.onclick = async () => {
+    const c = byId(b);
+    const n = await askText('Gruppe umbenennen', c.name);
+    if (n !== undefined) run(() => api('PATCH', '/api/categories/' + c.id, { name: n }));
+  }; });
+  main.querySelectorAll('[data-act=del]').forEach((b) => { b.onclick = () => {
+    const c = byId(b);
+    const hint = c.article_count ? `\n${c.article_count} Artikel stehen danach ohne Gruppe (sie werden nicht gelöscht).` : '';
+    if (confirm(`Gruppe „${c.name}“ wirklich löschen?${hint}`)) run(() => api('DELETE', '/api/categories/' + c.id));
+  }; });
+  const add = () => { const n = $('#newcat').value; if (n.trim()) run(() => api('POST', '/api/categories', { name: n })); };
+  $('#addcat').onclick = add;
+  $('#newcat').onkeydown = (e) => { if (e.key === 'Enter') add(); };
 }
 
 // ---- Ansicht: Etiketten drucken -------------------------------------------------------
@@ -449,8 +505,10 @@ function placeDialog(place, ctx) {
 }
 
 // ---- Dialog: Artikel neu / bearbeiten ------------------------------------------------------
-function articleDialog(article) {
+async function articleDialog(article) {
   const isNew = !article;
+  let cats;
+  try { cats = await api('GET', '/api/categories'); } catch (ex) { alert(ex.message); return; }
   const photo = photoControl('articles', article);
   dlg.innerHTML = `<form method="dialog" id="f">
     <h3>${isNew ? 'Neuer Artikel' : 'Artikel bearbeiten'}</h3>
@@ -458,6 +516,12 @@ function articleDialog(article) {
     <label>Artikelnummer</label>
     <input type="text" name="code" maxlength="40" value="${esc(isNew ? '' : article.code)}" placeholder="leer = automatisch (ART-0001 …)" autocomplete="off">
     <label>Einheit</label><input type="text" name="unit" maxlength="12" value="${esc(isNew ? 'Stk' : article.unit)}">
+    <label>Artikelgruppe (freiwillig)</label>
+    <select name="category_id">
+      <option value="">— keine Gruppe —</option>
+      ${cats.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}
+      <option value="__new__">＋ Neue Gruppe anlegen…</option>
+    </select>
     ${photo.html()}
     <label>Notiz</label><textarea name="notes" rows="2">${esc(isNew ? '' : article.notes)}</textarea>
     <div class="err" id="err"></div>
@@ -468,14 +532,34 @@ function articleDialog(article) {
     </div></form>`;
   const err = (m) => { $('#err').textContent = m; };
   photo.bind(err);
+  // Gruppe: beim Bearbeiten die vorhandene, bei neuen Artikeln die zuletzt benutzte vorschlagen
+  const catSel = $('#f select[name=category_id]');
+  const wanted = isNew ? (store.get('woiswos.lastCategory') || '') : String(article.category_id ?? '');
+  catSel.value = cats.some((c) => String(c.id) === wanted) ? wanted : '';
+  let lastCat = catSel.value;
+  catSel.onchange = async () => {
+    if (catSel.value !== '__new__') { lastCat = catSel.value; return; }
+    const name = await askText('Neue Artikelgruppe', '');
+    if (name && name.trim()) {
+      try {
+        const c = await api('POST', '/api/categories', { name });
+        const opt = new Option(c.name, c.id);
+        catSel.insertBefore(opt, catSel.querySelector('[value=__new__]'));
+        lastCat = String(c.id);
+      } catch (ex) { err(ex.message); }
+    }
+    catSel.value = lastCat;
+  };
   $('#cancel').onclick = () => dlg.close();
   $('#f').onsubmit = async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    const body = { name: fd.get('name'), code: fd.get('code'), unit: fd.get('unit'), notes: fd.get('notes') };
+    const body = { name: fd.get('name'), code: fd.get('code'), unit: fd.get('unit'), notes: fd.get('notes'),
+      category_id: catSel.value === '__new__' ? null : catSel.value };
     try {
       const saved = isNew ? await api('POST', '/api/articles', body) : await api('PATCH', '/api/articles/' + article.id, body);
       await photo.apply(saved.id);
+      store.set('woiswos.lastCategory', body.category_id || '');
       dlg.close();
       const target = '#/a/' + saved.id;
       if (location.hash === target) route(); else location.hash = target;
@@ -575,6 +659,7 @@ async function route() {
     else if (pathPart === '#/articles') await showArticles();
     else if ((m = pathPart.match(/^#\/a\/(\d+)$/))) await showArticle(Number(m[1]));
     else if (pathPart === '#/labels') await showLabels(params);
+    else if (pathPart === '#/settings') await showSettings();
     else await showPlace(null);
   } catch (ex) {
     renderCrumbs([], '');

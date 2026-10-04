@@ -142,6 +142,71 @@ test('Liste, Suche und Etiketten', () => {
   assert.throws(() => s.placeByCode('nope'), /Kein Lagerplatz/);
 });
 
+test('Artikelgruppen', () => {
+  const s = openStore(':memory:');
+  const cats = s.listCategories();
+  const names = cats.map((c) => c.name);
+  assert.ok(['Kleinteile', 'Handwerkzeug', 'Druckluftwerkzeug', 'Maschinen', 'Lötzubehör'].every((n) => names.includes(n)));
+  const kleinteile = cats.find((c) => c.name === 'Kleinteile');
+  // Gruppe ist optional (Kann-Feld)
+  const ohne = s.createArticle({ name: 'Ohne' });
+  assert.strictEqual(ohne.category_id, null);
+  assert.strictEqual(ohne.category, null);
+  const mit = s.createArticle({ name: 'Taster', category_id: kleinteile.id });
+  assert.strictEqual(mit.category, 'Kleinteile');
+  assert.throws(() => s.createArticle({ name: 'x', category_id: 9999 }), /existiert nicht/);
+  // Filter in der Artikelliste
+  assert.deepStrictEqual(s.listArticles('', String(kleinteile.id)).map((a) => a.name), ['Taster']);
+  assert.deepStrictEqual(s.listArticles('', 'none').map((a) => a.name), ['Ohne']);
+  assert.strictEqual(s.listArticles('', '').length, 2);
+  assert.strictEqual(s.listArticles('tast', String(kleinteile.id)).length, 1);
+  assert.strictEqual(s.listArticles('ohne', String(kleinteile.id)).length, 0);
+  // Gruppe ändern / entfernen beim Bearbeiten (Feld weglassen = unverändert)
+  assert.strictEqual(s.updateArticle(mit.id, { name: 'Taster rot' }).category, 'Kleinteile');
+  assert.strictEqual(s.updateArticle(mit.id, { category_id: null }).category, null);
+  s.updateArticle(mit.id, { category_id: kleinteile.id });
+  // Eigene Gruppen verwalten
+  const neu = s.createCategory({ name: '  Pressluft   Zubehör ' });
+  assert.strictEqual(neu.name, 'Pressluft Zubehör');
+  assert.throws(() => s.createCategory({ name: 'pressluft zubehör' }), /gibt es schon/);
+  assert.throws(() => s.createCategory({ name: ' ' }), /nicht leer/);
+  assert.strictEqual(s.updateCategory(neu.id, { name: 'Druckluft-Zubehör' }).name, 'Druckluft-Zubehör');
+  assert.throws(() => s.updateCategory(neu.id, { name: 'Maschinen' }), /gibt es schon/);
+  assert.strictEqual(s.updateCategory(neu.id, { name: 'DRUCKLUFT-ZUBEHÖR' }).name, 'DRUCKLUFT-ZUBEHÖR'); // eigener Name
+  // Löschen: Artikel bleiben, stehen danach ohne Gruppe
+  assert.deepStrictEqual(s.removeCategory(kleinteile.id), { unassigned_articles: 1 });
+  assert.strictEqual(s.getArticle(mit.id).category_id, null);
+  assert.throws(() => s.removeCategory(kleinteile.id), /nicht gefunden/);
+});
+
+test('Migration: Datenbank ohne Artikelgruppen (Schritt 3)', () => {
+  const { DatabaseSync } = require('node:sqlite');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'woiswos-'));
+  const file = path.join(dir, 'v3.db');
+  const old = new DatabaseSync(file);
+  old.exec(`CREATE TABLE places (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL UNIQUE COLLATE NOCASE,
+      name TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL DEFAULT 'place', parent_id INTEGER REFERENCES places(id) ON DELETE CASCADE,
+      notes TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
+    CREATE TABLE articles (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL UNIQUE COLLATE NOCASE, name TEXT NOT NULL,
+      unit TEXT NOT NULL DEFAULT 'Stk', notes TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
+    INSERT INTO articles (code, name) VALUES ('ART-0001', 'Altbestand');`);
+  old.close();
+  let s = openStore(file);
+  assert.strictEqual(s.listCategories().length, 13);
+  assert.strictEqual(s.getArticle(1).category_id, null);
+  const maschinen = s.listCategories().find((c) => c.name === 'Maschinen');
+  assert.strictEqual(s.updateArticle(1, { category_id: maschinen.id }).category, 'Maschinen');
+  // Gelöschte Standardgruppen kommen beim nächsten Start nicht zurück
+  s.removeCategory(maschinen.id);
+  s.db.close();
+  s = openStore(file);
+  assert.strictEqual(s.listCategories().length, 12);
+  assert.strictEqual(s.getArticle(1).category_id, null);
+  s.db.close();
+  fs.rmSync(dir, { recursive: true });
+});
+
 test('Fotos', () => {
   const s = openStore(':memory:');
   const box = s.createPlace({ kind: 'box' });
@@ -232,6 +297,16 @@ test('HTTP-API', async () => {
     assert.strictEqual((await call('GET', '/api/labels?place=' + lp.body.id)).body[0].payload, 'P:100 01 03');
     assert.strictEqual((await call('GET', '/api/labels?article=' + art.body.id)).body[0].payload, 'A:ART-0001');
     assert.strictEqual((await call('PATCH', '/api/articles/' + art.body.id, { name: 'Taster rot' })).body.name, 'Taster rot');
+    // Artikelgruppen
+    const cats = (await call('GET', '/api/categories')).body;
+    assert.ok(cats.length >= 10);
+    const newCat = await call('POST', '/api/categories', { name: 'Testgruppe' });
+    assert.strictEqual(newCat.status, 201);
+    assert.strictEqual((await call('POST', '/api/categories', { name: 'testgruppe' })).status, 409);
+    await call('PATCH', '/api/articles/' + art.body.id, { category_id: newCat.body.id });
+    assert.strictEqual((await call('GET', '/api/articles?category=' + newCat.body.id)).body.length, 1);
+    assert.strictEqual((await call('PATCH', '/api/categories/' + newCat.body.id, { name: 'Neu' })).body.article_count, 1);
+    assert.strictEqual((await call('DELETE', '/api/categories/' + newCat.body.id)).body.unassigned_articles, 1);
     // Foto hoch- und runterladen
     const up = await call('PUT', `/api/articles/${art.body.id}/photo`, { full: JPEG, thumb: JPEG });
     assert.strictEqual(up.body.has_photo, true);
