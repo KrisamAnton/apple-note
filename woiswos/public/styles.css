@@ -7,6 +7,9 @@
           --accent: #6aa5dd; --danger: #f0867f; --line: #2d3742; }
 }
 * { box-sizing: border-box; }
+/* Handy-Browser sollen weder Schrift aufblasen noch beim Antippen von Feldern hineinzoomen */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; overflow-x: hidden; }
+img { max-width: 100%; }
 body { margin: 0; font: 16px/1.4 system-ui, sans-serif; background: var(--bg); color: var(--text); }
 header { display: flex; gap: 12px; align-items: center; padding: 10px 16px;
          background: var(--accent); position: sticky; top: 0; z-index: 2; }

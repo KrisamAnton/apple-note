@@ -269,7 +269,7 @@ async function showArticle(id) {
     <h3 class="sec">Bestand: ${a.total} ${esc(a.unit)}</h3>
     ${a.stock.length ? a.stock.map((s, i) => `<div class="card"><div class="line">
         <a class="row" style="padding:0;flex:1" href="#/p/${s.place_id}"><span>${ICON[s.kind]}</span>
-          <span class="name">${esc(pathText([...s.path]))}<span class="sub">${esc(s.code)}</span></span>
+          <span class="name">${esc(pathText([...s.path]))}${s.name ? `<span class="sub">${esc(s.code)}</span>` : ''}</span>
           <span class="qty">${s.quantity} ${esc(a.unit)}</span></a></div>
         <div class="chips" style="padding:0 14px 10px"><button data-act="move" data-i="${i}">↔ Umlagern</button>
           <button data-act="take" data-i="${i}">− Ausbuchen</button></div></div>`).join('')
@@ -479,6 +479,8 @@ function articleDialog(article) {
       dlg.close();
       const target = '#/a/' + saved.id;
       if (location.hash === target) route(); else location.hash = target;
+      // Neuer Artikel: gleich weiter zum Einlagern (Abbrechen genügt, wenn er noch nicht eingelagert werden soll)
+      if (isNew) stockDialog('put', { article: saved });
     } catch (ex) { err(ex.message); }
   };
   const del = $('#del');
@@ -501,6 +503,10 @@ function articleDialog(article) {
 function stockDialog(mode, ctx) {
   let article = ctx.article || null;
   let place = mode === 'move' ? null : (ctx.place || null); // 'put': Ziel, 'remove': Quelle
+  if (mode === 'put' && !place) {
+    // beim Einlagern mehrerer Artikel hintereinander: zuletzt verwendeten Lagerplatz vorschlagen
+    try { place = JSON.parse(store.get('woiswos.lastPlace')) || null; } catch { place = null; }
+  }
   const title = { put: 'Einlagern', move: 'Umlagern', remove: 'Ausbuchen' }[mode];
   dlg.innerHTML = `<form method="dialog" id="f">
     <h3>${title}</h3>
@@ -544,9 +550,16 @@ function stockDialog(mode, ctx) {
       if (mode === 'put') await api('POST', '/api/stock/put', { ...body, place_id: place.id });
       else if (mode === 'remove') await api('POST', '/api/stock/remove', { ...body, place_id: ctx.place.id });
       else await api('POST', '/api/stock/move', { ...body, from_place_id: ctx.place.id, to_place_id: place.id });
+      if (mode === 'put') {
+        const d = await api('GET', '/api/places/' + place.id);
+        store.set('woiswos.lastPlace', JSON.stringify({ id: d.id, code: d.code, name: d.name, path: [...d.path, d] }));
+      }
       dlg.close();
       route();
-    } catch (ex) { err(ex.message); }
+    } catch (ex) {
+      if (mode === 'put' && /Lagerplatz nicht gefunden/.test(ex.message)) store.set('woiswos.lastPlace', '');
+      err(ex.message);
+    }
   };
   dlg.showModal();
 }
