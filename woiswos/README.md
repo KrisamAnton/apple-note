@@ -36,7 +36,7 @@ Regel: Ein fester Lagerplatz liegt nie in einer Box. Eine Box darf in einer Box 
 - Nummern frei vergeben oder automatisch fortlaufend; Nummern sind eindeutig
   (Groß-/Kleinschreibung und mehrfache Leerzeichen werden ignoriert)
 - Bestand einlagern / umlagern / ausbuchen, mit Notiz und Verlauf
-- Fotos für Lagerplätze und Artikel (am Handy direkt mit der Kamera), Miniaturen in
+- Fotos für Lagerplätze und Artikel (am Handy startet „Foto aufnehmen“ direkt die hintere Kamera, „Aus Galerie“ wählt ein vorhandenes Bild), Miniaturen in
   Listen, Suche und Lagerplatz-Auswahl
 - Suche über Nummer, Name und Notiz bei Lagerplätzen und Artikeln; zeigt den Pfad
 - **QR-Etiketten drucken** für Lagerplätze (einzeln, mit allen Unterplätzen oder alle)

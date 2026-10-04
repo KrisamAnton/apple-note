@@ -53,19 +53,26 @@ function photoControl(entity, current) {
   return {
     html: () => `<label>Foto</label>
       <div class="photobox"><img id="pv" alt="" hidden>
-        <button type="button" id="pbtn">📷 Foto aufnehmen / wählen</button>
+        <button type="button" id="pcam">📷 Foto aufnehmen</button>
+        <button type="button" id="pgal">🖼️ Aus Galerie</button>
         <button type="button" id="prm" hidden>Foto entfernen</button></div>
-      <input type="file" id="pf" accept="image/*" hidden>`,
+      <!-- capture="environment" startet direkt die hintere Kamera; ohne capture fragt das Handy nach der Quelle -->
+      <input type="file" id="pfcam" accept="image/*" capture="environment" hidden>
+      <input type="file" id="pfgal" accept="image/*" hidden>`,
     bind(err) {
       const pv = $('#pv'), prm = $('#prm');
       const show = (src) => { pv.hidden = !src; if (src) pv.src = src; prm.hidden = !src; };
       show(current && current.has_photo ? photoUrl(entity, current, 'thumb') : null);
-      $('#pbtn').onclick = () => $('#pf').click();
-      $('#pf').onchange = async (e) => {
+      const take = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
         try { op = await processPhoto(file); show(op.thumb); } catch { err('Das Foto konnte nicht gelesen werden.'); }
+        e.target.value = ''; // dasselbe Foto-Ziel darf erneut gewählt werden
       };
+      $('#pcam').onclick = () => $('#pfcam').click();
+      $('#pgal').onclick = () => $('#pfgal').click();
+      $('#pfcam').onchange = take;
+      $('#pfgal').onchange = take;
       prm.onclick = () => { op = 'remove'; show(null); };
     },
     async apply(id) {
