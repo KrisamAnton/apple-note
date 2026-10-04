@@ -47,6 +47,52 @@ async function processPhoto(file) {
   return { full: await resizeJpeg(bitmap, 900, 0.8), thumb: await resizeJpeg(bitmap, 160, 0.7) };
 }
 
+// Eigene Kamera-Ansicht: fordert gezielt die HINTERE Kamera an (das Handy-eigene "capture" wird auf manchen
+// Geräten ignoriert und öffnet dann die Selfie-Kamera). Der Browser erlaubt den Kamerazugriff nur über
+// HTTPS oder localhost - sonst steht sie nicht zur Verfügung und es wird der normale Weg benutzt.
+const cameraAvailable = () => !!(window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+
+// Ergebnis: {full, thumb}, null bei Abbruch, oder wirft einen Fehler, wenn die Kamera nicht startet.
+function cameraSnap() {
+  return subview((box, done) => {
+    let stream = null;
+    let facing = 'environment';
+    box.innerHTML = `<h3>Foto aufnehmen</h3>
+      <video id="cam" autoplay playsinline muted style="width:100%;border-radius:10px;background:#000;max-height:60vh"></video>
+      <div class="err" id="camerr"></div>
+      <div class="bar"><button class="primary" id="shoot">📸 Auslösen</button>
+        <button id="flip">🔄 Kamera wechseln</button><button id="camno">Abbrechen</button></div>`;
+    const video = box.querySelector('#cam');
+    const stop = () => { if (stream) stream.getTracks().forEach((t) => t.stop()); stream = null; };
+    async function start() {
+      stop();
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1440 } }, audio: false,
+        });
+        video.srcObject = stream;
+        await video.play();
+      } catch (ex) {
+        stop();
+        done({ error: ex });
+      }
+    }
+    box.querySelector('#flip').onclick = () => { facing = facing === 'environment' ? 'user' : 'environment'; start(); };
+    box.querySelector('#camno').onclick = () => { stop(); done(null); };
+    box.querySelector('#shoot').onclick = async () => {
+      if (!video.videoWidth) return;
+      const c = document.createElement('canvas');
+      c.width = video.videoWidth;
+      c.height = video.videoHeight;
+      c.getContext('2d').drawImage(video, 0, 0);
+      stop();
+      const bitmap = await createImageBitmap(c);
+      done({ full: await resizeJpeg(bitmap, 900, 0.8), thumb: await resizeJpeg(bitmap, 160, 0.7) });
+    };
+    start();
+  });
+}
+
 // Foto-Feld für Dialoge: html() liefert das Feld, bind() verdrahtet es, apply() speichert nach dem Anlegen.
 function photoControl(entity, current) {
   let op = null; // null = unverändert, 'remove' = löschen, {full, thumb} = neues Foto
@@ -69,7 +115,16 @@ function photoControl(entity, current) {
         try { op = await processPhoto(file); show(op.thumb); } catch { err('Das Foto konnte nicht gelesen werden.'); }
         e.target.value = ''; // dasselbe Foto-Ziel darf erneut gewählt werden
       };
-      $('#pcam').onclick = () => $('#pfcam').click();
+      $('#pcam').onclick = async () => {
+        if (!cameraAvailable()) return $('#pfcam').click(); // ohne HTTPS: Kamera-App des Handys
+        const r = await cameraSnap();
+        if (r && r.error) {
+          // Kamera nicht startbar/erlaubt: Hinweis zeigen und die Kamera-App des Handys anbieten
+          err('Die Kamera konnte nicht gestartet werden (' + (r.error.name === 'NotAllowedError' ? 'Zugriff nicht erlaubt' : r.error.name) + '). Bitte Kamera-Zugriff erlauben oder „Aus Galerie“ nutzen.');
+          return $('#pfcam').click();
+        }
+        if (r) { op = r; show(op.thumb); }
+      };
       $('#pgal').onclick = () => $('#pfgal').click();
       $('#pfcam').onchange = take;
       $('#pfgal').onchange = take;

@@ -43,7 +43,12 @@ Regel: Ein fester Lagerplatz liegt nie in einer Box. Eine Box darf in einer Box 
 - Bestand einlagern / umlagern / ausbuchen, mit Notiz und Verlauf; ein neu angelegter Artikel führt
   gleich zum Einlagern, der zuletzt benutzte Lagerplatz wird vorgeschlagen
 - Artikelliste nach Gruppe filtern
-- Fotos für Lagerplätze und Artikel (am Handy startet „Foto aufnehmen“ direkt die hintere Kamera, „Aus Galerie“ wählt ein vorhandenes Bild), Miniaturen in
+- Fotos für Lagerplätze und Artikel: „Foto aufnehmen“ zeigt eine eigene Kamera-Ansicht mit der
+  **hinteren Kamera** (Umschalten auf die Frontkamera möglich); „Aus Galerie“ wählt ein vorhandenes
+  Bild. Browser erlauben den Kamerazugriff nur über **HTTPS** (oder `localhost`). Über reines `http://`
+  im Heimnetz nutzt Woiswos stattdessen die Kamera-App des Handys (`capture=environment`), die auf
+  manchen Geräten die Frontkamera öffnet. Lösung: Woiswos über HTTPS betreiben, oder bei Android-Chrome
+  unter `chrome://flags` → „Insecure origins treated as secure“ die Adresse der App eintragen., Miniaturen in
   Listen, Suche und Lagerplatz-Auswahl
 - Suche über Nummer, Name und Notiz bei Lagerplätzen und Artikeln; zeigt den Pfad
 - **QR-Etiketten drucken** für Lagerplätze (einzeln, mit allen Unterplätzen oder alle)
