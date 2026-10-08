@@ -4,6 +4,12 @@ Hier steht, was wann geändert wurde (neueste Einträge oben). Die Versionsnumme
 steht klein neben dem Benutzernamen; bei jeder Änderung erhöht sich die letzte
 Zahl (1.7.1 → 1.7.2 → …).
 
+## 1.7.12 - 08.10.2026
+
+- Neu: Unter Einstellungen gibt es den Link „Projekt unterstützen (freiwillig)" (öffnet PayPal in einem neuen Tab). KrisNote bleibt kostenlos.
+- Sicherheit: Die Abhängigkeiten (Express, multer, qs, proxy-addr) sind auf den neuesten Stand gebracht. Es gibt keine bekannten Schwachstellen mehr (vorher 4, davon 1 kritische).
+- Neu: Einstellung `TRUST_PROXY` für den Betrieb hinter einem Reverse-Proxy (z. B. Cloudflare Tunnel). Damit zählen die Sperre nach Fehlversuchen und das „Secure"-Merkmal der Anmelde-Cookies pro echtem Besucher statt pro Proxy. Standardmäßig aus, bestehende Installationen ändern sich nicht.
+
 ## 1.7.11 - 08.10.2026
 
 - Lizenz: KrisNote steht jetzt unter der MIT-Lizenz (Datei LICENSE). Jeder darf es kostenlos nutzen, ändern und weitergeben; der Urheber-Hinweis muss erhalten bleiben.

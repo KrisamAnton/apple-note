@@ -135,6 +135,23 @@ function rateLimitMessage(retryAfterMs) {
 
 const app = express();
 
+// Betrieb hinter einem Reverse-Proxy (Cloudflare Tunnel, nginx, Caddy, Traefik ...):
+// Ohne diese Einstellung sieht der Server bei jeder Anfrage nur die Adresse des
+// Proxys - dann teilen sich alle Besucher dieselbe "Adresse". Die Sperre nach
+// Fehlversuchen trifft dadurch alle gemeinsam (jemand von außen könnte ein Konto
+// durch Fehlversuche sperren), und die Anmelde-Cookies werden nicht als "Secure"
+// markiert, obwohl die Verbindung nach außen verschlüsselt ist.
+// Standardmäßig AUS: Ohne Proxy ließe sich die Adresse sonst durch einen
+// mitgeschickten Header fälschen. Wert: Anzahl der vorgeschalteten Proxys (z. B.
+// 1) oder eine Adresse/ein Netz (z. B. 10.0.0.5, 10.0.0.0/24, loopback).
+const TRUST_PROXY = (process.env.TRUST_PROXY || '').trim();
+if (TRUST_PROXY) {
+  // "true" würde jedem Absender vertrauen - als "1 Proxy" behandeln.
+  const hops = /^\d+$/.test(TRUST_PROXY) ? Number(TRUST_PROXY) : null;
+  app.set('trust proxy', hops !== null ? hops : (TRUST_PROXY === 'true' ? 1 : TRUST_PROXY));
+  console.log(`Proxy-Vertrauen aktiv (TRUST_PROXY=${TRUST_PROXY})`);
+}
+
 // Quellcode und Rohdaten dürfen nie über den statischen Datei-Server erreichbar
 // sein (sonst wäre state.json mit allen Notizen öffentlich abrufbar).
 app.use((req, res, next) => {
