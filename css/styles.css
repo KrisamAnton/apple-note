@@ -3413,3 +3413,249 @@ a.popover-item {
   text-decoration: none;
   cursor: pointer;
 }
+
+/* ---------- Zugangsdaten: Auswahl Einzelkarte / Liste ---------- */
+
+.credential-choice-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.credential-choice-btn:hover {
+  background: var(--bg-hover, rgba(0, 0, 0, 0.06));
+}
+
+.credential-choice-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.credential-choice-hint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+/* ---------- Zugangsdaten-Liste (auf der Fläche) ---------- */
+
+.credlist-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 8px 10px;
+  overflow: auto;
+}
+
+.credlist-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.credlist-header .icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--accent-strong);
+}
+
+.credlist-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.credlist-all-btn {
+  flex: none;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  color: var(--accent-strong);
+  cursor: pointer;
+}
+
+.credlist-all-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.credlist-entries {
+  display: flex;
+  flex-direction: column;
+}
+
+.credlist-entry {
+  border-bottom: 1px solid var(--border);
+}
+
+.credlist-entry:last-child {
+  border-bottom: 0;
+}
+
+.credlist-entry-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  cursor: pointer;
+}
+
+.credlist-key {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+
+.credlist-key .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.credlist-entry.open .credlist-key {
+  color: var(--accent-strong);
+  background: var(--bg-hover, rgba(0, 0, 0, 0.06));
+}
+
+.credlist-name {
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.credlist-details {
+  display: none;
+  margin: 0 0 8px 34px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+}
+
+.credlist-entry.open .credlist-details {
+  display: block;
+}
+
+.credlist-empty {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+/* Bearbeiten-Fenster der Liste */
+
+.popover-credlist {
+  min-width: 360px;
+  max-width: 440px;
+}
+
+.credlist-entries-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 50vh;
+  overflow-y: auto;
+  margin-bottom: 8px;
+}
+
+.credlist-edit-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.credlist-edit-top {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.credlist-edit-name,
+.credlist-edit-text {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 14px;
+  padding: 7px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.credlist-edit-text {
+  resize: vertical;
+  min-height: 56px;
+}
+
+@media (max-width: 780px) and (pointer: coarse) {
+  .credlist-key {
+    width: 40px;
+    height: 40px;
+  }
+  .credlist-key .icon {
+    width: 22px;
+    height: 22px;
+  }
+  .credlist-entry-head {
+    padding: 4px 0;
+  }
+  .credlist-name,
+  .credlist-title {
+    font-size: 16px;
+  }
+  .credlist-details {
+    font-size: 15px;
+    margin-left: 48px;
+  }
+  .credlist-all-btn {
+    font-size: 14px;
+    padding: 8px 12px;
+  }
+  .credential-choice-btn {
+    padding: 14px 12px;
+  }
+  .popover-credlist {
+    min-width: 0;
+    max-width: none;
+  }
+  .credlist-entries-edit {
+    max-height: 38vh;
+  }
+}

@@ -8,7 +8,7 @@
   const MAX_OBJ_DIM = 20000;
   let SURFACE_W = BASE_SURFACE_W;
   let SURFACE_H = BASE_SURFACE_H;
-  const MIN_SIZES = { text: [140, 60], image: [60, 60], pdf: [60, 60], credential: [200, 70], reminder: [200, 70] };
+  const MIN_SIZES = { text: [140, 60], image: [60, 60], pdf: [60, 60], credential: [200, 70], credlist: [220, 100], reminder: [200, 70] };
   // Muss zum Linien-Hintergrund (.canvas-surface[data-bg="lines"]) passen: Zeilenabstand
   // 28px, die sichtbare Linie liegt am unteren Rand jedes 28px-Bandes (bei 27px).
   const LINE_PITCH = 28;
@@ -493,6 +493,17 @@
     addAudioBtn: document.getElementById('addAudioBtn'),
     addFileBtn: document.getElementById('addFileBtn'),
     addCredentialBtn: document.getElementById('addCredentialBtn'),
+    credentialChoiceBackdrop: document.getElementById('credentialChoiceBackdrop'),
+    credentialChoicePopover: document.getElementById('credentialChoicePopover'),
+    credentialChoiceSingleBtn: document.getElementById('credentialChoiceSingleBtn'),
+    credentialChoiceListBtn: document.getElementById('credentialChoiceListBtn'),
+    credlistPopoverBackdrop: document.getElementById('credlistPopoverBackdrop'),
+    credlistPopover: document.getElementById('credlistPopover'),
+    credlistTitleInput: document.getElementById('credlistTitleInput'),
+    credlistEntriesEdit: document.getElementById('credlistEntriesEdit'),
+    credlistAddEntryBtn: document.getElementById('credlistAddEntryBtn'),
+    credlistCancelBtn: document.getElementById('credlistCancelBtn'),
+    credlistSaveBtn: document.getElementById('credlistSaveBtn'),
     credentialPopoverBackdrop: document.getElementById('credentialPopoverBackdrop'),
     credentialPopover: document.getElementById('credentialPopover'),
     credentialTitleInput: document.getElementById('credentialTitleInput'),
@@ -574,11 +585,15 @@
       .filter((o) => o.type === 'credential')
       .map((o) => `${o.title || ''} ${(o.fields || []).map((f) => `${f.label} ${f.value}`).join(' ')}`)
       .join(' ');
+    const credlistText = note.objects
+      .filter((o) => o.type === 'credlist')
+      .map((o) => `${o.title || ''} ${(o.entries || []).map((en) => `${en.name} ${en.text}`).join(' ')}`)
+      .join(' ');
     const reminderText = note.objects
       .filter((o) => o.type === 'reminder')
       .map((o) => `${o.title || ''} ${o.text || ''}`)
       .join(' ');
-    return `${note.title || ''} ${objectText} ${credentialText} ${reminderText}`;
+    return `${note.title || ''} ${objectText} ${credentialText} ${credlistText} ${reminderText}`;
   }
 
   // Baut aus einer flachen Notizliste (z. B. eines Ordners) eine Tiefensuche-Reihenfolge
@@ -1774,6 +1789,9 @@
     if (obj.type === 'credential') {
       mainToolbar.appendChild(makeToolbarBtn(ICONS.rename, false, () => openCredentialPopover(note, obj, mainToolbar), 'Bearbeiten'));
     }
+    if (obj.type === 'credlist') {
+      mainToolbar.appendChild(makeToolbarBtn(ICONS.rename, false, () => openCredlistPopover(note, obj, mainToolbar), 'Bearbeiten'));
+    }
     if (obj.type === 'reminder') {
       mainToolbar.appendChild(makeToolbarBtn(ICONS.rename, false, () => openReminderPopover(note, obj, mainToolbar), 'Bearbeiten'));
     }
@@ -1786,6 +1804,7 @@
     else if (obj.type === 'audio') buildAudioContent(note, obj, objEl);
     else if (obj.type === 'file') buildFileContent(note, obj, objEl);
     else if (obj.type === 'credential') buildCredentialContent(note, obj, objEl);
+    else if (obj.type === 'credlist') buildCredlistContent(note, obj, objEl);
     else if (obj.type === 'reminder') buildReminderContent(note, obj, objEl);
 
     // Größe ändern nur noch über die rechte Kante (Breite) und die untere
@@ -5906,6 +5925,101 @@
     objEl.appendChild(card);
   }
 
+  // Zugangsdaten-Liste: zeigt zugeklappt nur die Namen mit je einem Schlüssel.
+  // Ein Klick auf einen Schlüssel klappt die Angaben darunter auf und alle
+  // anderen zu; "Alle zeigen" klappt alles auf. Der Auf-/Zuklapp-Zustand wird
+  // (wie bei der einzelnen Zugangsdaten-Karte) nicht gespeichert.
+  function buildCredlistContent(note, obj, objEl) {
+    const card = document.createElement('div');
+    card.className = 'credlist-card';
+
+    const header = document.createElement('div');
+    header.className = 'credlist-header';
+    header.innerHTML = `<svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.key}</svg>`;
+    const title = document.createElement('span');
+    title.className = 'credlist-title';
+    title.textContent = obj.title || 'Zugangsdaten';
+    header.appendChild(title);
+    const allBtn = document.createElement('button');
+    allBtn.type = 'button';
+    allBtn.className = 'credlist-all-btn';
+    header.appendChild(allBtn);
+    card.appendChild(header);
+
+    const entries = obj.entries || [];
+    const rows = [];
+    const syncAllBtn = () => {
+      const allOpen = rows.length > 0 && rows.every((r) => r.classList.contains('open'));
+      allBtn.textContent = allOpen ? 'Alle zuklappen' : 'Alle zeigen';
+      allBtn.disabled = rows.length === 0;
+    };
+    const setOpen = (row, open) => {
+      row.classList.toggle('open', open);
+      row.querySelector('.credlist-key').setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
+
+    const listEl = document.createElement('div');
+    listEl.className = 'credlist-entries';
+    for (const entry of entries) {
+      const row = document.createElement('div');
+      row.className = 'credlist-entry';
+
+      const head = document.createElement('div');
+      head.className = 'credlist-entry-head';
+      const keyBtn = document.createElement('button');
+      keyBtn.type = 'button';
+      keyBtn.className = 'credlist-key';
+      keyBtn.setAttribute('aria-expanded', 'false');
+      keyBtn.setAttribute('aria-label', `${entry.name || 'Eintrag'} auf-/zuklappen`);
+      keyBtn.innerHTML = `<svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.key}</svg>`;
+      const nameEl = document.createElement('span');
+      nameEl.className = 'credlist-name';
+      nameEl.textContent = entry.name || '';
+      head.appendChild(keyBtn);
+      head.appendChild(nameEl);
+
+      const details = document.createElement('div');
+      details.className = 'credlist-details';
+      details.textContent = entry.text || '';
+
+      row.appendChild(head);
+      row.appendChild(details);
+      listEl.appendChild(row);
+      rows.push(row);
+
+      head.addEventListener('click', (e) => {
+        selectObject(note, obj, objEl);
+        e.stopPropagation();
+        const willOpen = !row.classList.contains('open');
+        // Beim Aufklappen eines einzelnen Eintrags alle anderen zuklappen.
+        if (willOpen) rows.forEach((r) => { if (r !== row) setOpen(r, false); });
+        setOpen(row, willOpen);
+        syncAllBtn();
+      });
+    }
+    card.appendChild(listEl);
+
+    if (entries.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'credlist-empty';
+      empty.textContent = 'Noch keine Einträge - über "Bearbeiten" in der grauen Leiste hinzufügen.';
+      card.appendChild(empty);
+    }
+
+    allBtn.addEventListener('click', (e) => {
+      selectObject(note, obj, objEl);
+      e.stopPropagation();
+      const allOpen = rows.every((r) => r.classList.contains('open'));
+      rows.forEach((r) => setOpen(r, !allOpen));
+      syncAllBtn();
+    });
+    syncAllBtn();
+
+    // Ein Klick auf eine freie Stelle der Karte markiert nur das Objekt.
+    card.addEventListener('click', () => selectObject(note, obj, objEl));
+    objEl.appendChild(card);
+  }
+
   // ----- Objekte hinzufügen / löschen -----
 
   // Erstellt sofort ein freies Textobjekt an der übergebenen Stelle und aktiviert
@@ -6508,6 +6622,116 @@
     schedulePersist();
     renderCanvas(note);
     closeCredentialPopover();
+  }
+
+  // ---------- Zugangsdaten: Auswahl Einzelkarte / Liste ----------
+
+  function openCredentialChoice(anchorEl) {
+    if (!currentNote()) return;
+    el.credentialChoiceBackdrop.hidden = false;
+    const btnRect = anchorEl.getBoundingClientRect();
+    const popoverWidth = 280;
+    const left = Math.min(Math.max(8, btnRect.left), window.innerWidth - popoverWidth - 8);
+    el.credentialChoicePopover.style.left = `${Math.max(8, left)}px`;
+    el.credentialChoicePopover.style.top = `${Math.max(8, btnRect.bottom + 6)}px`;
+  }
+
+  function closeCredentialChoice() {
+    el.credentialChoiceBackdrop.hidden = true;
+  }
+
+  // ---------- Zugangsdaten-Liste (anlegen/bearbeiten) ----------
+
+  let editingCredlistObj = null; // null = neue Liste wird angelegt
+  let credlistEntriesDraft = []; // [{name, text}, ...] - Entwurf, solange das Popover offen ist
+
+  function renderCredlistEntryRows() {
+    el.credlistEntriesEdit.innerHTML = '';
+    credlistEntriesDraft.forEach((entry, idx) => {
+      const row = document.createElement('div');
+      row.className = 'credlist-edit-row';
+
+      const top = document.createElement('div');
+      top.className = 'credlist-edit-top';
+      const nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.className = 'credlist-edit-name';
+      nameInput.placeholder = 'Name (z. B. Finanzonline.at)';
+      nameInput.value = entry.name;
+      nameInput.addEventListener('input', () => { entry.name = nameInput.value; });
+
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'credential-field-remove-btn';
+      removeBtn.setAttribute('aria-label', 'Eintrag entfernen');
+      removeBtn.textContent = '×';
+      removeBtn.addEventListener('click', () => {
+        credlistEntriesDraft.splice(idx, 1);
+        renderCredlistEntryRows();
+      });
+      top.appendChild(nameInput);
+      top.appendChild(removeBtn);
+
+      const textInput = document.createElement('textarea');
+      textInput.className = 'credlist-edit-text';
+      textInput.rows = 3;
+      textInput.placeholder = 'Angaben (z. B. Benutzer, Passwort, PIN - eine Zeile pro Angabe)';
+      textInput.value = entry.text;
+      textInput.addEventListener('input', () => { entry.text = textInput.value; });
+
+      row.appendChild(top);
+      row.appendChild(textInput);
+      el.credlistEntriesEdit.appendChild(row);
+    });
+  }
+
+  function openCredlistPopover(note, obj, anchorEl) {
+    if (!note) return;
+    editingCredlistObj = obj || null;
+    el.credlistTitleInput.value = obj ? obj.title : '';
+    credlistEntriesDraft = obj && obj.entries && obj.entries.length
+      ? obj.entries.map((en) => ({ name: en.name, text: en.text }))
+      : [{ name: '', text: '' }];
+    renderCredlistEntryRows();
+
+    el.credlistPopoverBackdrop.hidden = false;
+    const btnRect = anchorEl.getBoundingClientRect();
+    const popoverWidth = 420;
+    const left = Math.min(Math.max(8, btnRect.left), window.innerWidth - popoverWidth - 8);
+    el.credlistPopover.style.left = `${Math.max(8, left)}px`;
+    el.credlistPopover.style.top = `${Math.max(8, Math.min(btnRect.bottom + 6, 80))}px`;
+    el.credlistTitleInput.focus();
+  }
+
+  function closeCredlistPopover() {
+    el.credlistPopoverBackdrop.hidden = true;
+    editingCredlistObj = null;
+    credlistEntriesDraft = [];
+  }
+
+  function saveCredlistPopover() {
+    const note = currentNote();
+    if (!note) return closeCredlistPopover();
+    const title = el.credlistTitleInput.value.trim() || 'Zugangsdaten';
+    const entries = credlistEntriesDraft
+      .map((en) => ({ name: en.name.trim(), text: en.text.replace(/\s+$/, '') }))
+      .filter((en) => en.name || en.text);
+
+    if (editingCredlistObj) {
+      editingCredlistObj.title = title;
+      editingCredlistObj.entries = entries;
+    } else {
+      const w = 320;
+      const h = 340;
+      const { x, y } = nextPlacement(note, w, h);
+      const obj = { id: uid(), type: 'credlist', x, y, w, h, z: 0, title, entries };
+      bringToFront(note, obj);
+      note.objects.push(obj);
+    }
+    note.updatedAt = Date.now();
+    schedulePersist();
+    renderCanvas(note);
+    closeCredlistPopover();
   }
 
   // ---------- Erinnerungs-Popover (anlegen/bearbeiten) ----------
@@ -7379,7 +7603,29 @@
       el.fileFileInput.value = '';
     });
     el.objectPasteBtn.addEventListener('click', pasteObjectsFromClipboard);
-    el.addCredentialBtn.addEventListener('click', () => openCredentialPopover(currentNote(), null, el.addCredentialBtn));
+    el.addCredentialBtn.addEventListener('click', () => openCredentialChoice(el.addCredentialBtn));
+    el.credentialChoiceBackdrop.addEventListener('click', (e) => {
+      if (e.target === el.credentialChoiceBackdrop) closeCredentialChoice();
+    });
+    el.credentialChoiceSingleBtn.addEventListener('click', () => {
+      closeCredentialChoice();
+      openCredentialPopover(currentNote(), null, el.addCredentialBtn);
+    });
+    el.credentialChoiceListBtn.addEventListener('click', () => {
+      closeCredentialChoice();
+      openCredlistPopover(currentNote(), null, el.addCredentialBtn);
+    });
+    el.credlistPopoverBackdrop.addEventListener('click', (e) => {
+      if (e.target === el.credlistPopoverBackdrop) closeCredlistPopover();
+    });
+    el.credlistAddEntryBtn.addEventListener('click', () => {
+      credlistEntriesDraft.push({ name: '', text: '' });
+      renderCredlistEntryRows();
+      const rows = el.credlistEntriesEdit.querySelectorAll('.credlist-edit-name');
+      if (rows.length) rows[rows.length - 1].focus();
+    });
+    el.credlistCancelBtn.addEventListener('click', closeCredlistPopover);
+    el.credlistSaveBtn.addEventListener('click', saveCredlistPopover);
     el.credentialPopoverBackdrop.addEventListener('click', (e) => {
       if (e.target === el.credentialPopoverBackdrop) closeCredentialPopover();
     });

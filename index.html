@@ -172,7 +172,7 @@
             <button class="toolbar-btn" id="objectPasteBtn" type="button" aria-label="Kopierte Objekte hier einfügen" data-tooltip="Kopierte Objekte hier einfügen" data-tooltip-hint="Fügt zuvor auf der Fläche kopierte Bilder/PDFs/Textfelder ein - auch in einer ganz anderen Notiz" hidden>
               <span class="icon icon-emoji" aria-hidden="true">📋</span>
             </button>
-            <button class="toolbar-btn" id="addCredentialBtn" type="button" aria-label="Zugangsdaten hinzufügen" data-tooltip="Zugangsdaten hinzufügen" data-tooltip-hint="Speichert z. B. Benutzername und Passwort übersichtlich in einer eigenen Karte">
+            <button class="toolbar-btn" id="addCredentialBtn" type="button" aria-label="Zugangsdaten hinzufügen" data-tooltip="Zugangsdaten hinzufügen" data-tooltip-hint="Speichert z. B. Benutzername und Passwort übersichtlich: als einzelne Karte oder als Liste mit vielen Einträgen zum Auf- und Zuklappen">
               <span class="icon icon-emoji" aria-hidden="true">🔐</span>
             </button>
             <button class="toolbar-btn" id="addReminderBtn" type="button" aria-label="Erinnerung hinzufügen" data-tooltip="Erinnerung hinzufügen" data-tooltip-hint="Markierten Text (oder die aktuelle Zeile) als Erinnerung übernehmen - erscheint als kleines Glockensymbol direkt im Text">
@@ -305,6 +305,35 @@
       <div class="popover-form-actions">
         <button type="button" class="popover-btn popover-btn-secondary" id="credentialCancelBtn">Abbrechen</button>
         <button type="button" class="popover-btn popover-btn-primary" id="credentialSaveBtn">Speichern</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Zugangsdaten: Auswahl Einzelkarte oder Liste -->
+  <div class="popover-backdrop" id="credentialChoiceBackdrop" hidden>
+    <div class="popover" id="credentialChoicePopover">
+      <p class="popover-title">Zugangsdaten</p>
+      <button type="button" class="credential-choice-btn" id="credentialChoiceSingleBtn">
+        <span class="credential-choice-title">Einzelne Karte</span>
+        <span class="credential-choice-hint">Ein Zugang mit Benutzername, Passwort usw.</span>
+      </button>
+      <button type="button" class="credential-choice-btn" id="credentialChoiceListBtn">
+        <span class="credential-choice-title">Liste</span>
+        <span class="credential-choice-hint">Viele Einträge untereinander, mit Schlüssel zum Auf- und Zuklappen</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Zugangsdaten-Liste anlegen/bearbeiten -->
+  <div class="popover-backdrop" id="credlistPopoverBackdrop" hidden>
+    <div class="popover popover-form popover-credlist" id="credlistPopover">
+      <p class="popover-title">Zugangsdaten-Liste</p>
+      <input type="text" id="credlistTitleInput" class="popover-text-input" placeholder="Titel der Liste (z. B. E-Mail Konten)" />
+      <div class="credlist-entries-edit" id="credlistEntriesEdit"></div>
+      <button type="button" class="credential-add-field-btn" id="credlistAddEntryBtn">+ Eintrag hinzufügen</button>
+      <div class="popover-form-actions">
+        <button type="button" class="popover-btn popover-btn-secondary" id="credlistCancelBtn">Abbrechen</button>
+        <button type="button" class="popover-btn popover-btn-primary" id="credlistSaveBtn">Speichern</button>
       </div>
     </div>
   </div>

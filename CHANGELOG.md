@@ -4,6 +4,10 @@ Hier steht, was wann geändert wurde (neueste Einträge oben). Die Versionsnumme
 steht klein neben dem Benutzernamen; bei jeder Änderung erhöht sich die letzte
 Zahl (1.7.1 → 1.7.2 → …).
 
+## 1.7.13 - 08.10.2026
+
+- Neu: Zugangsdaten als **Liste**. Beim Klick auf das Schloss fragt KrisNote jetzt, ob du eine einzelne Karte oder eine Liste möchtest. In der Liste stehen viele Einträge untereinander, jeweils nur mit Name und Schlüssel. Ein Klick auf den Schlüssel zeigt die Angaben darunter und klappt die anderen zu. Mit „Alle zeigen" öffnest du alle auf einmal. Bearbeiten über den Stift in der grauen Leiste.
+
 ## 1.7.12 - 08.10.2026
 
 - Neu: Unter Einstellungen gibt es den Link „Projekt unterstützen (freiwillig)" (öffnet PayPal in einem neuen Tab). KrisNote bleibt kostenlos.
