@@ -3474,8 +3474,8 @@ a.popover-item {
 .credlist-title {
   flex: 1;
   min-width: 0;
-  font-weight: 600;
-  font-size: 14px;
+  font-weight: 700;
+  font-size: 18px;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -3542,13 +3542,13 @@ a.popover-item {
 }
 
 .credlist-entry.open .credlist-key {
-  color: var(--accent-strong);
+  color: #2f9e44;
   background: var(--bg-hover, rgba(0, 0, 0, 0.06));
 }
 
 .credlist-name {
   min-width: 0;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--text-primary);
   word-break: break-word;
@@ -3557,8 +3557,8 @@ a.popover-item {
 .credlist-details {
   display: none;
   margin: 0 0 8px 34px;
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: 15px;
+  line-height: 1.5;
   color: var(--text-primary);
   white-space: pre-wrap;
   word-break: break-word;
@@ -3636,12 +3636,14 @@ a.popover-item {
   .credlist-entry-head {
     padding: 4px 0;
   }
-  .credlist-name,
   .credlist-title {
-    font-size: 16px;
+    font-size: 20px;
+  }
+  .credlist-name {
+    font-size: 17px;
   }
   .credlist-details {
-    font-size: 15px;
+    font-size: 16px;
     margin-left: 48px;
   }
   .credlist-all-btn {
@@ -3658,4 +3660,97 @@ a.popover-item {
   .credlist-entries-edit {
     max-height: 38vh;
   }
+}
+
+/* ---------- Eingabefelder ohne <input> (Zugangsdaten) ---------- */
+
+.plain-field {
+  display: block;
+  min-height: 1.4em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+
+.plain-field:focus {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: -1px;
+}
+
+.plain-field:empty::before,
+.credlist-edit-text:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+
+/* Fenster, das die Seite nicht blockiert (Hintergrund bleibt klickbar) */
+.popover-backdrop-passive {
+  pointer-events: none;
+}
+
+.popover-backdrop-passive .popover {
+  pointer-events: auto;
+  max-height: calc(100vh - 90px);
+  overflow-y: auto;
+}
+
+.credlist-info {
+  margin: 0 0 6px;
+  padding: 0 4px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.credlist-format-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 8px;
+}
+
+.credlist-fmt-btn {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.credlist-fmt-btn:hover {
+  background: var(--hover-bg);
+}
+
+.credlist-color-btn {
+  min-width: 22px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--swatch);
+}
+
+.credlist-edit-text {
+  min-height: 56px;
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+
+.credlist-edit-text:focus {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: -1px;
+}
+
+.credlist-edit-name {
+  flex: 1;
+  min-width: 0;
 }

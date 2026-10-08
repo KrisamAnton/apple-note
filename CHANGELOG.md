@@ -4,6 +4,13 @@ Hier steht, was wann geändert wurde (neueste Einträge oben). Die Versionsnumme
 steht klein neben dem Benutzernamen; bei jeder Änderung erhöht sich die letzte
 Zahl (1.7.1 → 1.7.2 → …).
 
+## 1.7.14 - 08.10.2026
+
+- Zugangsdaten-Liste: Das Bearbeiten-Fenster bleibt jetzt offen, auch wenn du daneben klickst, etwas kopierst oder die Notiz wechselst. Es schließt sich nur über „OK" oder „Abbrechen". Dein Entwurf bleibt dabei erhalten, sogar nach einem versehentlichen Neuladen der Seite.
+- Zugangsdaten-Liste: Der Text in den Einträgen lässt sich jetzt formatieren (fett, kursiv, unterstrichen, durchgestrichen, größer/kleiner, Farbe).
+- Zugangsdaten-Liste: Titel und Text sind größer, der Schlüssel vor dem Titel ist weg, und ein aufgeklappter Eintrag zeigt einen grünen Schlüssel.
+- Der Browser fragt beim Eingeben von Zugangsdaten nicht mehr, ob er ein Kennwort speichern soll.
+
 ## 1.7.13 - 08.10.2026
 
 - Neu: Zugangsdaten als **Liste**. Beim Klick auf das Schloss fragt KrisNote jetzt, ob du eine einzelne Karte oder eine Liste möchtest. In der Liste stehen viele Einträge untereinander, jeweils nur mit Name und Schlüssel. Ein Klick auf den Schlüssel zeigt die Angaben darunter und klappt die anderen zu. Mit „Alle zeigen" öffnest du alle auf einmal. Bearbeiten über den Stift in der grauen Leiste.

@@ -299,7 +299,7 @@
   <div class="popover-backdrop" id="credentialPopoverBackdrop" hidden>
     <div class="popover popover-form" id="credentialPopover">
       <p class="popover-title">Zugangsdaten</p>
-      <input type="text" id="credentialTitleInput" class="popover-text-input" placeholder="Bezeichnung (z. B. Finanzonline.at)" />
+      <div id="credentialTitleInput" class="popover-text-input" data-placeholder="Bezeichnung (z. B. Finanzonline.at)"></div>
       <div class="credential-fields-list" id="credentialFieldsList"></div>
       <button type="button" class="credential-add-field-btn" id="credentialAddFieldBtn">+ Feld hinzufügen</button>
       <div class="popover-form-actions">
@@ -324,16 +324,18 @@
     </div>
   </div>
 
-  <!-- Zugangsdaten-Liste anlegen/bearbeiten -->
-  <div class="popover-backdrop" id="credlistPopoverBackdrop" hidden>
+  <!-- Zugangsdaten-Liste anlegen/bearbeiten (Hintergrund bleibt klickbar, das Fenster schließt nur über OK/Abbrechen) -->
+  <div class="popover-backdrop popover-backdrop-passive" id="credlistPopoverBackdrop" hidden>
     <div class="popover popover-form popover-credlist" id="credlistPopover">
       <p class="popover-title">Zugangsdaten-Liste</p>
-      <input type="text" id="credlistTitleInput" class="popover-text-input" placeholder="Titel der Liste (z. B. E-Mail Konten)" />
+      <p class="credlist-info" id="credlistInfo"></p>
+      <div id="credlistTitleInput" class="popover-text-input" data-placeholder="Titel der Liste (z. B. E-Mail Konten)"></div>
+      <div class="credlist-format-bar" id="credlistFormatBar" role="toolbar" aria-label="Textformatierung"></div>
       <div class="credlist-entries-edit" id="credlistEntriesEdit"></div>
       <button type="button" class="credential-add-field-btn" id="credlistAddEntryBtn">+ Eintrag hinzufügen</button>
       <div class="popover-form-actions">
         <button type="button" class="popover-btn popover-btn-secondary" id="credlistCancelBtn">Abbrechen</button>
-        <button type="button" class="popover-btn popover-btn-primary" id="credlistSaveBtn">Speichern</button>
+        <button type="button" class="popover-btn popover-btn-primary" id="credlistSaveBtn">OK</button>
       </div>
     </div>
   </div>

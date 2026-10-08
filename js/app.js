@@ -501,6 +501,8 @@
     credlistPopover: document.getElementById('credlistPopover'),
     credlistTitleInput: document.getElementById('credlistTitleInput'),
     credlistEntriesEdit: document.getElementById('credlistEntriesEdit'),
+    credlistInfo: document.getElementById('credlistInfo'),
+    credlistFormatBar: document.getElementById('credlistFormatBar'),
     credlistAddEntryBtn: document.getElementById('credlistAddEntryBtn'),
     credlistCancelBtn: document.getElementById('credlistCancelBtn'),
     credlistSaveBtn: document.getElementById('credlistSaveBtn'),
@@ -5935,7 +5937,6 @@
 
     const header = document.createElement('div');
     header.className = 'credlist-header';
-    header.innerHTML = `<svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.key}</svg>`;
     const title = document.createElement('span');
     title.className = 'credlist-title';
     title.textContent = obj.title || 'Zugangsdaten';
@@ -5980,7 +5981,7 @@
 
       const details = document.createElement('div');
       details.className = 'credlist-details';
-      details.textContent = entry.text || '';
+      details.innerHTML = sanitizePastedHtml(credlistEntryHtml(entry));
 
       row.appendChild(head);
       row.appendChild(details);
@@ -6531,19 +6532,8 @@
       const row = document.createElement('div');
       row.className = 'credential-field-row';
 
-      const labelInput = document.createElement('input');
-      labelInput.type = 'text';
-      labelInput.className = 'credential-field-label-input';
-      labelInput.placeholder = 'Bezeichnung';
-      labelInput.value = field.label;
-      labelInput.addEventListener('input', () => { field.label = labelInput.value; });
-
-      const valueInput = document.createElement('input');
-      valueInput.type = 'text';
-      valueInput.className = 'credential-field-value-input';
-      valueInput.placeholder = 'Wert';
-      valueInput.value = field.value;
-      valueInput.addEventListener('input', () => { field.value = valueInput.value; });
+      const labelInput = makePlainField('credential-field-label-input', 'Bezeichnung', field.label, (v) => { field.label = v; });
+      const valueInput = makePlainField('credential-field-value-input', 'Wert', field.value, (v) => { field.value = v; });
 
       const removeBtn = document.createElement('button');
       removeBtn.type = 'button';
@@ -6640,97 +6630,293 @@
     el.credentialChoiceBackdrop.hidden = true;
   }
 
-  // ---------- Zugangsdaten-Liste (anlegen/bearbeiten) ----------
+  // ---------- Eingabefelder ohne <input> ----------
+  // Browser (Edge/Chrome) bieten bei Feldern, die nach Benutzername/Passwort
+  // aussehen, ungefragt an, die Eingabe als Kennwort zu speichern. Für Zugangsdaten
+  // sind deshalb alle Felder keine <input>-Elemente, sondern bearbeitbare
+  // <div>-Flächen (ohne Formular-Erkennung durch den Browser). Über .value verhalten
+  // sie sich nach außen wie ein normales Textfeld.
+  function setupPlainField(div, multiline) {
+    div.classList.add('plain-field');
+    div.setAttribute('role', 'textbox');
+    if (multiline) div.setAttribute('aria-multiline', 'true');
+    try {
+      div.contentEditable = 'plaintext-only';
+    } catch (e) {
+      div.contentEditable = 'true';
+    }
+    if (div.contentEditable !== 'plaintext-only') div.contentEditable = 'true';
+    div.spellcheck = false;
+    div.setAttribute('autocapitalize', 'off');
+    div.setAttribute('autocorrect', 'off');
+    Object.defineProperty(div, 'value', {
+      configurable: true,
+      get: () => div.textContent,
+      set: (v) => { div.textContent = v; },
+    });
+    div.addEventListener('keydown', (e) => {
+      if (!multiline && e.key === 'Enter') e.preventDefault();
+    });
+    div.addEventListener('paste', (e) => {
+      e.preventDefault();
+      let text = (e.clipboardData || window.clipboardData).getData('text/plain');
+      if (!multiline) text = text.replace(/\s*[\r\n]+\s*/g, ' ');
+      document.execCommand('insertText', false, text);
+    });
+    div.addEventListener('input', () => {
+      // Ein leerer Rest (z. B. <br>) würde den Platzhaltertext verdecken.
+      if (!div.textContent) div.innerHTML = '';
+    });
+    return div;
+  }
 
-  let editingCredlistObj = null; // null = neue Liste wird angelegt
-  let credlistEntriesDraft = []; // [{name, text}, ...] - Entwurf, solange das Popover offen ist
+  function makePlainField(className, placeholder, value, onInput) {
+    const div = document.createElement('div');
+    div.className = className;
+    div.setAttribute('data-placeholder', placeholder);
+    setupPlainField(div, false);
+    div.value = value || '';
+    div.addEventListener('input', () => onInput(div.value));
+    return div;
+  }
+
+  // ---------- Zugangsdaten-Liste (anlegen/bearbeiten) ----------
+  // Das Bearbeiten-Fenster blockiert die Seite nicht und schließt sich NICHT
+  // durch einen Klick daneben, sondern nur über OK/Abbrechen. Es gehört fest zu
+  // der Notiz, in der die Liste liegt, und bleibt beim Wechsel zu einer anderen
+  // Notiz (z. B. um dort etwas zu kopieren) unverändert offen. Der Entwurf wird
+  // zusätzlich im Tab (sessionStorage) mitgeschrieben, damit ein versehentliches
+  // Neuladen nichts kostet.
+
+  const CREDLIST_DRAFT_KEY = 'krisnote.credlistDraft';
+  let credlistEdit = null; // { noteId, objId|null, title, entries: [{name, html}] }
+  let credlistActiveEditor = null;
+  let credlistLastRange = null;
+
+  function credlistEntryHtml(entry) {
+    if (entry.html != null) return entry.html;
+    return escapeHtml(entry.text || '').replace(/\n/g, '<br>');
+  }
+
+  function saveCredlistDraft() {
+    try {
+      if (credlistEdit) sessionStorage.setItem(CREDLIST_DRAFT_KEY, JSON.stringify(credlistEdit));
+      else sessionStorage.removeItem(CREDLIST_DRAFT_KEY);
+    } catch (e) {
+      // Ohne Speicher im Tab bleibt der Entwurf nur im Arbeitsspeicher.
+    }
+  }
+
+  function credlistFormat(cmd, arg) {
+    const ed = credlistActiveEditor;
+    if (!ed || !document.body.contains(ed)) return;
+    const sel = window.getSelection();
+    ed.focus({ preventScroll: true });
+    let range = sel.rangeCount ? sel.getRangeAt(0) : null;
+    if (!range || !ed.contains(range.commonAncestorContainer)) {
+      range = credlistLastRange && ed.contains(credlistLastRange.commonAncestorContainer) ? credlistLastRange : null;
+      if (!range) return;
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+    if (cmd === 'bold' || cmd === 'italic' || cmd === 'underline' || cmd === 'strikeThrough') {
+      document.execCommand(cmd);
+    } else {
+      // Ohne markierten Text gilt Größe/Farbe für den ganzen Eintrag.
+      if (range.collapsed) {
+        range = document.createRange();
+        range.selectNodeContents(ed);
+      }
+      if (!ed.textContent) return;
+      if (cmd === 'bigger' || cmd === 'smaller') {
+        const anchor = range.startContainer.nodeType === Node.TEXT_NODE ? range.startContainer.parentElement : range.startContainer;
+        const cur = parseFloat(getComputedStyle(anchor).fontSize) || 15;
+        const next = clamp(Math.round(cur + (cmd === 'bigger' ? 2 : -2)), 10, 48);
+        wrapSelectionWithStyle(range, 'fontSize', `${next}px`);
+      } else if (cmd === 'color') {
+        if (arg) wrapSelectionWithStyle(range, 'color', arg);
+        else unwrapStyleFromRange(range, 'color');
+      }
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+    ed.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  function buildCredlistFormatBar() {
+    const bar = el.credlistFormatBar;
+    if (bar.childElementCount) return;
+    const add = (label, title, cmd, arg, extraClass) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `credlist-fmt-btn${extraClass ? ` ${extraClass}` : ''}`;
+      b.title = title;
+      b.setAttribute('aria-label', title);
+      b.innerHTML = label;
+      // mousedown verhindern, damit die Markierung im Text erhalten bleibt.
+      b.addEventListener('mousedown', (e) => e.preventDefault());
+      b.addEventListener('click', () => credlistFormat(cmd, arg));
+      bar.appendChild(b);
+      return b;
+    };
+    add('<b>F</b>', 'Fett', 'bold');
+    add('<i>K</i>', 'Kursiv', 'italic');
+    add('<u>U</u>', 'Unterstrichen', 'underline');
+    add('<s>D</s>', 'Durchgestrichen', 'strikeThrough');
+    add('A−', 'Kleiner', 'smaller');
+    add('A+', 'Größer', 'bigger');
+    for (const c of TEXT_COLORS) {
+      const b = add('', `Textfarbe ${c.name}`, 'color', c.hex, 'credlist-color-btn');
+      b.style.setProperty('--swatch', c.hex);
+    }
+    add('✕', 'Textfarbe zurücksetzen', 'color', '', 'credlist-color-reset');
+  }
 
   function renderCredlistEntryRows() {
     el.credlistEntriesEdit.innerHTML = '';
-    credlistEntriesDraft.forEach((entry, idx) => {
+    credlistEdit.entries.forEach((entry, idx) => {
       const row = document.createElement('div');
       row.className = 'credlist-edit-row';
 
       const top = document.createElement('div');
       top.className = 'credlist-edit-top';
-      const nameInput = document.createElement('input');
-      nameInput.type = 'text';
-      nameInput.className = 'credlist-edit-name';
-      nameInput.placeholder = 'Name (z. B. Finanzonline.at)';
-      nameInput.value = entry.name;
-      nameInput.addEventListener('input', () => { entry.name = nameInput.value; });
-
+      const nameField = makePlainField('credlist-edit-name', 'Name (z. B. Finanzonline.at)', entry.name, (v) => {
+        entry.name = v;
+        saveCredlistDraft();
+      });
       const removeBtn = document.createElement('button');
       removeBtn.type = 'button';
       removeBtn.className = 'credential-field-remove-btn';
       removeBtn.setAttribute('aria-label', 'Eintrag entfernen');
       removeBtn.textContent = '×';
       removeBtn.addEventListener('click', () => {
-        credlistEntriesDraft.splice(idx, 1);
+        credlistEdit.entries.splice(idx, 1);
+        saveCredlistDraft();
         renderCredlistEntryRows();
       });
-      top.appendChild(nameInput);
+      top.appendChild(nameField);
       top.appendChild(removeBtn);
 
-      const textInput = document.createElement('textarea');
-      textInput.className = 'credlist-edit-text';
-      textInput.rows = 3;
-      textInput.placeholder = 'Angaben (z. B. Benutzer, Passwort, PIN - eine Zeile pro Angabe)';
-      textInput.value = entry.text;
-      textInput.addEventListener('input', () => { entry.text = textInput.value; });
+      const editor = document.createElement('div');
+      editor.className = 'credlist-edit-text';
+      editor.contentEditable = 'true';
+      editor.spellcheck = false;
+      editor.setAttribute('role', 'textbox');
+      editor.setAttribute('aria-multiline', 'true');
+      editor.setAttribute('data-placeholder', 'Angaben (z. B. Benutzer, Passwort, PIN - eine Zeile pro Angabe)');
+      editor.innerHTML = sanitizePastedHtml(entry.html || '');
+      editor.addEventListener('focus', () => { credlistActiveEditor = editor; });
+      editor.addEventListener('paste', (e) => {
+        e.preventDefault();
+        const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+        document.execCommand('insertText', false, text);
+      });
+      editor.addEventListener('input', () => {
+        if (!editor.textContent) editor.innerHTML = '';
+        entry.html = editor.innerHTML;
+        saveCredlistDraft();
+      });
 
       row.appendChild(top);
-      row.appendChild(textInput);
+      row.appendChild(editor);
       el.credlistEntriesEdit.appendChild(row);
     });
   }
 
+  function showCredlistPopover(anchorEl) {
+    if (!credlistEdit) return;
+    buildCredlistFormatBar();
+    const note = state.notes.find((n) => n.id === credlistEdit.noteId);
+    el.credlistInfo.textContent = note ? `In Notiz: ${note.title || 'Ohne Titel'}` : '';
+    el.credlistTitleInput.value = credlistEdit.title;
+    renderCredlistEntryRows();
+    el.credlistPopoverBackdrop.hidden = false;
+    const popoverWidth = 420;
+    const rect = anchorEl ? anchorEl.getBoundingClientRect() : null;
+    const left = rect ? rect.left : window.innerWidth - popoverWidth - 16;
+    el.credlistPopover.style.left = `${Math.max(8, Math.min(left, window.innerWidth - popoverWidth - 8))}px`;
+    el.credlistPopover.style.top = '60px';
+  }
+
   function openCredlistPopover(note, obj, anchorEl) {
     if (!note) return;
-    editingCredlistObj = obj || null;
-    el.credlistTitleInput.value = obj ? obj.title : '';
-    credlistEntriesDraft = obj && obj.entries && obj.entries.length
-      ? obj.entries.map((en) => ({ name: en.name, text: en.text }))
-      : [{ name: '', text: '' }];
-    renderCredlistEntryRows();
-
-    el.credlistPopoverBackdrop.hidden = false;
-    const btnRect = anchorEl.getBoundingClientRect();
-    const popoverWidth = 420;
-    const left = Math.min(Math.max(8, btnRect.left), window.innerWidth - popoverWidth - 8);
-    el.credlistPopover.style.left = `${Math.max(8, left)}px`;
-    el.credlistPopover.style.top = `${Math.max(8, Math.min(btnRect.bottom + 6, 80))}px`;
+    if (credlistEdit) {
+      // Es wird schon an einer Liste gearbeitet - dieser Entwurf darf nicht
+      // verloren gehen, daher nur das offene Fenster zeigen.
+      el.credlistPopoverBackdrop.hidden = false;
+      el.credlistTitleInput.focus();
+      return;
+    }
+    credlistEdit = {
+      noteId: note.id,
+      objId: obj ? obj.id : null,
+      title: obj ? obj.title : '',
+      entries: obj && obj.entries && obj.entries.length
+        ? obj.entries.map((en) => ({ name: en.name, html: credlistEntryHtml(en) }))
+        : [{ name: '', html: '' }],
+    };
+    saveCredlistDraft();
+    showCredlistPopover(anchorEl);
     el.credlistTitleInput.focus();
   }
 
   function closeCredlistPopover() {
     el.credlistPopoverBackdrop.hidden = true;
-    editingCredlistObj = null;
-    credlistEntriesDraft = [];
+    credlistEdit = null;
+    credlistActiveEditor = null;
+    credlistLastRange = null;
+    saveCredlistDraft();
+  }
+
+  function restoreCredlistDraft() {
+    try {
+      const raw = sessionStorage.getItem(CREDLIST_DRAFT_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      if (!draft || !state.notes.some((n) => n.id === draft.noteId) || !Array.isArray(draft.entries)) {
+        sessionStorage.removeItem(CREDLIST_DRAFT_KEY);
+        return;
+      }
+      credlistEdit = draft;
+      showCredlistPopover(null);
+    } catch (e) {
+      // Kaputter Entwurf - einfach ignorieren.
+    }
   }
 
   function saveCredlistPopover() {
-    const note = currentNote();
-    if (!note) return closeCredlistPopover();
-    const title = el.credlistTitleInput.value.trim() || 'Zugangsdaten';
-    const entries = credlistEntriesDraft
-      .map((en) => ({ name: en.name.trim(), text: en.text.replace(/\s+$/, '') }))
+    if (!credlistEdit) return;
+    const note = state.notes.find((n) => n.id === credlistEdit.noteId);
+    if (!note) {
+      closeCredlistPopover();
+      return;
+    }
+    const title = (credlistEdit.title || '').trim() || 'Zugangsdaten';
+    const entries = credlistEdit.entries
+      .map((en) => {
+        const html = sanitizePastedHtml(en.html || '');
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        return { name: (en.name || '').trim(), html, text: tmp.textContent.trim() };
+      })
       .filter((en) => en.name || en.text);
 
-    if (editingCredlistObj) {
-      editingCredlistObj.title = title;
-      editingCredlistObj.entries = entries;
+    let obj = credlistEdit.objId ? note.objects.find((o) => o.id === credlistEdit.objId && o.type === 'credlist') : null;
+    if (obj) {
+      obj.title = title;
+      obj.entries = entries;
     } else {
-      const w = 320;
+      const w = 340;
       const h = 340;
       const { x, y } = nextPlacement(note, w, h);
-      const obj = { id: uid(), type: 'credlist', x, y, w, h, z: 0, title, entries };
+      obj = { id: uid(), type: 'credlist', x, y, w, h, z: 0, title, entries };
       bringToFront(note, obj);
       note.objects.push(obj);
     }
     note.updatedAt = Date.now();
     schedulePersist();
-    renderCanvas(note);
+    const cur = currentNote();
+    if (cur && cur.id === note.id) renderCanvas(note);
     closeCredlistPopover();
   }
 
@@ -7449,6 +7635,8 @@
   // ---------- Event wiring ----------
 
   async function init() {
+    setupPlainField(el.credentialTitleInput, false);
+    setupPlainField(el.credlistTitleInput, false);
     setupBackButtons();
     setupMobileRibbon();
     initColumnResizers();
@@ -7615,17 +7803,34 @@
       closeCredentialChoice();
       openCredlistPopover(currentNote(), null, el.addCredentialBtn);
     });
-    el.credlistPopoverBackdrop.addEventListener('click', (e) => {
-      if (e.target === el.credlistPopoverBackdrop) closeCredlistPopover();
+    el.credlistTitleInput.addEventListener('input', () => {
+      if (credlistEdit) {
+        credlistEdit.title = el.credlistTitleInput.value;
+        saveCredlistDraft();
+      }
     });
     el.credlistAddEntryBtn.addEventListener('click', () => {
-      credlistEntriesDraft.push({ name: '', text: '' });
+      if (!credlistEdit) return;
+      credlistEdit.entries.push({ name: '', html: '' });
+      saveCredlistDraft();
       renderCredlistEntryRows();
-      const rows = el.credlistEntriesEdit.querySelectorAll('.credlist-edit-name');
-      if (rows.length) rows[rows.length - 1].focus();
+      const names = el.credlistEntriesEdit.querySelectorAll('.credlist-edit-name');
+      if (names.length) names[names.length - 1].focus();
     });
     el.credlistCancelBtn.addEventListener('click', closeCredlistPopover);
     el.credlistSaveBtn.addEventListener('click', saveCredlistPopover);
+    document.addEventListener('selectionchange', () => {
+      const sel = window.getSelection();
+      if (!sel.rangeCount) return;
+      const range = sel.getRangeAt(0);
+      const node = range.commonAncestorContainer;
+      const ed = (node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement)?.closest('.credlist-edit-text');
+      if (ed && el.credlistEntriesEdit.contains(ed)) {
+        credlistActiveEditor = ed;
+        credlistLastRange = range.cloneRange();
+      }
+    });
+    restoreCredlistDraft();
     el.credentialPopoverBackdrop.addEventListener('click', (e) => {
       if (e.target === el.credentialPopoverBackdrop) closeCredentialPopover();
     });
