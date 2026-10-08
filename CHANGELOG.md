@@ -65,7 +65,7 @@ Zahl (1.7.1 → 1.7.2 → …).
 
 ## Vor der Versionsnummer (Verlauf bis 01.10.2026)
 
-- 28.09.2026: Erste freigegebene Version für andere Personen („Gäste-Version", Testphase): Installationsskript mit einem Befehl, Ersteinrichtung mit Einrichtungscode, feste Einführung „Erklärung KrisNote" für jeden neuen Benutzer, Registrierung standardmäßig aus, Sperre nach 5 Fehlversuchen.
+- 28.09.2026: Erste freigegebene Version für andere Personen („Gäste-Version"): Installationsskript mit einem Befehl, Ersteinrichtung mit Einrichtungscode, feste Einführung „Erklärung KrisNote" für jeden neuen Benutzer, Registrierung standardmäßig aus, Sperre nach 5 Fehlversuchen.
 - 28.09.2026: Rechtsklick in einem Text, den man gerade bearbeitet, zeigt wieder das Browser-Menü (Rechtschreibvorschläge, Ausschneiden, Kopieren, Einfügen).
 - 28.09.2026: Mehrfachauswahl von Objekten auf der Fläche (gemeinsam verschieben, löschen, kopieren); Kopieren und Löschen per Standard-Rechtsklick sowie Strg+C und Strg+V.
 - 27.09.2026: Erinnerungs-Mail (SMTP) wird pro Benutzer eingestellt.
