@@ -4,6 +4,10 @@ Hier steht, was wann geändert wurde (neueste Einträge oben). Die Versionsnumme
 steht klein neben dem Benutzernamen; bei jeder Änderung erhöht sich die letzte
 Zahl (1.7.1 → 1.7.2 → …).
 
+## 1.7.11 - 08.10.2026
+
+- Lizenz: KrisNote steht jetzt unter der MIT-Lizenz (Datei LICENSE). Jeder darf es kostenlos nutzen, ändern und weitergeben; der Urheber-Hinweis muss erhalten bleiben.
+
 ## 1.7.10 - 03.10.2026
 
 - Sprachnotizen: Der unverständliche Knopf mit den drei Zeilen ist ersetzt durch „Transkript" mit einem Symbol aus Schallwelle, Pfeil und Textzeilen (Sprache wird zu Text). Er steht mit Beschriftung in der grauen Leiste über der Sprachnotiz.
