@@ -1,6 +1,6 @@
 {
   "name": "krisnote-server",
-  "version": "1.7.14",
+  "version": "1.7.15",
   "description": "Self-hosted Backend für KrisNote (Notizen + Datei-Uploads)",
   "private": true,
   "main": "server.js",

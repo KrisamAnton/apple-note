@@ -4,6 +4,12 @@ Hier steht, was wann geändert wurde (neueste Einträge oben). Die Versionsnumme
 steht klein neben dem Benutzernamen; bei jeder Änderung erhöht sich die letzte
 Zahl (1.7.1 → 1.7.2 → …).
 
+## 1.7.15 - 08.10.2026
+
+- Zugangsdaten-Liste: Das Bearbeiten-Fenster ist jetzt nur in der Notiz zu sehen, in der du es geöffnet hast. Wechselst du zu einer anderen Seite, verschwindet es. Kommst du zurück, ist es wieder da, genau so, wie du es verlassen hast (solange du nicht „OK" oder „Abbrechen" gedrückt hast).
+- Zugangsdaten-Liste: Das Bearbeiten-Fenster lässt sich am Titel verschieben und merkt sich seine Position.
+- Zugangsdaten-Liste: Die Einträge im Fenster lassen sich per Ziehen umsortieren, am Griff (⋮⋮) oder mit der Maus irgendwo am Rand der Eintrags-Box.
+
 ## 1.7.14 - 08.10.2026
 
 - Zugangsdaten-Liste: Das Bearbeiten-Fenster bleibt jetzt offen, auch wenn du daneben klickst, etwas kopierst oder die Notiz wechselst. Es schließt sich nur über „OK" oder „Abbrechen". Dein Entwurf bleibt dabei erhalten, sogar nach einem versehentlichen Neuladen der Seite.

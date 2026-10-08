@@ -501,7 +501,7 @@
     credlistPopover: document.getElementById('credlistPopover'),
     credlistTitleInput: document.getElementById('credlistTitleInput'),
     credlistEntriesEdit: document.getElementById('credlistEntriesEdit'),
-    credlistInfo: document.getElementById('credlistInfo'),
+    credlistDragHandle: document.getElementById('credlistDragHandle'),
     credlistFormatBar: document.getElementById('credlistFormatBar'),
     credlistAddEntryBtn: document.getElementById('credlistAddEntryBtn'),
     credlistCancelBtn: document.getElementById('credlistCancelBtn'),
@@ -1328,6 +1328,7 @@
   }
 
   function renderEditor() {
+    syncCredlistVisibility();
     // Eine Mehrfachauswahl von Objekten bezieht sich immer nur auf die
     // gerade offene Notiz - beim Wechsel zu einer anderen (oder zur leeren
     // Ansicht) macht eine übernommene Auswahl keinen Sinn mehr.
@@ -1345,6 +1346,7 @@
     autoGrow(el.titleInput);
     el.noteBackBtn.hidden = noteBackStack.length === 0;
     renderCanvas(note);
+    syncCredlistVisibility();
   }
 
   function autoGrow(textarea) {
@@ -6698,6 +6700,20 @@
     return escapeHtml(entry.text || '').replace(/\n/g, '<br>');
   }
 
+  // Das Fenster ist nur sichtbar, solange die Notiz offen ist, zu der es gehört
+  // (am Handy zusätzlich nur in der Editor-Ansicht). Bei einem Wechsel wird es
+  // nur ausgeblendet - der Entwurf bleibt erhalten und erscheint beim Zurückkehren
+  // wieder genau so, wie er verlassen wurde.
+  function syncCredlistVisibility() {
+    if (!credlistEdit) {
+      el.credlistPopoverBackdrop.hidden = true;
+      return;
+    }
+    const here = selectedNoteId === credlistEdit.noteId && !el.editor.hidden &&
+      (!isMobileLayout() || el.app.classList.contains('view-editor'));
+    el.credlistPopoverBackdrop.hidden = !here;
+  }
+
   function saveCredlistDraft() {
     try {
       if (credlistEdit) sessionStorage.setItem(CREDLIST_DRAFT_KEY, JSON.stringify(credlistEdit));
@@ -6780,6 +6796,12 @@
 
       const top = document.createElement('div');
       top.className = 'credlist-edit-top';
+      const grip = document.createElement('span');
+      grip.className = 'credlist-grip';
+      grip.title = 'Zum Verschieben ziehen';
+      grip.setAttribute('aria-label', 'Eintrag verschieben');
+      grip.textContent = '⋮⋮';
+      grip.addEventListener('pointerdown', (e) => startCredlistRowDrag(e, row, idx));
       const nameField = makePlainField('credlist-edit-name', 'Name (z. B. Finanzonline.at)', entry.name, (v) => {
         entry.name = v;
         saveCredlistDraft();
@@ -6794,8 +6816,14 @@
         saveCredlistDraft();
         renderCredlistEntryRows();
       });
+      top.appendChild(grip);
       top.appendChild(nameField);
       top.appendChild(removeBtn);
+      // Mit der Maus lässt sich der Eintrag auch am Rand der Box (Innenabstand)
+      // anfassen, nicht nur am Griff.
+      row.addEventListener('pointerdown', (e) => {
+        if (e.target === row && e.pointerType === 'mouse') startCredlistRowDrag(e, row, idx);
+      });
 
       const editor = document.createElement('div');
       editor.className = 'credlist-edit-text';
@@ -6826,24 +6854,121 @@
   function showCredlistPopover(anchorEl) {
     if (!credlistEdit) return;
     buildCredlistFormatBar();
-    const note = state.notes.find((n) => n.id === credlistEdit.noteId);
-    el.credlistInfo.textContent = note ? `In Notiz: ${note.title || 'Ohne Titel'}` : '';
     el.credlistTitleInput.value = credlistEdit.title;
     renderCredlistEntryRows();
-    el.credlistPopoverBackdrop.hidden = false;
     const popoverWidth = 420;
-    const rect = anchorEl ? anchorEl.getBoundingClientRect() : null;
-    const left = rect ? rect.left : window.innerWidth - popoverWidth - 16;
-    el.credlistPopover.style.left = `${Math.max(8, Math.min(left, window.innerWidth - popoverWidth - 8))}px`;
-    el.credlistPopover.style.top = '60px';
+    if (credlistEdit.pos) {
+      positionCredlistPopover(credlistEdit.pos.left, credlistEdit.pos.top);
+    } else {
+      const rect = anchorEl ? anchorEl.getBoundingClientRect() : null;
+      positionCredlistPopover(rect ? rect.left : window.innerWidth - popoverWidth - 16, 60);
+    }
+    syncCredlistVisibility();
+  }
+
+  // Hält das Fenster (auch nach Größenänderung des Browsers) im sichtbaren Bereich.
+  function positionCredlistPopover(left, top) {
+    const w = el.credlistPopover.offsetWidth || 420;
+    el.credlistPopover.style.left = `${clamp(left, 8, Math.max(8, window.innerWidth - w - 8))}px`;
+    el.credlistPopover.style.top = `${clamp(top, 8, Math.max(8, window.innerHeight - 120))}px`;
+  }
+
+  // Fenster am Titel verschieben (nur am PC - am Handy ist es unten angedockt).
+  function startCredlistPopoverDrag(e) {
+    if (e.button !== undefined && e.button !== 0) return;
+    if (isMobileLayout()) return;
+    e.preventDefault();
+    const handle = e.currentTarget;
+    const startLeft = parseFloat(el.credlistPopover.style.left) || 0;
+    const startTop = parseFloat(el.credlistPopover.style.top) || 0;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    handle.setPointerCapture(e.pointerId);
+    const move = (ev) => positionCredlistPopover(startLeft + ev.clientX - startX, startTop + ev.clientY - startY);
+    const up = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', up);
+      handle.removeEventListener('pointercancel', up);
+      if (credlistEdit) {
+        credlistEdit.pos = {
+          left: parseFloat(el.credlistPopover.style.left) || 0,
+          top: parseFloat(el.credlistPopover.style.top) || 0,
+        };
+        saveCredlistDraft();
+      }
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', up);
+    handle.addEventListener('pointercancel', up);
+  }
+
+  // Einträge im Bearbeiten-Fenster per Ziehen umsortieren: am Griff (⋮⋮) oder
+  // (mit der Maus) irgendwo am Rand der Eintrags-Box.
+  function startCredlistRowDrag(e, row, idx) {
+    if (e.button !== undefined && e.button !== 0) return;
+    e.preventDefault();
+    const container = el.credlistEntriesEdit;
+    const rows = Array.from(container.children);
+    const tops = rows.map((r) => r.offsetTop);
+    const heights = rows.map((r) => r.offsetHeight);
+    const GAP = 8;
+    const startY = e.clientY;
+    const startScroll = container.scrollTop;
+    let targetIdx = idx;
+    row.classList.add('dragging');
+    container.classList.add('reordering');
+    row.setPointerCapture(e.pointerId);
+
+    const move = (ev) => {
+      const dy = ev.clientY - startY + (container.scrollTop - startScroll);
+      row.style.transform = `translateY(${dy}px)`;
+      const center = tops[idx] + heights[idx] / 2 + dy;
+      let t = 0;
+      rows.forEach((r, j) => {
+        if (j !== idx && tops[j] + heights[j] / 2 < center) t++;
+      });
+      targetIdx = t;
+      rows.forEach((r, j) => {
+        if (j === idx) return;
+        let shift = 0;
+        if (idx < targetIdx && j > idx && j <= targetIdx) shift = -(heights[idx] + GAP);
+        else if (idx > targetIdx && j >= targetIdx && j < idx) shift = heights[idx] + GAP;
+        r.style.transform = shift ? `translateY(${shift}px)` : '';
+      });
+      const cr = container.getBoundingClientRect();
+      if (ev.clientY < cr.top + 30) container.scrollTop -= 12;
+      else if (ev.clientY > cr.bottom - 30) container.scrollTop += 12;
+    };
+    const finish = () => {
+      row.removeEventListener('pointermove', move);
+      row.removeEventListener('pointerup', finish);
+      row.removeEventListener('pointercancel', finish);
+      row.classList.remove('dragging');
+      container.classList.remove('reordering');
+      rows.forEach((r) => { r.style.transform = ''; });
+      if (credlistEdit && targetIdx !== idx) {
+        const [moved] = credlistEdit.entries.splice(idx, 1);
+        credlistEdit.entries.splice(targetIdx, 0, moved);
+        saveCredlistDraft();
+        renderCredlistEntryRows();
+      }
+    };
+    row.addEventListener('pointermove', move);
+    row.addEventListener('pointerup', finish);
+    row.addEventListener('pointercancel', finish);
   }
 
   function openCredlistPopover(note, obj, anchorEl) {
     if (!note) return;
     if (credlistEdit) {
       // Es wird schon an einer Liste gearbeitet - dieser Entwurf darf nicht
-      // verloren gehen, daher nur das offene Fenster zeigen.
-      el.credlistPopoverBackdrop.hidden = false;
+      // verloren gehen. Gehört er zu einer anderen Notiz, geht es dorthin
+      // zurück, sonst wird nur das offene Fenster gezeigt.
+      if (credlistEdit.noteId !== selectedNoteId && findNote(credlistEdit.noteId)) {
+        selectNote(credlistEdit.noteId);
+      } else {
+        syncCredlistVisibility();
+      }
       el.credlistTitleInput.focus();
       return;
     }
@@ -7364,6 +7489,7 @@
   function goToView(view) {
     el.app.classList.remove('view-folders', 'view-notes', 'view-editor');
     el.app.classList.add(`view-${view}`);
+    syncCredlistVisibility();
   }
 
   function isMobileLayout() {
@@ -7817,6 +7943,7 @@
       const names = el.credlistEntriesEdit.querySelectorAll('.credlist-edit-name');
       if (names.length) names[names.length - 1].focus();
     });
+    el.credlistDragHandle.addEventListener('pointerdown', startCredlistPopoverDrag);
     el.credlistCancelBtn.addEventListener('click', closeCredlistPopover);
     el.credlistSaveBtn.addEventListener('click', saveCredlistPopover);
     document.addEventListener('selectionchange', () => {
