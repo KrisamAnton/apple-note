@@ -511,6 +511,24 @@
     </div>
   </div>
 
+  <!-- Word-Datei einfügen: Text anzeigen oder nur Datei ablegen -->
+  <div class="popover-backdrop" id="wordModePopoverBackdrop" hidden>
+    <div class="popover popover-wide" id="wordModePopover">
+      <p class="popover-title">Word-Datei einfügen</p>
+      <div class="popover-list">
+        <button type="button" class="popover-item popover-item-rich" data-mode="pages" id="wordPagesModeBtn">
+          <span class="popover-item-title">Text hier anzeigen</span>
+          <span class="popover-item-desc">Das Dokument wird zum Anzeigen in eine PDF umgewandelt und wie eine PDF auf die Fläche gelegt (alle Seiten untereinander). Die Word-Datei selbst wird zusätzlich unverändert als Datei abgelegt.</span>
+        </button>
+        <button type="button" class="popover-item popover-item-rich" data-mode="file">
+          <span class="popover-item-title">Nur Datei ablegen</span>
+          <span class="popover-item-desc">Kompakte Ablage als Datei-Symbol, ohne den Text anzuzeigen.</span>
+        </button>
+      </div>
+      <p class="popover-hint" id="wordModeHint" hidden>Für „Text hier anzeigen“ muss auf dem Server LibreOffice installiert sein (siehe README).</p>
+    </div>
+  </div>
+
   <!-- Ordnerfarbe -->
   <div class="popover-backdrop" id="folderColorPopoverBackdrop" hidden>
     <div class="popover" id="folderColorPopover">

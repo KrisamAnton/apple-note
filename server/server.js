@@ -713,6 +713,108 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
   res.json({ url: `/files/${req.file.filename}` });
 });
 
+// ---------- Word -> PDF (nur zum Anzeigen) ----------
+//
+// Wird eine Word-Datei "mit Text angezeigt" auf die Fläche gelegt, wandelt der
+// Server sie dafür mit LibreOffice (optional, muss auf dem Server installiert
+// sein) in eine PDF um, aus der der Browser dann die Seiten-Ansicht erzeugt.
+// Wichtig: Es wird nur eine KOPIE in einem eigenen Temp-Ordner umgewandelt. Die
+// Original-Datei, die der Benutzer ablegt, läuft über /api/upload und wird hier
+// nie angefasst. Die entstandene PDF und der Temp-Ordner werden sofort wieder
+// gelöscht - nichts davon bleibt auf dem Server liegen.
+
+const WORD_EXTENSIONS = new Set(['.doc', '.docx', '.odt', '.rtf']);
+const convertUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
+let officeBinCache = null; // { bin: string|null, checkedAt: number }
+let convertQueue = Promise.resolve(); // LibreOffice-Umwandlungen laufen nacheinander
+
+function runProcess(bin, args, { timeoutMs, env }) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(bin, args, { env, stdio: ['ignore', 'ignore', 'pipe'] });
+    let stderr = '';
+    child.stderr.on('data', (d) => { stderr += d.toString().slice(0, 2000); });
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      reject(new Error('Zeitüberschreitung bei der Umwandlung'));
+    }, timeoutMs);
+    child.on('error', (err) => { clearTimeout(timer); reject(err); });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve();
+      else reject(new Error(`Prozess endete mit Code ${code}: ${stderr.trim()}`));
+    });
+  });
+}
+
+// Sucht LibreOffice (SOFFICE_BIN, sonst soffice/libreoffice im PATH). Ein
+// negatives Ergebnis gilt nur kurz, damit eine Nachinstallation ohne
+// Server-Neustart erkannt wird.
+async function findOfficeBin() {
+  const now = Date.now();
+  if (officeBinCache && (officeBinCache.bin || now - officeBinCache.checkedAt < 30000)) {
+    return officeBinCache.bin;
+  }
+  const candidates = process.env.SOFFICE_BIN ? [process.env.SOFFICE_BIN] : ['soffice', 'libreoffice'];
+  let found = null;
+  for (const bin of candidates) {
+    try {
+      await runProcess(bin, ['--version'], { timeoutMs: 30000, env: process.env });
+      found = bin;
+      break;
+    } catch (err) {
+      // nächster Kandidat
+    }
+  }
+  officeBinCache = { bin: found, checkedAt: now };
+  return found;
+}
+
+async function convertWordToPdf(bin, buffer, ext) {
+  const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'krisnote-convert-'));
+  try {
+    const input = path.join(dir, `dokument${ext}`);
+    await fs.promises.writeFile(input, buffer);
+    const profileDir = path.join(dir, 'profile');
+    await runProcess(
+      bin,
+      [
+        '--headless', '--norestore', '--nolockcheck', '--nologo',
+        `-env:UserInstallation=${require('url').pathToFileURL(profileDir).href}`,
+        '--convert-to', 'pdf', '--outdir', dir, input,
+      ],
+      { timeoutMs: 180000, env: { ...process.env, HOME: dir } }
+    );
+    return await fs.promises.readFile(path.join(dir, 'dokument.pdf'));
+  } finally {
+    await fs.promises.rm(dir, { recursive: true, force: true });
+  }
+}
+
+app.get('/api/convert/status', async (req, res) => {
+  res.json({ available: !!(await findOfficeBin()) });
+});
+
+app.post('/api/convert/word-to-pdf', convertUpload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Keine Datei erhalten' });
+  const ext = path.extname(req.file.originalname || '').toLowerCase();
+  if (!WORD_EXTENSIONS.has(ext)) {
+    return res.status(400).json({ error: 'Nur Word-Dokumente (.doc, .docx, .odt, .rtf) können umgewandelt werden.' });
+  }
+  const bin = await findOfficeBin();
+  if (!bin) {
+    return res.status(503).json({ error: 'Auf dem Server ist LibreOffice nicht installiert - die Umwandlung ist daher nicht möglich.' });
+  }
+  const job = convertQueue.then(() => convertWordToPdf(bin, req.file.buffer, ext));
+  convertQueue = job.catch(() => {});
+  try {
+    const pdf = await job;
+    res.type('application/pdf').send(pdf);
+  } catch (err) {
+    console.error('Word-Umwandlung fehlgeschlagen:', err.message);
+    res.status(500).json({ error: 'Die Word-Datei konnte nicht umgewandelt werden.' });
+  }
+});
+
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError || err) {
     console.error('Upload-Fehler:', err.message);

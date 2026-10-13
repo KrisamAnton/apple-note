@@ -465,6 +465,9 @@
     fontFamilyPopoverBackdrop: document.getElementById('fontFamilyPopoverBackdrop'),
     fontFamilyPopover: document.getElementById('fontFamilyPopover'),
     fontFamilyList: document.getElementById('fontFamilyList'),
+    wordModePopoverBackdrop: document.getElementById('wordModePopoverBackdrop'),
+    wordPagesModeBtn: document.getElementById('wordPagesModeBtn'),
+    wordModeHint: document.getElementById('wordModeHint'),
     pdfModePopoverBackdrop: document.getElementById('pdfModePopoverBackdrop'),
     pdfModePopover: document.getElementById('pdfModePopover'),
     pdfInlineFileModeBtn: document.getElementById('pdfInlineFileModeBtn'),
@@ -2521,6 +2524,15 @@
           return;
         }
         insertInlineImage(note, obj, objEl, body, file);
+        return;
+      }
+      // Eine kopierte Word-Datei (z. B. aus dem Explorer) wird wie beim Ablegen
+      // behandelt: Text anzeigen oder nur die Datei ablegen.
+      const wordPasted = Array.from(clipboardData.files || []).find(isWordFile);
+      if (wordPasted) {
+        e.preventDefault();
+        body.blur();
+        addWordObjectFromFile(wordPasted);
         return;
       }
       e.preventDefault();
@@ -5114,7 +5126,8 @@
   }
 
   function buildPdfContent(note, obj, objEl) {
-    const pages = obj.pageCount > 1 ? `PDF · ${obj.pageCount} Seiten` : 'PDF';
+    const kindLabel = obj.sourceLabel || 'PDF';
+    const pages = obj.pageCount > 1 ? `${kindLabel} · ${obj.pageCount} Seiten` : kindLabel;
 
     if (obj.variant === 'file') {
       objEl.classList.add('pdf-file-chip');
@@ -5836,6 +5849,151 @@
   function fileKindStyle(fileName) {
     const ext = (fileName || '').split('.').pop().toLowerCase();
     return FILE_KIND_STYLES[ext] || { label: ext ? ext.toUpperCase() : 'DATEI', color: '#6b7280' };
+  }
+
+  // ----- Word-Dokumente: Text anzeigen oder nur Datei ablegen -----
+  //
+  // Wie bei einer PDF wird gefragt, ob der Text auf der Fläche angezeigt werden
+  // soll. Dann wandelt der Server eine KOPIE per LibreOffice in eine PDF um (nur
+  // zum Anzeigen, die PDF wird verworfen), aus der die Seiten-Ansicht entsteht.
+  // Die Word-Datei selbst wird immer unverändert als Datei abgelegt.
+
+  const WORD_EXTENSIONS = ['doc', 'docx', 'odt', 'rtf'];
+
+  function isWordFile(file) {
+    const ext = ((file && file.name) || '').split('.').pop().toLowerCase();
+    return WORD_EXTENSIONS.includes(ext);
+  }
+
+  let officeAvailablePromise = null;
+  function checkOfficeAvailable() {
+    if (!officeAvailablePromise) {
+      officeAvailablePromise = fetch('/api/convert/status')
+        .then((res) => (res.ok ? res.json() : { available: false }))
+        .then((data) => !!data.available)
+        .catch(() => false)
+        .then((available) => {
+          // Ein "nicht verfügbar" gilt nur kurz, damit eine Nachinstallation erkannt wird.
+          if (!available) setTimeout(() => { officeAvailablePromise = null; }, 30000);
+          return available;
+        });
+    }
+    return officeAvailablePromise;
+  }
+
+  let wordModeResolve = null;
+  function askWordInsertMode(available) {
+    return new Promise((resolve) => {
+      wordModeResolve = resolve;
+      el.wordPagesModeBtn.disabled = !available;
+      el.wordPagesModeBtn.classList.toggle('disabled', !available);
+      el.wordModeHint.hidden = available;
+      el.wordModePopoverBackdrop.hidden = false;
+    });
+  }
+
+  function resolveWordInsertMode(mode) {
+    el.wordModePopoverBackdrop.hidden = true;
+    if (wordModeResolve) {
+      const resolve = wordModeResolve;
+      wordModeResolve = null;
+      resolve(mode);
+    }
+  }
+
+  function showBusyBanner(text) {
+    let banner = document.getElementById('busyBanner');
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'busyBanner';
+      banner.className = 'busy-banner';
+      banner.setAttribute('role', 'status');
+      document.body.appendChild(banner);
+    }
+    banner.textContent = text;
+    banner.hidden = false;
+  }
+
+  function hideBusyBanner() {
+    const banner = document.getElementById('busyBanner');
+    if (banner) banner.hidden = true;
+  }
+
+  async function addWordObjectFromFile(file, dropPoint) {
+    const note = currentNote();
+    if (!note || !file) return;
+    const available = await checkOfficeAvailable();
+    const mode = await askWordInsertMode(available);
+    if (!mode) return;
+    if (mode === 'file') {
+      await addFileObjectFromFile(file, dropPoint);
+      return;
+    }
+
+    const noteId = note.id;
+    showBusyBanner('Word-Datei wird zum Anzeigen umgewandelt ...');
+    try {
+      const fd = new FormData();
+      fd.append('file', file, file.name);
+      const res = await fetch('/api/convert/word-to-pdf', { method: 'POST', body: fd });
+      if (!res.ok) {
+        let message = 'Die Word-Datei konnte nicht umgewandelt werden.';
+        try {
+          const data = await res.json();
+          if (data && data.error) message = data.error;
+        } catch (e) {
+          // Standardmeldung bleibt.
+        }
+        throw new Error(message);
+      }
+      const pdfjsLib = await loadPdfJs();
+      const pdf = await pdfjsLib.getDocument({ data: await res.arrayBuffer() }).promise;
+      const rendered = await renderPdfAllPages(pdf);
+      const maxW = 360;
+      const scale = Math.min(1, maxW / rendered.width);
+      const w = Math.round(rendered.width * scale) || 200;
+      const h = Math.round(rendered.height * scale) || 260;
+      const src = await uploadFile(await canvasToJpegBlob(rendered.canvas, 0.82), `${file.name}.jpg`);
+      // Die Word-Datei selbst wird unverändert abgelegt (die PDF dagegen nicht).
+      const fileData = await uploadFile(file);
+
+      const target = findNote(noteId);
+      if (!target) return;
+      const CHIP_H = 60;
+      const GAP = 36; // Platz für die graue Werkzeugleiste des Seiten-Objekts
+      const totalH = CHIP_H + GAP + h;
+      const chipW = 240;
+      const { x, y } = dropPoint
+        ? {
+            x: clamp(dropPoint.x - Math.max(w, chipW) / 2, 0, Math.max(0, SURFACE_W - Math.max(w, chipW))),
+            y: clamp(dropPoint.y - totalH / 2, 0, Math.max(0, SURFACE_H - totalH)),
+          }
+        : nextPlacement(target, Math.max(w, chipW), totalH);
+      const chipObj = { id: uid(), type: 'file', x, y, w: chipW, h: CHIP_H, z: 0, fileName: file.name, fileData };
+      const pagesObj = {
+        id: uid(), type: 'pdf', x, y: y + CHIP_H + GAP, w, h, z: 0,
+        src, pageCount: pdf.numPages, fileName: file.name, variant: 'pages', sourceLabel: 'Word',
+      };
+      const visible = currentNote() && currentNote().id === target.id;
+      for (const objData of [chipObj, pagesObj]) {
+        bringToFront(target, objData);
+        target.objects.push(objData);
+        if (visible) {
+          const objEl = buildObjectEl(target, objData);
+          el.canvasSurface.insertBefore(objEl, el.inkLayer);
+          if (objData === pagesObj) selectObject(target, objData, objEl);
+        }
+      }
+      target.updatedAt = Date.now();
+      if (visible) updateSurfaceSize(target);
+      schedulePersist();
+      renderNoteList();
+    } catch (err) {
+      console.error('Word-Datei konnte nicht angezeigt werden:', err);
+      alert(err.message || 'Die Word-Datei konnte nicht umgewandelt werden.');
+    } finally {
+      hideBusyBanner();
+    }
   }
 
   // Beliebige andere Dateien (Word, Excel, ZIP, ...), die der Browser nicht
@@ -8216,6 +8374,11 @@
         addPdfObjectFromFile(pdfFile, point);
         return;
       }
+      const wordFile = files.find(isWordFile);
+      if (wordFile) {
+        addWordObjectFromFile(wordFile, point);
+        return;
+      }
       const imageFile = files.find((f) => f.type.startsWith('image/'));
       if (imageFile) {
         addImageObjectFromFile(imageFile, point);
@@ -8256,6 +8419,23 @@
       if (item) setBackground(item.dataset.bg);
     });
 
+    el.wordModePopoverBackdrop.addEventListener('click', (e) => {
+      if (e.target === el.wordModePopoverBackdrop) resolveWordInsertMode(null);
+    });
+    el.wordModePopoverBackdrop.querySelector('.popover-list').addEventListener('click', (e) => {
+      const item = e.target.closest('.popover-item');
+      if (item && !item.disabled) resolveWordInsertMode(item.dataset.mode);
+    });
+    // Eine kopierte Word-Datei auch dann einfügen, wenn gerade kein Textfeld
+    // bearbeitet wird (Eingabefelder und Textfelder behandeln Einfügen selbst).
+    document.addEventListener('paste', (e) => {
+      const target = e.target;
+      if (target && target.closest && target.closest('input, textarea, [contenteditable="true"], [contenteditable="plaintext-only"]')) return;
+      const wordPasted = Array.from((e.clipboardData && e.clipboardData.files) || []).find(isWordFile);
+      if (!wordPasted || !currentNote()) return;
+      e.preventDefault();
+      addWordObjectFromFile(wordPasted);
+    });
     el.pdfModePopoverBackdrop.addEventListener('click', (e) => {
       if (e.target === el.pdfModePopoverBackdrop) resolvePdfInsertMode(null);
     });

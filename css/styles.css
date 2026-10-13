@@ -3820,3 +3820,31 @@ a.popover-item {
     max-height: 34vh;
   }
 }
+
+/* ---------- Word-Datei einfügen ---------- */
+
+.popover-item.disabled,
+.popover-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.busy-banner {
+  position: fixed;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 9500;
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-popover);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.busy-banner[hidden] {
+  display: none;
+}

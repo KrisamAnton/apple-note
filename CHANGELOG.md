@@ -4,6 +4,12 @@ Hier steht, was wann geändert wurde (neueste Einträge oben). Die Versionsnumme
 steht klein neben dem Benutzernamen; bei jeder Änderung erhöht sich die letzte
 Zahl (1.7.1 → 1.7.2 → …).
 
+## 1.7.16 - 13.10.2026
+
+- Neu: Word-Dokumente (.doc, .docx, .odt, .rtf), die du auf eine Seite ziehst oder einfügst (Strg+V), werden wie eine PDF behandelt: Du wirst gefragt, ob der **Text hier angezeigt** werden soll oder ob nur die **Datei abgelegt** wird.
+- „Text hier anzeigen": Das Dokument wird zum Anzeigen in eine PDF umgewandelt und wie eine PDF auf die Fläche gelegt (alle Seiten untereinander, mit Zoom und zum Zeichnen). Die Word-Datei selbst wird zusätzlich **unverändert** als Datei darüber abgelegt. Die Umwandlung arbeitet nur mit einer Kopie, die PDF wird danach verworfen.
+- Dafür muss auf dem Server **LibreOffice** installiert sein (`apt-get install -y libreoffice-writer`). Ohne LibreOffice bleibt nur „Nur Datei ablegen" auswählbar, mit einem Hinweis.
+
 ## 1.7.15 - 08.10.2026
 
 - Zugangsdaten-Liste: Das Bearbeiten-Fenster ist jetzt nur in der Notiz zu sehen, in der du es geöffnet hast. Wechselst du zu einer anderen Seite, verschwindet es. Kommst du zurück, ist es wieder da, genau so, wie du es verlassen hast (solange du nicht „OK" oder „Abbrechen" gedrückt hast).
