@@ -4,6 +4,10 @@ Hier steht, was wann geändert wurde (neueste Einträge oben). Die Versionsnumme
 steht klein neben dem Benutzernamen; bei jeder Änderung erhöht sich die letzte
 Zahl (1.7.1 → 1.7.2 → …).
 
+## 1.7.17 - 13.10.2026
+
+- Das Mausrad zoomt eine PDF- bzw. Word-Ansicht nur noch, wenn du sie vorher angeklickt (aktiviert) hast. Sonst scrollt es ganz normal die Seite, auch wenn der Mauszeiger gerade über der Datei steht. Klickst du danach etwas anderes oder die leere Fläche an, scrollt das Mausrad wieder die Seite.
+
 ## 1.7.16 - 13.10.2026
 
 - Neu: Word-Dokumente (.doc, .docx, .odt, .rtf), die du auf eine Seite ziehst oder einfügst (Strg+V), werden wie eine PDF behandelt: Du wirst gefragt, ob der **Text hier angezeigt** werden soll oder ob nur die **Datei abgelegt** wird.

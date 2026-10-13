@@ -5166,7 +5166,7 @@
 
       const hint = document.createElement('div');
       hint.className = 'pdf-zoom-hint';
-      hint.textContent = 'Mausrad: Zoom · Umschalt oder mittlere Maustaste + Ziehen: Verschieben';
+      hint.textContent = 'Anklicken, dann Mausrad: Zoom · Umschalt oder mittlere Maustaste + Ziehen: Verschieben';
       objEl.appendChild(hint);
       let hintTimer = null;
       viewport.addEventListener('mouseenter', () => {
@@ -5180,6 +5180,9 @@
       });
 
       viewport.addEventListener('wheel', (e) => {
+        // Gezoomt wird nur, wenn dieses Objekt angeklickt (aktiviert) ist - sonst
+        // soll das Mausrad ganz normal die Fläche scrollen.
+        if (!objEl.classList.contains('selected')) return;
         e.preventDefault();
         e.stopPropagation();
         const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
