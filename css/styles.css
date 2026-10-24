@@ -4749,3 +4749,65 @@ button.journal-tag:hover {
   outline-offset: 3px;
   transition: outline-color 0.3s;
 }
+
+/* ---------- Status: Dateisuche & Texterkennung ---------- */
+
+.search-status-row {
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+
+.search-status-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.search-status-head strong {
+  flex: 1;
+  font-size: 14px;
+}
+
+.search-status-state {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.search-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+  background: #8e8e93;
+}
+
+.search-status-dot.ok {
+  background: #34c759;
+}
+
+.search-status-dot.missing {
+  background: #ff9500;
+}
+
+.search-status-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.search-status-hint code {
+  display: block;
+  margin-top: 4px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--hover-bg);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12px;
+  user-select: all;
+  overflow-wrap: anywhere;
+}
+
+.search-status-pending {
+  margin-top: 8px;
+  font-weight: 600;
+}

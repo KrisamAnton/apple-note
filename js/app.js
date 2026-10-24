@@ -402,6 +402,10 @@
     reminderSettingsModal: document.getElementById('reminderSettingsModal'),
     openChangePasswordBtn: document.getElementById('openChangePasswordBtn'),
     openChangelogBtn: document.getElementById('openChangelogBtn'),
+    openSearchStatusBtn: document.getElementById('openSearchStatusBtn'),
+    searchStatusModalBackdrop: document.getElementById('searchStatusModalBackdrop'),
+    searchStatusBody: document.getElementById('searchStatusBody'),
+    searchStatusCloseBtn: document.getElementById('searchStatusCloseBtn'),
     changelogModalBackdrop: document.getElementById('changelogModalBackdrop'),
     changelogBody: document.getElementById('changelogBody'),
     changelogCloseBtn: document.getElementById('changelogCloseBtn'),
@@ -969,7 +973,7 @@
     const hits = (fileHits.get(note.id) || []).slice().sort((a, b) => b.matched.length - a.matched.length).slice(0, 3);
     for (const hit of hits) {
       lines.push({
-        label: `In Datei ${hit.fileName}${hit.page ? `, Seite ${hit.page}` : ''}`,
+        label: `${hit.kind === 'image' ? 'Im Bild' : 'In Datei'} ${hit.fileName}${hit.page ? `, Seite ${hit.page}` : ''}`,
         html: highlightSearchHtml(hit.snippet, words),
         action: { objId: hit.objId, entryId: hit.entryId },
       });
@@ -7844,6 +7848,53 @@
     }
   }
 
+  // Zeigt, welche Programme der Server für die Suche in Dateien gefunden hat
+  // und wie viele Dateien noch gelesen werden.
+  async function openSearchStatusModal() {
+    closeSettingsPopover();
+    el.searchStatusBody.textContent = 'Wird geladen ...';
+    el.searchStatusModalBackdrop.hidden = false;
+    try {
+      const res = await fetch('/api/search/status');
+      if (!res.ok) throw new Error('Laden fehlgeschlagen');
+      const data = await res.json();
+      const t = data.tools || {};
+      const rows = [
+        ['PDF-Dateien lesen', t.pdftotext, 'Paket poppler-utils', 'apt-get install -y poppler-utils'],
+        ['Word, Excel, PowerPoint lesen und anzeigen', t.office, 'Programm LibreOffice', 'apt-get install -y libreoffice-writer fonts-crosextra-carlito fonts-liberation'],
+        ['Text in Bildern und gescannten PDFs erkennen', t.ocr, 'Pakete tesseract-ocr (mit Deutsch)', 'apt-get install -y tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng'],
+      ];
+      el.searchStatusBody.innerHTML = '';
+      const intro = document.createElement('p');
+      intro.textContent = 'Die Suche liest den Text abgelegter Dateien im Hintergrund auf dem Server. Was hier fehlt, lässt sich auf dem Server nachinstallieren; fehlende Dateien werden danach automatisch nachgeholt.';
+      el.searchStatusBody.appendChild(intro);
+      for (const [label, ok, what, cmd] of rows) {
+        const row = document.createElement('div');
+        row.className = 'search-status-row';
+        row.innerHTML = `<div class="search-status-head"><span class="search-status-dot ${ok ? 'ok' : 'missing'}" aria-hidden="true"></span><strong>${escapeHtml(label)}</strong><span class="search-status-state">${ok ? 'bereit' : 'nicht installiert'}</span></div>`;
+        if (!ok) {
+          const hint = document.createElement('div');
+          hint.className = 'search-status-hint';
+          hint.innerHTML = `${escapeHtml(what)}. Auf dem Server als root eingeben:<code>${escapeHtml(cmd)}</code>`;
+          row.appendChild(hint);
+        }
+        el.searchStatusBody.appendChild(row);
+      }
+      const pending = document.createElement('p');
+      pending.className = 'search-status-pending';
+      pending.textContent = data.pending > 0
+        ? `Noch ${data.pending} ${data.pending === 1 ? 'Datei wird' : 'Dateien werden'} gelesen.`
+        : 'Alle Dateien sind durchsuchbar.';
+      el.searchStatusBody.appendChild(pending);
+    } catch (err) {
+      el.searchStatusBody.textContent = 'Der Status konnte nicht geladen werden.';
+    }
+  }
+
+  function closeSearchStatusModal() {
+    el.searchStatusModalBackdrop.hidden = true;
+  }
+
   function closeChangelogModal() {
     el.changelogModalBackdrop.hidden = true;
   }
@@ -9113,6 +9164,11 @@
       if (e.target === el.changelogModalBackdrop) closeChangelogModal();
     });
     el.changelogCloseBtn.addEventListener('click', closeChangelogModal);
+    el.openSearchStatusBtn.addEventListener('click', openSearchStatusModal);
+    el.searchStatusCloseBtn.addEventListener('click', closeSearchStatusModal);
+    el.searchStatusModalBackdrop.addEventListener('click', (e) => {
+      if (e.target === el.searchStatusModalBackdrop) closeSearchStatusModal();
+    });
     el.openChangePasswordBtn.addEventListener('click', openChangePasswordModal);
     el.changePasswordModalBackdrop.addEventListener('click', (e) => {
       if (e.target === el.changePasswordModalBackdrop) closeChangePasswordModal();

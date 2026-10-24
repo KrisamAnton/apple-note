@@ -4,6 +4,12 @@ Hier steht, was wann geändert wurde (neueste Einträge oben). Die Versionsnumme
 steht klein neben dem Benutzernamen; bei jeder Änderung erhöht sich die letzte
 Zahl (1.7.1 → 1.7.2 → …).
 
+## 1.7.20 - 24.10.2026
+
+- Neu: **Texterkennung (OCR)**. Die Suche findet jetzt auch Text, der **in Bildern** steht (z. B. fotografierte Rechnungen, Typenschilder, Schilder) und in **gescannten PDFs** ohne eigenen Text. Im Suchergebnis steht dann „Im Bild …" bzw. „In Datei …" mit dem erkannten Textausschnitt. Das gilt für Bilder auf Seiten, im Text und als Anhang im Logbuch.
+- Neu in den Einstellungen: **Dateisuche & Texterkennung**. Das Fenster zeigt, ob der Server alles Nötige hat (PDF, Word/Excel/PowerPoint, Texterkennung), wie viele Dateien noch gelesen werden und, falls etwas fehlt, den Befehl zum Nachinstallieren.
+- Für die Texterkennung braucht der Server die Pakete `tesseract-ocr`, `tesseract-ocr-deu` und `tesseract-ocr-eng`. Ohne sie funktioniert alles andere ganz normal. Was KI auf Fotos „sieht" (z. B. einen Reifen), wird nicht erkannt, nur lesbarer Text.
+
 ## 1.7.19 - 24.10.2026
 
 - Neue Suche: Du kannst jetzt nach **einzelnen Wörtern** suchen. Alle eingegebenen Wörter müssen vorkommen, in beliebiger Reihenfolge, Groß-/Kleinschreibung und Akzente sind egal. Gesucht wird in allen Notizen und Logbüchern auf einmal.

@@ -381,6 +381,10 @@
         <span>Passwort ändern</span>
       </button>
 
+      <button type="button" class="popover-item" id="openSearchStatusBtn">
+        <span>Dateisuche &amp; Texterkennung</span>
+      </button>
+
       <button type="button" class="popover-item" id="openChangelogBtn">
         <span>Änderungsverlauf</span>
       </button>
@@ -398,6 +402,17 @@
       <div class="changelog-body" id="changelogBody"></div>
       <div class="popover-form-actions">
         <button type="button" class="popover-btn popover-btn-primary" id="changelogCloseBtn">Schließen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dateisuche & Texterkennung: Status -->
+  <div class="modal-backdrop" id="searchStatusModalBackdrop" hidden>
+    <div class="modal changelog-modal" id="searchStatusModal" role="dialog" aria-modal="true">
+      <p class="modal-title">Dateisuche &amp; Texterkennung</p>
+      <div class="changelog-body" id="searchStatusBody"></div>
+      <div class="popover-form-actions">
+        <button type="button" class="popover-btn popover-btn-primary" id="searchStatusCloseBtn">Schließen</button>
       </div>
     </div>
   </div>

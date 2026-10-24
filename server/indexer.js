@@ -11,6 +11,8 @@
 // Dateiart einfach übersprungen und später automatisch nachgeholt):
 //   - pdftotext (Paket poppler-utils): Text aus PDF-Dateien
 //   - LibreOffice (soffice): Word/Excel/PowerPoint -> PDF, danach pdftotext
+//   - tesseract (Pakete tesseract-ocr, tesseract-ocr-deu): Text in Bildern und in
+//     gescannten PDFs (Texterkennung/OCR)
 
 const fs = require('fs');
 const path = require('path');
@@ -20,6 +22,9 @@ const { spawn } = require('child_process');
 const PDF_EXT = new Set(['.pdf']);
 const OFFICE_EXT = new Set(['.doc', '.docx', '.odt', '.rtf', '.xls', '.xlsx', '.ods', '.ppt', '.pptx', '.odp']);
 const TEXT_EXT = new Set(['.txt', '.md', '.csv']);
+const IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.tif', '.tiff']);
+const MIN_IMAGE_BYTES = 8 * 1024; // winzige Bilder (Symbole) enthalten keinen lesbaren Text
+const MAX_OCR_PAGES = 30;
 const MAX_FILE_BYTES = 150 * 1024 * 1024;
 const MAX_TEXT_BYTES = 5 * 1024 * 1024;
 const RETRY_MISSING_TOOL_MS = 10 * 60 * 1000;
@@ -43,9 +48,9 @@ function foldAligned(s) {
   return out;
 }
 
-function runCapture(bin, args, { timeoutMs, maxBytes }) {
+function runCapture(bin, args, { timeoutMs, maxBytes, env }) {
   return new Promise((resolve, reject) => {
-    const child = spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'], env: env || process.env });
     const chunks = [];
     let size = 0;
     let stderr = '';
@@ -96,12 +101,29 @@ function createIndexer({ usersDataDir, userStateFile, userFilesDir, userIndexDir
   let running = false;
   let toolCache = null;
 
+  // Sprachpakete von tesseract: bevorzugt Deutsch + Englisch.
+  async function findOcrLang() {
+    try {
+      const out = await runCapture('tesseract', ['--list-langs'], { timeoutMs: 15000, maxBytes: 100000 });
+      const langs = out.split('\n').slice(1).map((l) => l.trim()).filter(Boolean);
+      const wanted = ['deu', 'eng'].filter((l) => langs.includes(l));
+      if (wanted.length) return wanted.join('+');
+      const other = langs.find((l) => l !== 'osd');
+      return other || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   async function tools() {
     if (toolCache && Date.now() - toolCache.at < 30000) return toolCache.value;
     const value = {
       pdftotext: await toolExists('pdftotext', ['-v']),
+      pdftoppm: await toolExists('pdftoppm', ['-v']),
       office: await officeAvailable(),
+      ocrLang: await findOcrLang(),
     };
+    value.ocr = !!value.ocrLang;
     toolCache = { at: Date.now(), value };
     return value;
   }
@@ -110,6 +132,7 @@ function createIndexer({ usersDataDir, userStateFile, userFilesDir, userIndexDir
     if (PDF_EXT.has(ext)) return 'pdf';
     if (OFFICE_EXT.has(ext)) return 'office';
     if (TEXT_EXT.has(ext)) return 'text';
+    if (IMAGE_EXT.has(ext)) return 'image';
     return null;
   }
 
@@ -245,6 +268,33 @@ function createIndexer({ usersDataDir, userStateFile, userFilesDir, userIndexDir
     return pages;
   }
 
+  async function ocrImage(imagePath, lang) {
+    const env = { ...process.env, OMP_THREAD_LIMIT: '1' };
+    return runCapture('tesseract', [imagePath, 'stdout', '-l', lang, '--psm', '3'], { timeoutMs: 240000, maxBytes: 5 * 1024 * 1024, env });
+  }
+
+  // Gescannte PDFs haben keinen Text: Seiten als Bilder ausgeben und per OCR lesen.
+  async function ocrPdfPages(pdfPath, pageCount, lang) {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'krisnote-ocr-'));
+    try {
+      const last = Math.min(pageCount, MAX_OCR_PAGES);
+      await runCapture('pdftoppm', ['-r', '150', '-png', '-f', '1', '-l', String(last), pdfPath, path.join(tmpDir, 'seite')], { timeoutMs: 240000, maxBytes: 1024 });
+      const files = fs.readdirSync(tmpDir).filter((f) => f.endsWith('.png')).sort();
+      const pages = [];
+      for (const f of files) pages.push(await ocrImage(path.join(tmpDir, f), lang));
+      return pages;
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  }
+
+  // Ist (fast) kein Text vorhanden, handelt es sich vermutlich um einen Scan.
+  function looksScanned(pages) {
+    if (!pages.length) return true;
+    const chars = pages.reduce((n, p) => n + p.replace(/\s+/g, '').length, 0);
+    return chars < 15 * pages.length;
+  }
+
   async function processJob({ username, basename }) {
     const ext = path.extname(basename).toLowerCase();
     const kind = kindOf(ext);
@@ -267,12 +317,26 @@ function createIndexer({ usersDataDir, userStateFile, userFilesDir, userIndexDir
       if (kind === 'text') {
         const buf = fs.readFileSync(filePath).subarray(0, MAX_TEXT_BYTES);
         pages = [buf.toString('utf8')];
+      } else if (kind === 'image') {
+        if (stat.size < MIN_IMAGE_BYTES) {
+          writeIndex(username, basename, { v: 1, kind, pages: [''], extractedAt: now });
+          return;
+        }
+        if (!available.ocr) {
+          writeIndex(username, basename, { v: 1, kind, error: 'tool-missing', tool: 'tesseract', retryAfter: now + RETRY_MISSING_TOOL_MS });
+          return;
+        }
+        pages = [await ocrImage(filePath, available.ocrLang)];
       } else if (kind === 'pdf') {
         if (!available.pdftotext) {
           writeIndex(username, basename, { v: 1, kind, error: 'tool-missing', tool: 'pdftotext', retryAfter: now + RETRY_MISSING_TOOL_MS });
           return;
         }
         pages = await pdfPages(filePath);
+        if (looksScanned(pages) && available.ocr && available.pdftoppm) {
+          const ocrPages = await ocrPdfPages(filePath, Math.max(pages.length, 1), available.ocrLang);
+          if (ocrPages.length) pages = ocrPages;
+        }
       } else {
         if (!available.pdftotext || !available.office) {
           writeIndex(username, basename, { v: 1, kind, error: 'tool-missing', tool: available.office ? 'pdftotext' : 'libreoffice', retryAfter: now + RETRY_MISSING_TOOL_MS });
@@ -383,7 +447,7 @@ function createIndexer({ usersDataDir, userStateFile, userFilesDir, userIndexDir
         objId: ref.objId || null,
         entryId: ref.entryId || null,
         fileName: ref.fileName,
-        page: idx.pages.length > 1 && idx.kind !== 'text' ? bestPage + 1 : null,
+        page: idx.pages.length > 1 && idx.kind !== 'text' && idx.kind !== 'image' ? bestPage + 1 : null,
         matched: [...matched],
         snippet,
       });
