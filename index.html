@@ -204,6 +204,8 @@
             <textarea id="titleInput" class="title-input" placeholder="Titel" rows="1"></textarea>
           </div>
 
+          <div class="journal-view" id="journalView" hidden></div>
+
           <div class="canvas-workspace" id="canvasWorkspace">
             <div class="draw-toolbar" id="drawToolbar" hidden>
               <div class="draw-tools-switch">
@@ -508,6 +510,25 @@
           <span class="popover-item-desc">Kleines Datei-Symbol direkt im Text - bewegt sich mit, wenn sich der Text darüber verändert.</span>
         </button>
       </div>
+    </div>
+  </div>
+
+  <!-- Neue Notiz: Seite oder Logbuch -->
+  <div class="popover-backdrop" id="newNoteMenuBackdrop" hidden>
+    <div class="popover" id="newNoteMenuPopover">
+      <p class="popover-title">Neu</p>
+      <button type="button" class="credential-choice-btn" id="newNotePageBtn">
+        <span class="credential-choice-title">Neue Seite</span>
+        <span class="credential-choice-hint">Freie Fläche mit Text, Bildern, Zeichnungen und Dateien</span>
+      </button>
+      <button type="button" class="credential-choice-btn" id="newNoteJournalBtn">
+        <span class="credential-choice-title">Neues Logbuch</span>
+        <span class="credential-choice-hint">Einträge mit Datum, Schlagwörtern und Anhängen als Zeitleiste</span>
+      </button>
+      <button type="button" class="credential-choice-btn" id="newNoteJournalFromBtn" hidden>
+        <span class="credential-choice-title">Logbuch aus dieser Seite erstellen</span>
+        <span class="credential-choice-hint">Zerlegt den Text dieser Seite anhand der Datumszeilen (z. B. 20.10.2026) in einzelne Einträge. Die Seite selbst bleibt unverändert.</span>
+      </button>
     </div>
   </div>
 

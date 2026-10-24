@@ -4,6 +4,13 @@ Hier steht, was wann geändert wurde (neueste Einträge oben). Die Versionsnumme
 steht klein neben dem Benutzernamen; bei jeder Änderung erhöht sich die letzte
 Zahl (1.7.1 → 1.7.2 → …).
 
+## 1.7.18 - 24.10.2026
+
+- Neu: **Logbuch**. Beim Klick auf das „+" über der Notizliste kannst du jetzt zwischen „Neue Seite" und „Neues Logbuch" wählen. Ein Logbuch ist eine Zeitleiste aus einzelnen Einträgen: oben schreibst du in der Schnellzeile (Strg+Enter trägt ein), dazu optional Titel, Uhrzeit, Schlagwörter sowie Fotos und Dateien als Anhang.
+- Logbuch: Die Einträge stehen neueste zuerst, nach Monaten gruppiert. Du kannst im Logbuch suchen, nach Schlagwörtern filtern und zwischen Liste und Kalender umschalten (ein Klick auf einen Tag zeigt nur dessen Einträge). Einträge lassen sich bearbeiten und löschen, Fotos öffnen sich groß. Gibt es einen Eintrag vom selben Tag im Vorjahr, erscheint ein Hinweis.
+- Logbuch: Aus einer bestehenden Seite mit Datumszeilen (z. B. „20.10.2026") erzeugt „Logbuch aus dieser Seite erstellen" automatisch ein Logbuch mit einzelnen Einträgen. Die Seite selbst bleibt unverändert.
+- Logbücher haben in der Notizliste ein Buch-Symbol und werden von der Suche über alle Notizen mit durchsucht.
+
 ## 1.7.17 - 13.10.2026
 
 - Das Mausrad zoomt eine PDF- bzw. Word-Ansicht nur noch, wenn du sie vorher angeklickt (aktiviert) hast. Sonst scrollt es ganz normal die Seite, auch wenn der Mauszeiger gerade über der Datei steht. Klickst du danach etwas anderes oder die leere Fläche an, scrollt das Mausrad wieder die Seite.

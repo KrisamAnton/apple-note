@@ -157,6 +157,7 @@
       delete note.sketch;
     }
     if (!note.ink) note.ink = { strokes: [] };
+    if (note.type === 'journal' && !Array.isArray(note.entries)) note.entries = [];
     if (!note.background) note.background = 'dots';
     if (note.parentNoteId === undefined) note.parentNoteId = null;
 
@@ -427,6 +428,12 @@
     noteCount: document.getElementById('noteCount'),
     collapseAllBtn: document.getElementById('collapseAllBtn'),
     newNoteBtn: document.getElementById('newNoteBtn'),
+    journalView: document.getElementById('journalView'),
+    newNoteMenuBackdrop: document.getElementById('newNoteMenuBackdrop'),
+    newNoteMenuPopover: document.getElementById('newNoteMenuPopover'),
+    newNotePageBtn: document.getElementById('newNotePageBtn'),
+    newNoteJournalBtn: document.getElementById('newNoteJournalBtn'),
+    newNoteJournalFromBtn: document.getElementById('newNoteJournalFromBtn'),
     searchInput: document.getElementById('searchInput'),
     editorEmpty: document.getElementById('editorEmpty'),
     editor: document.getElementById('editor'),
@@ -571,7 +578,8 @@
     // (aus einer Zeit vor diesem Feld) kein "objects"/"ink" haben.
     const objects = note.objects || [];
     const strokes = (note.ink && note.ink.strokes) || [];
-    return !hasChildren && objects.length === 0 && strokes.length === 0;
+    const entries = note.entries || [];
+    return !hasChildren && objects.length === 0 && strokes.length === 0 && entries.length === 0;
   }
 
   function notesInFolder(folderId) {
@@ -598,7 +606,8 @@
       .filter((o) => o.type === 'reminder')
       .map((o) => `${o.title || ''} ${o.text || ''}`)
       .join(' ');
-    return `${note.title || ''} ${objectText} ${credentialText} ${credlistText} ${reminderText}`;
+    const journalText = (note.entries || []).map(journalEntrySearchText).join(' ');
+    return `${note.title || ''} ${objectText} ${credentialText} ${credlistText} ${reminderText} ${journalText}`;
   }
 
   // Baut aus einer flachen Notizliste (z. B. eines Ordners) eine Tiefensuche-Reihenfolge
@@ -1216,7 +1225,7 @@
 
       const main = document.createElement('div');
       main.className = 'note-item-main';
-      main.innerHTML = `<div class="note-title">${escapeHtml(note.title)}</div>`;
+      main.innerHTML = `<div class="note-title">${note.type === 'journal' ? '<span class="note-type-icon" aria-hidden="true">📒</span>' : ''}${escapeHtml(note.title)}</div>`;
       item.appendChild(main);
 
       if (isTrashView) {
@@ -1341,6 +1350,8 @@
     if (!note) {
       el.editorEmpty.hidden = false;
       el.editor.hidden = true;
+      el.editor.classList.remove('is-journal');
+      el.journalView.hidden = true;
       return;
     }
     el.editorEmpty.hidden = true;
@@ -1348,7 +1359,11 @@
     el.titleInput.value = note.title;
     autoGrow(el.titleInput);
     el.noteBackBtn.hidden = noteBackStack.length === 0;
+    const isJournal = note.type === 'journal';
+    el.editor.classList.toggle('is-journal', isJournal);
+    el.journalView.hidden = !isJournal;
     renderCanvas(note);
+    if (isJournal) renderJournal(note);
     syncCredlistVisibility();
   }
 
@@ -1357,21 +1372,26 @@
     textarea.style.height = `${textarea.scrollHeight}px`;
   }
 
-  function createNote(parentNoteId) {
+  function createNote(parentNoteId, opts) {
+    opts = opts || {};
     const now = Date.now();
     const parent = parentNoteId ? findNote(parentNoteId) : null;
     const note = {
       id: uid(),
-      title: '',
+      title: opts.title || '',
       objects: [],
       ink: { strokes: [] },
       background: 'dots',
-      folderId: parent ? parent.folderId : selectedFolderId,
+      folderId: opts.folderId !== undefined ? opts.folderId : (parent ? parent.folderId : selectedFolderId),
       parentNoteId: parent ? parent.id : null,
       order: nextOrderForParent(parent ? parent.id : null),
       createdAt: now,
       updatedAt: now,
     };
+    if (opts.type === 'journal') {
+      note.type = 'journal';
+      note.entries = opts.entries || [];
+    }
     state.notes.unshift(note);
     if (parent) collapsedNoteIds.delete(parent.id);
     schedulePersist();
@@ -7921,6 +7941,873 @@
 
   // ---------- Event wiring ----------
 
+  // ---------- Logbuch (eigener Seitentyp) ----------
+  //
+  // Ein Logbuch ist eine Notiz mit note.type === 'journal' und einer Liste von
+  // Einträgen (note.entries) statt einer freien Fläche. Jeder Eintrag hat
+  // Datum, optional Uhrzeit/Titel, formatierten Text, Schlagwörter und Anhänge
+  // (Fotos/Dateien). Angezeigt wird eine Zeitleiste (neueste oben) oder ein
+  // Kalender; Eingabe geht über die Schnellzeile oben.
+
+  const MONTH_NAMES = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+  const WEEKDAY_SHORT = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+
+  // Nur im Arbeitsspeicher: Filter/Ansicht des gerade offenen Logbuchs und
+  // noch nicht abgeschickte Entwürfe je Logbuch (gehen beim Seitenwechsel nicht verloren).
+  const journalUi = { noteId: null, view: 'list', calMonth: null, filterText: '', filterTag: null, filterDate: null, listHost: null, tagHost: null, countEl: null };
+  const journalDrafts = new Map();
+
+  function pad2(n) {
+    return String(n).padStart(2, '0');
+  }
+
+  function isoFromDate(d) {
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  }
+
+  function isoToday() {
+    return isoFromDate(new Date());
+  }
+
+  function nowTimeHHMM() {
+    const d = new Date();
+    return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  }
+
+  function parseIsoDate(iso) {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+
+  function formatDateDe(iso) {
+    const [y, m, d] = iso.split('-');
+    return `${d}.${m}.${y}`;
+  }
+
+  function foldText(s) {
+    return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  }
+
+  function journalEntrySearchText(e) {
+    return `${e.title || ''} ${e.text || ''} ${(e.tags || []).join(' ')} ${(e.attachments || []).map((a) => a.name).join(' ')}`;
+  }
+
+  function journalTagHue(tag) {
+    let h = 0;
+    for (const c of tag) h = (h * 31 + c.charCodeAt(0)) % 360;
+    return h;
+  }
+
+  function makeTagChip(tag, onClick, extraClass) {
+    const chip = document.createElement(onClick ? 'button' : 'span');
+    if (onClick) chip.type = 'button';
+    chip.className = `journal-tag${extraClass ? ` ${extraClass}` : ''}`;
+    chip.style.setProperty('--tag-hue', String(journalTagHue(foldText(tag))));
+    chip.textContent = tag;
+    if (onClick) chip.addEventListener('click', onClick);
+    return chip;
+  }
+
+  function sortedJournalEntries(note) {
+    return [...(note.entries || [])].sort((a, b) => {
+      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+      const ta = a.time || '';
+      const tb = b.time || '';
+      if (ta !== tb) return ta < tb ? 1 : -1;
+      return (b.createdAt || 0) - (a.createdAt || 0);
+    });
+  }
+
+  function journalDraftFor(noteId) {
+    let draft = journalDrafts.get(noteId);
+    if (!draft) {
+      draft = { editingId: null, date: isoToday(), time: nowTimeHHMM(), title: '', html: '', tags: [], attachments: [], uploading: 0 };
+      journalDrafts.set(noteId, draft);
+    }
+    return draft;
+  }
+
+  function openLightbox(url, name) {
+    const overlay = document.createElement('div');
+    overlay.className = 'lightbox';
+    const img = document.createElement('img');
+    img.src = url;
+    img.alt = name || '';
+    overlay.appendChild(img);
+    const close = () => {
+      overlay.remove();
+      document.removeEventListener('keydown', onKey);
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') close();
+    };
+    overlay.addEventListener('click', close);
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(overlay);
+  }
+
+  function renderJournal(note) {
+    const view = el.journalView;
+    if (journalUi.noteId !== note.id) {
+      journalUi.noteId = note.id;
+      journalUi.filterText = '';
+      journalUi.filterTag = null;
+      journalUi.filterDate = null;
+      journalUi.view = 'list';
+      journalUi.calMonth = isoToday().slice(0, 7);
+    }
+    view.innerHTML = '';
+    const inner = document.createElement('div');
+    inner.className = 'journal-inner';
+    inner.appendChild(buildJournalComposer(note));
+    inner.appendChild(buildJournalFilterBar(note));
+    const listHost = document.createElement('div');
+    listHost.className = 'journal-list-host';
+    inner.appendChild(listHost);
+    journalUi.listHost = listHost;
+    view.appendChild(inner);
+    renderJournalTagFilter(note);
+    renderJournalList(note);
+  }
+
+  // ----- Eingabe (Schnellzeile) -----
+
+  function buildJournalComposer(note) {
+    const draft = journalDraftFor(note.id);
+    const box = document.createElement('div');
+    box.className = `journal-composer${draft.editingId ? ' editing' : ''}`;
+
+    const top = document.createElement('div');
+    top.className = 'journal-composer-top';
+    const dateInput = document.createElement('input');
+    dateInput.type = 'date';
+    dateInput.className = 'journal-date-input';
+    dateInput.autocomplete = 'off';
+    dateInput.value = draft.date;
+    dateInput.addEventListener('change', () => { draft.date = dateInput.value || isoToday(); });
+    const timeInput = document.createElement('input');
+    timeInput.type = 'time';
+    timeInput.className = 'journal-time-input';
+    timeInput.autocomplete = 'off';
+    timeInput.value = draft.time || '';
+    timeInput.addEventListener('change', () => { draft.time = timeInput.value || ''; });
+    const titleInput = document.createElement('input');
+    titleInput.type = 'text';
+    titleInput.className = 'journal-title-input';
+    titleInput.placeholder = 'Titel (optional)';
+    titleInput.autocomplete = 'off';
+    titleInput.value = draft.title;
+    titleInput.addEventListener('input', () => { draft.title = titleInput.value; });
+    top.appendChild(dateInput);
+    top.appendChild(timeInput);
+    top.appendChild(titleInput);
+    box.appendChild(top);
+
+    const editor = document.createElement('div');
+    editor.className = 'journal-editor';
+    editor.contentEditable = 'true';
+    editor.setAttribute('role', 'textbox');
+    editor.setAttribute('aria-multiline', 'true');
+    editor.setAttribute('data-placeholder', draft.editingId ? 'Text des Eintrags' : 'Was war heute? Einfach losschreiben ...');
+    editor.innerHTML = sanitizePastedHtml(draft.html || '');
+    editor.addEventListener('input', () => {
+      if (!editor.textContent.trim() && !editor.querySelector('img')) {
+        if (!editor.textContent) editor.innerHTML = '';
+      }
+      draft.html = editor.innerHTML;
+    });
+    editor.addEventListener('paste', (e) => {
+      const cd = e.clipboardData || window.clipboardData;
+      const files = Array.from(cd.files || []);
+      if (files.length) {
+        e.preventDefault();
+        addJournalAttachments(note, files);
+        return;
+      }
+      e.preventDefault();
+      const html = cd.getData('text/html');
+      if (html && html.trim()) insertSanitizedHtmlAtCaret(sanitizePastedHtml(html));
+      else document.execCommand('insertText', false, cd.getData('text/plain'));
+    });
+    box.appendChild(editor);
+
+    const strip = document.createElement('div');
+    strip.className = 'journal-attach-strip';
+    box.appendChild(strip);
+    const renderStrip = () => {
+      strip.innerHTML = '';
+      strip.hidden = draft.attachments.length === 0 && draft.uploading === 0;
+      draft.attachments.forEach((att, idx) => {
+        const chip = document.createElement('span');
+        chip.className = 'journal-attach-chip';
+        if (att.type === 'image') {
+          const img = document.createElement('img');
+          img.src = att.url;
+          img.alt = '';
+          chip.appendChild(img);
+        }
+        const label = document.createElement('span');
+        label.textContent = att.name;
+        chip.appendChild(label);
+        const rm = document.createElement('button');
+        rm.type = 'button';
+        rm.setAttribute('aria-label', `${att.name} entfernen`);
+        rm.textContent = '×';
+        rm.addEventListener('click', () => {
+          draft.attachments.splice(idx, 1);
+          renderStrip();
+        });
+        chip.appendChild(rm);
+        strip.appendChild(chip);
+      });
+      if (draft.uploading > 0) {
+        const busy = document.createElement('span');
+        busy.className = 'journal-attach-chip busy';
+        busy.textContent = 'Wird hochgeladen ...';
+        strip.appendChild(busy);
+      }
+    };
+    renderStrip();
+    box.__renderStrip = renderStrip;
+
+    const tagRow = document.createElement('div');
+    tagRow.className = 'journal-tags-edit';
+    const tagList = document.createElement('span');
+    tagList.className = 'journal-tags-edit-list';
+    const tagInput = document.createElement('input');
+    tagInput.type = 'text';
+    tagInput.className = 'journal-tag-input';
+    tagInput.placeholder = '+ Schlagwort';
+    tagInput.autocomplete = 'off';
+    const datalist = document.createElement('datalist');
+    datalist.id = 'journalTagSuggestions';
+    const existing = new Set();
+    for (const e of note.entries || []) for (const t of e.tags || []) existing.add(t);
+    for (const t of existing) {
+      const opt = document.createElement('option');
+      opt.value = t;
+      datalist.appendChild(opt);
+    }
+    tagInput.setAttribute('list', datalist.id);
+    const renderTags = () => {
+      tagList.innerHTML = '';
+      draft.tags.forEach((t, idx) => {
+        const chip = makeTagChip(t, null);
+        const rm = document.createElement('button');
+        rm.type = 'button';
+        rm.className = 'journal-tag-remove';
+        rm.setAttribute('aria-label', `Schlagwort ${t} entfernen`);
+        rm.textContent = '×';
+        rm.addEventListener('click', () => {
+          draft.tags.splice(idx, 1);
+          renderTags();
+        });
+        chip.appendChild(rm);
+        tagList.appendChild(chip);
+      });
+    };
+    const addPendingTag = () => {
+      const raw = tagInput.value.replace(/^#/, '').trim();
+      tagInput.value = '';
+      if (!raw) return;
+      if (!draft.tags.some((t) => foldText(t) === foldText(raw))) draft.tags.push(raw);
+      renderTags();
+    };
+    tagInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) return;
+      if (e.key === 'Enter' || e.key === ',') {
+        e.preventDefault();
+        addPendingTag();
+      } else if (e.key === 'Backspace' && !tagInput.value && draft.tags.length) {
+        draft.tags.pop();
+        renderTags();
+      }
+    });
+    tagInput.addEventListener('blur', addPendingTag);
+    renderTags();
+    tagRow.appendChild(tagList);
+    tagRow.appendChild(tagInput);
+    tagRow.appendChild(datalist);
+    box.appendChild(tagRow);
+
+    const actions = document.createElement('div');
+    actions.className = 'journal-composer-actions';
+    const attachBtn = document.createElement('button');
+    attachBtn.type = 'button';
+    attachBtn.className = 'journal-attach-btn';
+    attachBtn.innerHTML = '<span aria-hidden="true">📎</span> Foto / Datei';
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.multiple = true;
+    fileInput.hidden = true;
+    attachBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => {
+      addJournalAttachments(note, Array.from(fileInput.files));
+      fileInput.value = '';
+    });
+    actions.appendChild(attachBtn);
+    actions.appendChild(fileInput);
+    const spacer = document.createElement('span');
+    spacer.className = 'journal-spacer';
+    actions.appendChild(spacer);
+    if (draft.editingId) {
+      const cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.className = 'journal-cancel-btn';
+      cancel.textContent = 'Abbrechen';
+      cancel.addEventListener('click', () => {
+        journalDrafts.delete(note.id);
+        renderJournal(note);
+      });
+      actions.appendChild(cancel);
+    }
+    const submit = document.createElement('button');
+    submit.type = 'button';
+    submit.className = 'journal-submit-btn';
+    submit.textContent = draft.editingId ? 'Änderung speichern' : 'Eintragen';
+    submit.title = 'Strg+Enter';
+    submit.addEventListener('click', () => {
+      addPendingTag();
+      submitJournalEntry(note, editor);
+    });
+    actions.appendChild(submit);
+    box.appendChild(actions);
+
+    box.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        addPendingTag();
+        submitJournalEntry(note, editor);
+      }
+    });
+    return box;
+  }
+
+  async function addJournalAttachments(note, files) {
+    const draft = journalDraftFor(note.id);
+    const refresh = () => {
+      const composer = el.journalView.querySelector('.journal-composer');
+      if (composer && composer.__renderStrip && journalUi.noteId === note.id) composer.__renderStrip();
+    };
+    for (const file of files) {
+      draft.uploading++;
+      refresh();
+      try {
+        const url = await uploadFile(file);
+        draft.attachments.push({ id: uid(), type: file.type && file.type.startsWith('image/') ? 'image' : 'file', name: file.name || 'Datei', url });
+      } catch (err) {
+        console.error('Anhang konnte nicht hochgeladen werden:', err);
+        alert(`"${file.name}" konnte nicht hochgeladen werden.`);
+      } finally {
+        draft.uploading--;
+        refresh();
+      }
+    }
+  }
+
+  function submitJournalEntry(note, editor) {
+    const draft = journalDraftFor(note.id);
+    if (draft.uploading > 0) return;
+    const title = (draft.title || '').trim();
+    const html = sanitizePastedHtml(editor.innerHTML);
+    const text = bodyToPlainText(editor).trim();
+    if (!text && !title && draft.attachments.length === 0) {
+      editor.focus();
+      return;
+    }
+    const now = Date.now();
+    const fields = {
+      date: draft.date || isoToday(),
+      time: draft.time || '',
+      title,
+      html: text || html.includes('<img') ? html : '',
+      text,
+      tags: [...draft.tags],
+      attachments: draft.attachments.map((a) => ({ ...a })),
+      updatedAt: now,
+    };
+    if (!Array.isArray(note.entries)) note.entries = [];
+    if (draft.editingId) {
+      const entry = note.entries.find((x) => x.id === draft.editingId);
+      if (entry) Object.assign(entry, fields);
+      else note.entries.push({ id: uid(), createdAt: now, ...fields });
+    } else {
+      note.entries.push({ id: uid(), createdAt: now, ...fields });
+    }
+    note.updatedAt = now;
+    journalDrafts.delete(note.id);
+    schedulePersist();
+    renderNoteList();
+    renderJournal(note);
+  }
+
+  function startEditJournalEntry(note, entry) {
+    journalDrafts.set(note.id, {
+      editingId: entry.id,
+      date: entry.date,
+      time: entry.time || '',
+      title: entry.title || '',
+      html: entry.html || '',
+      tags: [...(entry.tags || [])],
+      attachments: (entry.attachments || []).map((a) => ({ ...a })),
+      uploading: 0,
+    });
+    renderJournal(note);
+    el.journalView.scrollTop = 0;
+    const editor = el.journalView.querySelector('.journal-editor');
+    if (editor) editor.focus();
+  }
+
+  function deleteJournalEntry(note, entry) {
+    if (!confirm('Diesen Eintrag löschen?')) return;
+    note.entries = note.entries.filter((x) => x.id !== entry.id);
+    note.updatedAt = Date.now();
+    schedulePersist();
+    renderNoteList();
+    renderJournalTagFilter(note);
+    renderJournalList(note);
+  }
+
+  // ----- Filterleiste, Kalender, Liste -----
+
+  function buildJournalFilterBar(note) {
+    const bar = document.createElement('div');
+    bar.className = 'journal-filterbar';
+
+    const search = document.createElement('input');
+    search.type = 'search';
+    search.className = 'journal-search';
+    search.placeholder = 'Im Logbuch suchen ...';
+    search.autocomplete = 'off';
+    search.value = journalUi.filterText;
+    search.addEventListener('input', () => {
+      journalUi.filterText = search.value;
+      renderJournalList(note);
+    });
+    bar.appendChild(search);
+
+    const viewSwitch = document.createElement('div');
+    viewSwitch.className = 'journal-view-switch';
+    for (const [id, label] of [['list', 'Liste'], ['calendar', 'Kalender']]) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = label;
+      b.className = journalUi.view === id ? 'active' : '';
+      b.addEventListener('click', () => {
+        journalUi.view = id;
+        if (id === 'list') journalUi.filterDate = null;
+        viewSwitch.querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b));
+        renderJournalList(note);
+      });
+      viewSwitch.appendChild(b);
+    }
+    bar.appendChild(viewSwitch);
+
+    const tagHost = document.createElement('div');
+    tagHost.className = 'journal-tag-filter';
+    journalUi.tagHost = tagHost;
+    bar.appendChild(tagHost);
+
+    const count = document.createElement('span');
+    count.className = 'journal-count';
+    journalUi.countEl = count;
+    bar.appendChild(count);
+    return bar;
+  }
+
+  function renderJournalTagFilter(note) {
+    const host = journalUi.tagHost;
+    if (!host) return;
+    host.innerHTML = '';
+    const counts = new Map();
+    for (const e of note.entries || []) {
+      for (const t of e.tags || []) {
+        const key = foldText(t);
+        const cur = counts.get(key) || { label: t, n: 0 };
+        cur.n++;
+        counts.set(key, cur);
+      }
+    }
+    const tags = [...counts.entries()].sort((a, b) => b[1].n - a[1].n);
+    if (journalUi.filterTag && !counts.has(journalUi.filterTag)) journalUi.filterTag = null;
+    for (const [key, info] of tags) {
+      const chip = makeTagChip(`${info.label} · ${info.n}`, () => {
+        journalUi.filterTag = journalUi.filterTag === key ? null : key;
+        renderJournalTagFilter(note);
+        renderJournalList(note);
+      }, journalUi.filterTag === key ? 'selected' : '');
+      chip.style.setProperty('--tag-hue', String(journalTagHue(key)));
+      host.appendChild(chip);
+    }
+  }
+
+  function filteredJournalEntries(note) {
+    const words = foldText(journalUi.filterText).split(/\s+/).filter(Boolean);
+    return sortedJournalEntries(note).filter((e) => {
+      if (journalUi.filterDate && e.date !== journalUi.filterDate) return false;
+      if (journalUi.filterTag && !(e.tags || []).some((t) => foldText(t) === journalUi.filterTag)) return false;
+      if (words.length) {
+        const t = foldText(journalEntrySearchText(e));
+        if (!words.every((w) => t.includes(w))) return false;
+      }
+      return true;
+    });
+  }
+
+  function buildJournalMemory(note) {
+    const today = new Date();
+    const md = `${pad2(today.getMonth() + 1)}-${pad2(today.getDate())}`;
+    const older = sortedJournalEntries(note).filter((e) => e.date.slice(5) === md && Number(e.date.slice(0, 4)) < today.getFullYear());
+    if (!older.length) return null;
+    const e = older[0];
+    const years = today.getFullYear() - Number(e.date.slice(0, 4));
+    const box = document.createElement('button');
+    box.type = 'button';
+    box.className = 'journal-memory';
+    const first = e.title || (e.text || '').split('\n')[0] || 'Eintrag';
+    box.innerHTML = `<span class="journal-memory-label">Vor ${years} ${years === 1 ? 'Jahr' : 'Jahren'}, am ${formatDateDe(e.date)}</span><span class="journal-memory-text"></span>`;
+    box.querySelector('.journal-memory-text').textContent = first.length > 120 ? `${first.slice(0, 117)}...` : first;
+    box.addEventListener('click', () => {
+      journalUi.filterDate = e.date;
+      journalUi.view = 'list';
+      renderJournal(note);
+    });
+    return box;
+  }
+
+  function buildJournalCalendar(note) {
+    const [y, m] = journalUi.calMonth.split('-').map(Number);
+    const wrap = document.createElement('div');
+    wrap.className = 'journal-calendar';
+    const counts = new Map();
+    for (const e of note.entries || []) counts.set(e.date, (counts.get(e.date) || 0) + 1);
+
+    const head = document.createElement('div');
+    head.className = 'journal-cal-head';
+    const shift = (delta) => {
+      const d = new Date(y, m - 1 + delta, 1);
+      journalUi.calMonth = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+      renderJournalList(note);
+    };
+    const prev = document.createElement('button');
+    prev.type = 'button';
+    prev.textContent = '‹';
+    prev.setAttribute('aria-label', 'Vorheriger Monat');
+    prev.addEventListener('click', () => shift(-1));
+    const next = document.createElement('button');
+    next.type = 'button';
+    next.textContent = '›';
+    next.setAttribute('aria-label', 'Nächster Monat');
+    next.addEventListener('click', () => shift(1));
+    const title = document.createElement('strong');
+    title.textContent = `${MONTH_NAMES[m - 1]} ${y}`;
+    const todayBtn = document.createElement('button');
+    todayBtn.type = 'button';
+    todayBtn.className = 'journal-cal-today';
+    todayBtn.textContent = 'Heute';
+    todayBtn.addEventListener('click', () => {
+      journalUi.calMonth = isoToday().slice(0, 7);
+      renderJournalList(note);
+    });
+    head.append(prev, title, next, todayBtn);
+    wrap.appendChild(head);
+
+    const grid = document.createElement('div');
+    grid.className = 'journal-cal-grid';
+    for (const wd of ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']) {
+      const h = document.createElement('div');
+      h.className = 'journal-cal-wd';
+      h.textContent = wd;
+      grid.appendChild(h);
+    }
+    const first = new Date(y, m - 1, 1);
+    const offset = (first.getDay() + 6) % 7;
+    for (let i = 0; i < offset; i++) grid.appendChild(document.createElement('span'));
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const today = isoToday();
+    for (let d = 1; d <= daysInMonth; d++) {
+      const iso = `${y}-${pad2(m)}-${pad2(d)}`;
+      const cell = document.createElement('button');
+      cell.type = 'button';
+      cell.className = 'journal-cal-day'
+        + (counts.has(iso) ? ' has-entries' : '')
+        + (iso === today ? ' today' : '')
+        + (iso === journalUi.filterDate ? ' selected' : '');
+      cell.innerHTML = `<span>${d}</span>${counts.has(iso) ? `<i>${counts.get(iso)}</i>` : ''}`;
+      cell.addEventListener('click', () => {
+        journalUi.filterDate = journalUi.filterDate === iso ? null : iso;
+        renderJournalList(note);
+      });
+      grid.appendChild(cell);
+    }
+    wrap.appendChild(grid);
+    return wrap;
+  }
+
+  function buildJournalEntryEl(note, e) {
+    const art = document.createElement('article');
+    art.className = `journal-entry${e.date === isoToday() ? ' is-today' : ''}`;
+    art.dataset.entryId = e.id;
+
+    const d = parseIsoDate(e.date);
+    const dateBox = document.createElement('div');
+    dateBox.className = 'journal-date';
+    dateBox.innerHTML = `<span class="journal-date-day">${d.getDate()}</span><span class="journal-date-month">${MONTH_NAMES[d.getMonth()].slice(0, 3)}</span><span class="journal-date-wd">${WEEKDAY_SHORT[d.getDay()]}</span>`;
+    art.appendChild(dateBox);
+
+    const card = document.createElement('div');
+    card.className = 'journal-card';
+    if (e.title || e.time) {
+      const head = document.createElement('div');
+      head.className = 'journal-card-head';
+      const title = document.createElement('div');
+      title.className = 'journal-card-title';
+      title.textContent = e.title || '';
+      head.appendChild(title);
+      if (e.time) {
+        const time = document.createElement('span');
+        time.className = 'journal-card-time';
+        time.textContent = `${e.time} Uhr`;
+        head.appendChild(time);
+      }
+      card.appendChild(head);
+    }
+    const acts = document.createElement('span');
+    acts.className = 'journal-card-actions';
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.title = 'Bearbeiten';
+    edit.setAttribute('aria-label', 'Eintrag bearbeiten');
+    edit.innerHTML = `<svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.rename}</svg>`;
+    edit.addEventListener('click', () => startEditJournalEntry(note, e));
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.title = 'Löschen';
+    del.className = 'danger';
+    del.setAttribute('aria-label', 'Eintrag löschen');
+    del.innerHTML = `<svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.trash}</svg>`;
+    del.addEventListener('click', () => deleteJournalEntry(note, e));
+    acts.append(edit, del);
+
+    if (e.html) {
+      const body = document.createElement('div');
+      body.className = 'journal-text';
+      body.innerHTML = sanitizePastedHtml(e.html);
+      card.appendChild(body);
+    }
+
+    const atts = e.attachments || [];
+    if (atts.length) {
+      const wrap = document.createElement('div');
+      wrap.className = 'journal-attachments';
+      for (const a of atts) {
+        if (a.type === 'image') {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'journal-thumb';
+          b.title = a.name;
+          const img = document.createElement('img');
+          img.src = a.url;
+          img.alt = a.name;
+          img.loading = 'lazy';
+          b.appendChild(img);
+          b.addEventListener('click', () => openLightbox(a.url, a.name));
+          wrap.appendChild(b);
+        } else {
+          const kind = fileKindStyle(a.name);
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'journal-file';
+          b.title = 'Datei öffnen';
+          b.innerHTML = `<span class="journal-file-kind" style="background:${kind.color}">${escapeHtml(kind.label)}</span><span class="journal-file-name">${escapeHtml(a.name)}</span>`;
+          b.addEventListener('click', () => window.open(a.url, '_blank'));
+          wrap.appendChild(b);
+        }
+      }
+      card.appendChild(wrap);
+    }
+
+    if ((e.tags || []).length) {
+      const tags = document.createElement('div');
+      tags.className = 'journal-card-tags';
+      for (const t of e.tags) {
+        tags.appendChild(makeTagChip(t, () => {
+          journalUi.filterTag = foldText(t);
+          renderJournalTagFilter(note);
+          renderJournalList(note);
+        }));
+      }
+      card.appendChild(tags);
+    }
+    card.appendChild(acts);
+    art.appendChild(card);
+    return art;
+  }
+
+  function renderJournalList(note) {
+    const host = journalUi.listHost;
+    if (!host) return;
+    host.innerHTML = '';
+    const all = note.entries || [];
+    const filtersActive = !!(journalUi.filterText.trim() || journalUi.filterTag || journalUi.filterDate);
+
+    if (!filtersActive && journalUi.view === 'list') {
+      const memory = buildJournalMemory(note);
+      if (memory) host.appendChild(memory);
+    }
+    if (journalUi.view === 'calendar') host.appendChild(buildJournalCalendar(note));
+
+    const entries = filteredJournalEntries(note);
+    if (journalUi.countEl) {
+      journalUi.countEl.textContent = filtersActive ? `${entries.length} von ${all.length} Einträgen` : `${all.length} ${all.length === 1 ? 'Eintrag' : 'Einträge'}`;
+    }
+    if (filtersActive) {
+      const clear = document.createElement('button');
+      clear.type = 'button';
+      clear.className = 'journal-clear-filter';
+      clear.textContent = 'Filter zurücksetzen';
+      clear.addEventListener('click', () => {
+        journalUi.filterText = '';
+        journalUi.filterTag = null;
+        journalUi.filterDate = null;
+        renderJournal(note);
+      });
+      host.appendChild(clear);
+    }
+
+    if (entries.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'journal-empty';
+      empty.textContent = all.length === 0
+        ? 'Noch keine Einträge. Schreib oben, was heute wichtig war - mit Strg+Enter ist er eingetragen.'
+        : 'Keine Einträge gefunden.';
+      host.appendChild(empty);
+      return;
+    }
+
+    const list = document.createElement('div');
+    list.className = 'journal-list';
+    let currentMonth = null;
+    let monthCount = 0;
+    const monthCounts = new Map();
+    for (const e of entries) monthCounts.set(e.date.slice(0, 7), (monthCounts.get(e.date.slice(0, 7)) || 0) + 1);
+    for (const e of entries) {
+      const month = e.date.slice(0, 7);
+      if (month !== currentMonth) {
+        currentMonth = month;
+        monthCount = monthCounts.get(month);
+        const [y, m] = month.split('-').map(Number);
+        const h = document.createElement('div');
+        h.className = 'journal-month';
+        h.textContent = `${MONTH_NAMES[m - 1]} ${y}`;
+        const n = document.createElement('span');
+        n.textContent = `${monthCount} ${monthCount === 1 ? 'Eintrag' : 'Einträge'}`;
+        h.appendChild(n);
+        list.appendChild(h);
+      }
+      list.appendChild(buildJournalEntryEl(note, e));
+    }
+    host.appendChild(list);
+  }
+
+  // Springt zu einem Eintrag (z. B. aus einem Suchergebnis) und hebt ihn kurz hervor.
+  function scrollToJournalEntry(entryId) {
+    const note = findNote(selectedNoteId);
+    if (!note || note.type !== 'journal') return;
+    journalUi.filterText = '';
+    journalUi.filterTag = null;
+    journalUi.filterDate = null;
+    journalUi.view = 'list';
+    renderJournal(note);
+    const target = el.journalView.querySelector(`[data-entry-id="${entryId}"]`);
+    if (!target) return;
+    target.scrollIntoView({ block: 'center' });
+    target.classList.add('flash');
+    setTimeout(() => target.classList.remove('flash'), 2200);
+  }
+
+  // ----- Logbuch anlegen / aus einer Seite erzeugen -----
+
+  // Zerlegt den Text einer normalen Seite anhand von Zeilen, die mit einem
+  // Datum beginnen (z. B. "20.10.2026"), in einzelne Logbuch-Einträge. Die
+  // Quell-Seite bleibt dabei unverändert.
+  function extractJournalEntriesFromNote(note) {
+    const texts = (note.objects || [])
+      .filter((o) => o.type === 'text' && o.text)
+      .sort((a, b) => (a.y - b.y) || (a.x - b.x))
+      .map((o) => o.text);
+    const lines = texts.join('\n').split('\n');
+    const dateRe = /^\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4}|\d{2})\b[\s:,\-–]*(.*)$/;
+    const entries = [];
+    let current = null;
+    const startedAt = isoFromDate(new Date(note.createdAt || Date.now()));
+    const flush = () => {
+      if (!current) return;
+      while (current.lines.length && !current.lines[current.lines.length - 1].trim()) current.lines.pop();
+      while (current.lines.length && !current.lines[0].trim()) current.lines.shift();
+      if (current.lines.length) entries.push({ date: current.date, lines: current.lines });
+      current = null;
+    };
+    for (const line of lines) {
+      const m = line.match(dateRe);
+      if (m) {
+        flush();
+        let year = Number(m[3]);
+        if (year < 100) year += 2000;
+        const month = Number(m[2]);
+        const day = Number(m[1]);
+        const valid = month >= 1 && month <= 12 && day >= 1 && day <= 31;
+        if (valid) {
+          current = { date: `${year}-${pad2(month)}-${pad2(day)}`, lines: m[4] ? [m[4]] : [] };
+          continue;
+        }
+      }
+      if (!current) current = { date: startedAt, lines: [] };
+      current.lines.push(line);
+    }
+    flush();
+    return entries.filter((e) => e.lines.some((l) => l.trim()));
+  }
+
+  function createJournalFromNote(source) {
+    const parsed = extractJournalEntriesFromNote(source);
+    if (!parsed.length) return;
+    const now = Date.now();
+    const entries = parsed.map((p, i) => {
+      const html = p.lines.map((l) => (l.trim() ? `<div>${escapeHtml(l)}</div>` : '<div><br></div>')).join('');
+      return {
+        id: uid(), date: p.date, time: '', title: '', html,
+        text: p.lines.join('\n').trim(), tags: [], attachments: [],
+        createdAt: now + i, updatedAt: now + i,
+      };
+    });
+    createNote(source.parentNoteId || null, {
+      type: 'journal',
+      title: source.title ? `${source.title} (Logbuch)` : 'Logbuch',
+      entries,
+      folderId: source.folderId,
+    });
+  }
+
+  function openNewNoteMenu() {
+    const note = currentNote();
+    const canImport = !!(note && note.type !== 'journal' && extractJournalEntriesFromNote(note).length > 0);
+    el.newNoteJournalFromBtn.hidden = !canImport;
+    if (canImport) {
+      const n = extractJournalEntriesFromNote(note).length;
+      el.newNoteJournalFromBtn.querySelector('.credential-choice-title').textContent = `Logbuch aus dieser Seite erstellen (${n} Einträge)`;
+    }
+    el.newNoteMenuBackdrop.hidden = false;
+    const rect = el.newNoteBtn.getBoundingClientRect();
+    const width = 300;
+    el.newNoteMenuPopover.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))}px`;
+    el.newNoteMenuPopover.style.top = `${rect.bottom + 6}px`;
+  }
+
+  function closeNewNoteMenu() {
+    el.newNoteMenuBackdrop.hidden = true;
+  }
+
   async function init() {
     setupPlainField(el.credentialTitleInput, false);
     setupPlainField(el.credlistTitleInput, false);
@@ -8017,7 +8904,23 @@
     // Als eigene Funktion statt direkt "createNote" übergeben, sonst würde der
     // Klick-Event selbst als "parentNoteId" durchgereicht (createNote() ohne
     // Argument = neue Hauptseite).
-    el.newNoteBtn.addEventListener('click', () => createNote());
+    el.newNoteBtn.addEventListener('click', openNewNoteMenu);
+    el.newNoteMenuBackdrop.addEventListener('click', (e) => {
+      if (e.target === el.newNoteMenuBackdrop) closeNewNoteMenu();
+    });
+    el.newNotePageBtn.addEventListener('click', () => {
+      closeNewNoteMenu();
+      createNote();
+    });
+    el.newNoteJournalBtn.addEventListener('click', () => {
+      closeNewNoteMenu();
+      createNote(null, { type: 'journal', title: 'Logbuch' });
+    });
+    el.newNoteJournalFromBtn.addEventListener('click', () => {
+      closeNewNoteMenu();
+      const source = currentNote();
+      if (source) createJournalFromNote(source);
+    });
     el.collapseAllBtn.addEventListener('click', () => {
       const ids = collapsibleNoteIds(getVisibleNotes());
       const allCollapsed = ids.size > 0 && [...ids].every((id) => collapsedNoteIds.has(id));
