@@ -29,3 +29,9 @@
 - README (Deutsch und Englisch) der Gäste-Version ergänzen: Word-Dokumente anzeigen (optional, braucht LibreOffice)
   und dieser Befehl; außerdem die neuen Funktionen (Zugangsdaten-Liste, Word-Anzeige) bei den Features nennen.
 - Der Hinweis "SOFFICE_BIN" (Umgebungsvariable, Pfad zu LibreOffice) gehört in die Tabelle der Umgebungsvariablen.
+- **Suche in Dateien (ab Version 1.7.19):** Der Server liest Dateitext mit `pdftotext` (Paket `poppler-utils`) und für
+  Word/Excel/PowerPoint mit LibreOffice. Der Installer muss `poppler-utils` immer mitinstallieren (klein), LibreOffice
+  bleibt die j/N-Frage. In die README (Deutsch/Englisch) kommt: Suche in Dateien, Voraussetzungen, Index-Ordner
+  `data/users/<name>/index/` (wird bei Bedarf neu aufgebaut, darf beim Backup fehlen).
+- **Texterkennung in Bildern (ab Version 1.7.20):** braucht `tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng` (optional,
+  Installer fragt j/N, Standard Nein).

@@ -4,6 +4,13 @@ Hier steht, was wann geändert wurde (neueste Einträge oben). Die Versionsnumme
 steht klein neben dem Benutzernamen; bei jeder Änderung erhöht sich die letzte
 Zahl (1.7.1 → 1.7.2 → …).
 
+## 1.7.19 - 24.10.2026
+
+- Neue Suche: Du kannst jetzt nach **einzelnen Wörtern** suchen. Alle eingegebenen Wörter müssen vorkommen, in beliebiger Reihenfolge, Groß-/Kleinschreibung und Akzente sind egal. Gesucht wird in allen Notizen und Logbüchern auf einmal.
+- Die Suche liest jetzt auch den **Inhalt abgelegter Dateien**: PDF, Word, Excel, PowerPoint und Textdateien. Der Server liest den Text im Hintergrund aus, sobald eine Datei vorkommt. Im Ergebnis steht, wo etwas gefunden wurde, z. B. „In Datei Rechnung.pdf, Seite 2" mit einem Textausschnitt. Ein Klick darauf springt zur Datei.
+- Unter jedem Suchergebnis stehen jetzt Textausschnitte mit hervorgehobenen Wörtern. Bei Logbüchern steht das Datum des Eintrags, ein Klick springt direkt zu diesem Eintrag. Auch Texte aus Sprachaufnahmen (Transkripte) werden durchsucht.
+- Für die Dateisuche braucht der Server das Programm `pdftotext` (Paket poppler-utils) und für Word/Excel/PowerPoint zusätzlich LibreOffice. Fehlt etwas, wird die jeweilige Dateiart übersprungen und später automatisch nachgeholt.
+
 ## 1.7.18 - 24.10.2026
 
 - Neu: **Logbuch**. Beim Klick auf das „+" über der Notizliste kannst du jetzt zwischen „Neue Seite" und „Neues Logbuch" wählen. Ein Logbuch ist eine Zeitleiste aus einzelnen Einträgen: oben schreibst du in der Schnellzeile (Strg+Enter trägt ein), dazu optional Titel, Uhrzeit, Schlagwörter sowie Fotos und Dateien als Anhang.

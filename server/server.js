@@ -18,6 +18,7 @@ const {
   parseCookies,
 } = require('./auth');
 const { makeAttemptLimiter } = require('./rate-limit');
+const { createIndexer, foldAligned } = require('./indexer');
 
 // Einzige Quelle der Versionsnummer ist package.json (siehe CHANGELOG.md für
 // die Änderungen pro Version) - nirgends sonst noch einmal hart hinterlegt,
@@ -51,6 +52,9 @@ function userStateFile(username) {
 }
 function userFilesDir(username) {
   return path.join(userDir(username), 'files');
+}
+function userIndexDir(username) {
+  return path.join(userDir(username), 'index');
 }
 function userSettingsFile(username) {
   return path.join(userDir(username), 'settings.json');
@@ -608,6 +612,7 @@ function saveState(req, res) {
           console.error('Konnte Notizen nicht speichern:', renameErr);
           return res.status(500).json({ error: 'Speichern fehlgeschlagen' });
         }
+        indexer.onStateSaved(req.username);
         res.json({ ok: true });
       });
     });
@@ -813,6 +818,39 @@ app.post('/api/convert/word-to-pdf', convertUpload.single('file'), async (req, r
     console.error('Word-Umwandlung fehlgeschlagen:', err.message);
     res.status(500).json({ error: 'Die Word-Datei konnte nicht umgewandelt werden.' });
   }
+});
+
+// ---------- Suche in Dateien (Index) ----------
+
+async function officeToPdfQueued(buffer, ext) {
+  const bin = await findOfficeBin();
+  if (!bin) throw new Error('LibreOffice nicht installiert');
+  const job = convertQueue.then(() => convertWordToPdf(bin, buffer, ext));
+  convertQueue = job.catch(() => {});
+  return job;
+}
+
+const indexer = createIndexer({
+  usersDataDir: USERS_DATA_DIR,
+  userStateFile,
+  userFilesDir,
+  userIndexDir,
+  officeToPdf: officeToPdfQueued,
+  officeAvailable: async () => !!(await findOfficeBin()),
+});
+
+// Sucht in den Texten der abgelegten Dateien (PDF, Word, Excel, ...). Die
+// Suche in den Notizen selbst (Titel, Text, Logbuch, ...) macht der Browser.
+app.get('/api/search', async (req, res) => {
+  const q = typeof req.query.q === 'string' ? req.query.q.slice(0, 200) : '';
+  const words = foldAligned(q).split(/\s+/).filter(Boolean).slice(0, 8);
+  indexer.scanUser(req.username);
+  const status = await indexer.status(req.username);
+  res.json({ hits: indexer.search(req.username, words), pending: status.pending, tools: status.tools });
+});
+
+app.get('/api/search/status', async (req, res) => {
+  res.json(await indexer.status(req.username));
 });
 
 app.use((err, req, res, next) => {
@@ -1095,6 +1133,7 @@ setInterval(checkAndSendDueReminders, REMINDER_CHECK_INTERVAL_MS);
 checkAndSendDueReminders();
 
 app.listen(PORT, () => {
+  setTimeout(() => indexer.scanAllUsers(), 5000);
   console.log(`KrisNote-Server läuft auf Port ${PORT}`);
   console.log(`Daten-Verzeichnis: ${DATA_DIR}`);
 });

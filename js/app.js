@@ -589,6 +589,14 @@
     return state.notes.filter((n) => !isTrashed(n) && (folderId === null ? true : n.folderId === folderId));
   }
 
+  // Text der Sprachaufnahmen (Transkripte) einer Notiz.
+  function noteTranscriptText(note) {
+    return (note.objects || [])
+      .filter((o) => o.type === 'audio' && Array.isArray(o.transcript))
+      .map((o) => o.transcript.map((seg) => seg.text || '').join(' '))
+      .join(' ');
+  }
+
   function noteSearchableText(note) {
     const objectText = note.objects
       .filter((o) => o.type === 'text')
@@ -607,7 +615,7 @@
       .map((o) => `${o.title || ''} ${o.text || ''}`)
       .join(' ');
     const journalText = (note.entries || []).map(journalEntrySearchText).join(' ');
-    return `${note.title || ''} ${objectText} ${credentialText} ${credlistText} ${reminderText} ${journalText}`;
+    return `${note.title || ''} ${objectText} ${credentialText} ${credlistText} ${reminderText} ${journalText} ${noteTranscriptText(note)}`;
   }
 
   // Baut aus einer flachen Notizliste (z. B. eines Ordners) eine Tiefensuche-Reihenfolge
@@ -839,13 +847,207 @@
     renderNoteList();
   }
 
+  // ---------- Suche: Wörter, Dateitreffer, Ausschnitte ----------
+
+  let searchFileHits = []; // Treffer in Dateien (vom Server) zur Suche searchHitsQuery
+  let searchHitsQuery = '';
+  let searchPending = 0; // Dateien, deren Text noch ausgelesen wird
+  let searchFetchToken = 0;
+  let serverSearchTimer = null;
+  let searchPollTimer = null;
+
+  function searchWordList() {
+    return foldText(searchQuery).split(/\s+/).filter(Boolean).slice(0, 8);
+  }
+
+  // Wie foldText(), aber mit gleicher Länge wie der Originaltext (für Ausschnitte).
+  function foldAligned(str) {
+    let out = '';
+    for (const ch of str) {
+      let f = ch;
+      if (ch.length === 1) {
+        f = ch.normalize('NFD')[0] || ch;
+        const lower = f.toLowerCase();
+        f = lower.length === 1 ? lower : f;
+      }
+      out += f;
+    }
+    return out;
+  }
+
+  function fileHitsByNote() {
+    const map = new Map();
+    if (searchHitsQuery !== searchQuery.trim()) return map;
+    for (const hit of searchFileHits) {
+      if (!map.has(hit.noteId)) map.set(hit.noteId, []);
+      map.get(hit.noteId).push(hit);
+    }
+    return map;
+  }
+
+  function noteMatchesSearch(note, words, fileHits) {
+    const text = foldText(noteSearchableText(note));
+    const matched = new Set();
+    words.forEach((w, i) => {
+      if (text.includes(w)) matched.add(i);
+    });
+    if (matched.size === words.length) return true;
+    for (const hit of fileHits.get(note.id) || []) hit.matched.forEach((i) => matched.add(i));
+    return matched.size === words.length;
+  }
+
+  // Kurzer Ausschnitt um die erste Fundstelle (Text bereits mit Leerzeichen
+  // zusammengefasst); null, wenn kein Suchwort vorkommt.
+  function searchSnippet(text, words) {
+    const flat = (text || '').replace(/\s+/g, ' ').trim();
+    const folded = foldAligned(flat);
+    let pos = -1;
+    for (const w of words) {
+      const i = folded.indexOf(w);
+      if (i !== -1 && (pos === -1 || i < pos)) pos = i;
+    }
+    if (pos === -1) return null;
+    const from = Math.max(0, pos - 50);
+    const to = Math.min(flat.length, pos + 110);
+    return `${from > 0 ? '... ' : ''}${flat.slice(from, to)}${to < flat.length ? ' ...' : ''}`;
+  }
+
+  // Ausschnitt als HTML, Suchwörter hervorgehoben.
+  function highlightSearchHtml(text, words) {
+    const folded = foldAligned(text);
+    const marks = new Array(text.length).fill(false);
+    for (const w of words) {
+      let from = 0;
+      for (;;) {
+        const i = folded.indexOf(w, from);
+        if (i === -1) break;
+        for (let k = i; k < i + w.length; k++) marks[k] = true;
+        from = i + w.length;
+      }
+    }
+    let html = '';
+    let open = false;
+    for (let i = 0; i < text.length; i++) {
+      if (marks[i] && !open) { html += '<mark>'; open = true; }
+      if (!marks[i] && open) { html += '</mark>'; open = false; }
+      html += escapeHtml(text[i]);
+    }
+    if (open) html += '</mark>';
+    return html;
+  }
+
+  // Zeilen unter einem Suchergebnis: wo genau (Text, Logbuch-Eintrag, Datei) etwas gefunden wurde.
+  function buildSearchHitLines(note, words, fileHits) {
+    const lines = [];
+    const bodyText = [
+      ...(note.objects || []).filter((o) => o.type === 'text' || o.type === 'reminder').map((o) => o.text || ''),
+      noteTranscriptText(note),
+    ].join(' ');
+    const bodySnippet = searchSnippet(bodyText, words);
+    if (bodySnippet) lines.push({ label: '', html: highlightSearchHtml(bodySnippet, words) });
+
+    if (Array.isArray(note.entries)) {
+      const scored = note.entries
+        .map((e) => {
+          const t = foldText(journalEntrySearchText(e));
+          return { e, n: words.filter((w) => t.includes(w)).length };
+        })
+        .filter((x) => x.n > 0)
+        .sort((a, b) => b.n - a.n || (a.e.date < b.e.date ? 1 : -1))
+        .slice(0, 2);
+      for (const { e } of scored) {
+        const snippet = searchSnippet(`${e.title ? `${e.title}. ` : ''}${e.text || ''}`, words)
+          || (e.title || (e.text || '').slice(0, 100));
+        lines.push({
+          label: `Logbuch ${formatDateDe(e.date)}`,
+          html: highlightSearchHtml(snippet, words),
+          action: { entryId: e.id },
+        });
+      }
+    }
+
+    const hits = (fileHits.get(note.id) || []).slice().sort((a, b) => b.matched.length - a.matched.length).slice(0, 3);
+    for (const hit of hits) {
+      lines.push({
+        label: `In Datei ${hit.fileName}${hit.page ? `, Seite ${hit.page}` : ''}`,
+        html: highlightSearchHtml(hit.snippet, words),
+        action: { objId: hit.objId, entryId: hit.entryId },
+      });
+    }
+    return lines.slice(0, 5);
+  }
+
+  // Nach einem Klick auf eine Trefferzeile: zum Eintrag bzw. zur Datei springen.
+  function performSearchHitAction(action) {
+    if (!action) return;
+    const note = currentNote();
+    if (!note) return;
+    if (action.entryId && note.type === 'journal') {
+      scrollToJournalEntry(action.entryId);
+      return;
+    }
+    if (action.objId) {
+      const objEl = findObjEl(action.objId);
+      if (objEl) {
+        objEl.scrollIntoView({ block: 'center', inline: 'center' });
+        objEl.classList.add('search-flash');
+        setTimeout(() => objEl.classList.remove('search-flash'), 2200);
+      }
+    }
+  }
+
+  function scheduleServerSearch() {
+    clearTimeout(serverSearchTimer);
+    clearTimeout(searchPollTimer);
+    if (!searchWordList().length) {
+      searchFileHits = [];
+      searchHitsQuery = '';
+      searchPending = 0;
+      return;
+    }
+    serverSearchTimer = setTimeout(() => runServerSearch(0), 250);
+  }
+
+  async function runServerSearch(attempt) {
+    const q = searchQuery.trim();
+    if (!q) return;
+    const token = ++searchFetchToken;
+    try {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (token !== searchFetchToken || searchQuery.trim() !== q) return;
+      searchFileHits = data.hits || [];
+      searchHitsQuery = q;
+      searchPending = data.pending || 0;
+      renderNoteList();
+      clearTimeout(searchPollTimer);
+      if (searchPending > 0 && attempt < 20) {
+        searchPollTimer = setTimeout(() => runServerSearch(attempt + 1), 6000);
+      }
+    } catch (e) {
+      // Ohne Antwort des Servers bleibt die Suche in den Notizen selbst.
+    }
+  }
+
   function getVisibleNotes() {
-    const q = searchQuery.trim().toLowerCase();
+    const words = searchWordList();
     // Bei aktiver Suche werden bewusst ALLE Notizen durchsucht (nicht nur der
     // gerade geöffnete Ordner), damit man wirklich überall etwas findet -
     // Notizen im Papierkorb bleiben dabei aber wie überall sonst versteckt.
-    let list = q ? state.notes.filter((n) => !isTrashed(n)) : notesInFolder(selectedFolderId);
-    if (q) list = list.filter((n) => noteSearchableText(n).toLowerCase().includes(q));
+    // Gesucht wird nach einzelnen Wörtern (alle müssen vorkommen, in beliebiger
+    // Reihenfolge, Groß-/Kleinschreibung und Akzente egal) - auch im Inhalt der
+    // abgelegten Dateien (Treffer vom Server, siehe runServerSearch()).
+    let list = words.length ? state.notes.filter((n) => !isTrashed(n)) : notesInFolder(selectedFolderId);
+    if (words.length) {
+      const fileHits = fileHitsByNote();
+      list = list.filter((n) => noteMatchesSearch(n, words, fileHits));
+      const titleScore = (n) => {
+        const t = foldText(n.title);
+        return words.every((w) => t.includes(w)) ? 1 : 0;
+      };
+      return list.slice().sort((a, b) => titleScore(b) - titleScore(a) || b.updatedAt - a.updatedAt);
+    }
     return list.slice().sort((a, b) => b.updatedAt - a.updatedAt);
   }
 
@@ -1186,6 +1388,8 @@
       : buildNoteTree(notes);
 
     const isSearchMode = searchQuery.trim().length > 0;
+    const searchWords = isSearchMode ? searchWordList() : [];
+    const searchFileHitMap = isSearchMode ? fileHitsByNote() : new Map();
     const isTrashView = selectedFolderId === TRASH_FOLDER_ID;
     updateCollapseAllButton(isSearchMode ? new Set() : collapsibleNoteIds(notes));
     // Während der Suche (flache, nach Relevanz sortierte Liste) ergibt eine
@@ -1226,6 +1430,15 @@
       const main = document.createElement('div');
       main.className = 'note-item-main';
       main.innerHTML = `<div class="note-title">${note.type === 'journal' ? '<span class="note-type-icon" aria-hidden="true">📒</span>' : ''}${escapeHtml(note.title)}</div>`;
+      if (isSearchMode && searchWords.length) {
+        for (const line of buildSearchHitLines(note, searchWords, searchFileHitMap)) {
+          const hitEl = document.createElement('div');
+          hitEl.className = `note-hit${line.action ? ' note-hit-link' : ''}`;
+          if (line.action) hitEl.dataset.action = JSON.stringify(line.action);
+          hitEl.innerHTML = `${line.label ? `<span class="note-hit-label">${escapeHtml(line.label)}</span> ` : ''}<span class="note-hit-text">${line.html}</span>`;
+          main.appendChild(hitEl);
+        }
+      }
       item.appendChild(main);
 
       if (isTrashView) {
@@ -1274,8 +1487,10 @@
       }
 
       if (!isSearchMode && !isTrashView) wireNoteItemDrag(item, note);
-      item.addEventListener('click', () => {
+      item.addEventListener('click', (ev) => {
         if (noteDragSuppressClick) return;
+        const hitLine = ev.target.closest && ev.target.closest('.note-hit-link');
+        const hitAction = hitLine ? JSON.parse(hitLine.dataset.action) : null;
         // Bei der Suche springt die Hauptüberschrift (Ordner) mit zum Ordner
         // der angeklickten Notiz - die Trefferliste selbst bleibt unverändert.
         // Wird die Suche danach geleert, steht man gleich im richtigen Ordner.
@@ -1294,8 +1509,15 @@
           }
         }
         selectNote(note.id);
+        performSearchHitAction(hitAction);
       });
       el.noteList.appendChild(item);
+    }
+    if (isSearchMode && searchPending > 0) {
+      const hint = document.createElement('div');
+      hint.className = 'note-list-hint';
+      hint.textContent = `Dateien werden noch durchsucht (${searchPending}) - weitere Treffer können folgen.`;
+      el.noteList.appendChild(hint);
     }
   }
 
@@ -9457,6 +9679,7 @@
       clearTimeout(searchDebounce);
       searchDebounce = setTimeout(() => {
         searchQuery = el.searchInput.value;
+        scheduleServerSearch();
         renderNoteList();
       }, 120);
     });
