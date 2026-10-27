@@ -4,6 +4,11 @@ Hier steht, was wann geändert wurde (neueste Einträge oben). Die Versionsnumme
 steht klein neben dem Benutzernamen; bei jeder Änderung erhöht sich die letzte
 Zahl (1.7.1 → 1.7.2 → …).
 
+## 1.7.21 - 27.10.2026
+
+- Erinnerungen gehören in den Text: Ist ein Textfeld angeklickt (ausgewählt), auch wenn gerade kein Cursor darin blinkt, wird die Erinnerung beim Klick auf den Wecker jetzt als kleines Glockensymbol am Ende dieses Textes eingefügt. Vorher entstand dann eine eigene Karte unter dem Text. Nur wenn nichts ausgewählt ist, entsteht weiterhin eine freie Erinnerungs-Karte.
+- Der Browser fragt beim Anlegen einer Erinnerung (und im Logbuch bei Titel und Schlagwort) nicht mehr, ob er ein Kennwort speichern soll.
+
 ## 1.7.20 - 24.10.2026
 
 - Neu: **Texterkennung (OCR)**. Die Suche findet jetzt auch Text, der **in Bildern** steht (z. B. fotografierte Rechnungen, Typenschilder, Schilder) und in **gescannten PDFs** ohne eigenen Text. Im Suchergebnis steht dann „Im Bild …" bzw. „In Datei …" mit dem erkannten Textausschnitt. Das gilt für Bilder auf Seiten, im Text und als Anhang im Logbuch.

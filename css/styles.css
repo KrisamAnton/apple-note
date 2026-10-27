@@ -4811,3 +4811,20 @@ button.journal-tag:hover {
   margin-top: 8px;
   font-weight: 600;
 }
+
+/* Erinnerungstext und Logbuch-Felder ohne <input>/<textarea> (siehe setupPlainField) */
+.reminder-text-input.plain-field {
+  min-height: 6.5em;
+  max-height: 14em;
+  overflow-y: auto;
+}
+
+.journal-title-input.plain-field {
+  min-height: 0;
+}
+
+.journal-tag-input.plain-field {
+  min-height: 0;
+  min-width: 110px;
+  width: auto;
+}

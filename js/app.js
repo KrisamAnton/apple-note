@@ -8364,13 +8364,7 @@
     timeInput.autocomplete = 'off';
     timeInput.value = draft.time || '';
     timeInput.addEventListener('change', () => { draft.time = timeInput.value || ''; });
-    const titleInput = document.createElement('input');
-    titleInput.type = 'text';
-    titleInput.className = 'journal-title-input';
-    titleInput.placeholder = 'Titel (optional)';
-    titleInput.autocomplete = 'off';
-    titleInput.value = draft.title;
-    titleInput.addEventListener('input', () => { draft.title = titleInput.value; });
+    const titleInput = makePlainField('journal-title-input', 'Titel (optional)', draft.title, (v) => { draft.title = v; });
     top.appendChild(dateInput);
     top.appendChild(timeInput);
     top.appendChild(titleInput);
@@ -8447,21 +8441,7 @@
     tagRow.className = 'journal-tags-edit';
     const tagList = document.createElement('span');
     tagList.className = 'journal-tags-edit-list';
-    const tagInput = document.createElement('input');
-    tagInput.type = 'text';
-    tagInput.className = 'journal-tag-input';
-    tagInput.placeholder = '+ Schlagwort';
-    tagInput.autocomplete = 'off';
-    const datalist = document.createElement('datalist');
-    datalist.id = 'journalTagSuggestions';
-    const existing = new Set();
-    for (const e of note.entries || []) for (const t of e.tags || []) existing.add(t);
-    for (const t of existing) {
-      const opt = document.createElement('option');
-      opt.value = t;
-      datalist.appendChild(opt);
-    }
-    tagInput.setAttribute('list', datalist.id);
+    const tagInput = makePlainField('journal-tag-input', '+ Schlagwort', '', () => {});
     const renderTags = () => {
       tagList.innerHTML = '';
       draft.tags.forEach((t, idx) => {
@@ -8500,7 +8480,6 @@
     renderTags();
     tagRow.appendChild(tagList);
     tagRow.appendChild(tagInput);
-    tagRow.appendChild(datalist);
     box.appendChild(tagRow);
 
     const actions = document.createElement('div');
@@ -9082,6 +9061,8 @@
   }
 
   async function init() {
+    setupPlainField(el.reminderTitleInput, false);
+    setupPlainField(el.reminderTextInput, true);
     setupPlainField(el.credentialTitleInput, false);
     setupPlainField(el.credlistTitleInput, false);
     setupBackButtons();
@@ -9341,6 +9322,26 @@
           pendingInlineReminderHost = activeTextEdit;
           const prefillRange = liveRange.collapsed ? currentFormatRange() || liveRange : liveRange;
           openReminderPopover(note, null, el.addReminderBtn, prefillRange.toString().trim());
+          return;
+        }
+      }
+      // Ist ein Textfeld nur angeklickt (ausgewählt, aber nicht zum Schreiben
+      // geöffnet), gehört die Erinnerung trotzdem in diesen Text: das
+      // Glocken-Symbol kommt ans Ende des Textes.
+      const selectedObj = selectedObjectId && multiSelectedObjectIds.size === 0
+        ? note.objects.find((o) => o.id === selectedObjectId)
+        : null;
+      if (selectedObj && selectedObj.type === 'text') {
+        const selEl = findObjEl(selectedObj.id);
+        const selBody = selEl && selEl.querySelector('.canvas-text-body');
+        if (selBody) {
+          const range = document.createRange();
+          const lastBlock = Array.from(selBody.children).reverse().find((c) => c.tagName === 'DIV' || c.tagName === 'P');
+          range.selectNodeContents(lastBlock || selBody);
+          range.collapse(false);
+          pendingInlineReminderRange = range;
+          pendingInlineReminderHost = { note, obj: selectedObj, objEl: selEl, body: selBody };
+          openReminderPopover(note, null, el.addReminderBtn, '');
           return;
         }
       }

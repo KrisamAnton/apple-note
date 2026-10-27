@@ -345,7 +345,7 @@
   <div class="popover-backdrop" id="reminderPopoverBackdrop" hidden>
     <div class="popover popover-form" id="reminderPopover">
       <p class="popover-title">Erinnerung</p>
-      <input type="text" id="reminderTitleInput" class="popover-text-input" placeholder="Überschrift (z. B. Vertrag AKS läuft aus)" />
+      <div id="reminderTitleInput" class="popover-text-input" data-placeholder="Überschrift (z. B. Vertrag AKS läuft aus)"></div>
       <label class="settings-field">
         <span class="settings-field-label">Erinnerungsdatum und -uhrzeit</span>
         <input type="datetime-local" id="reminderDateInput" class="popover-text-input" />
@@ -353,7 +353,7 @@
       <label class="settings-field">
         <span class="settings-field-label">Erinnerungstext</span>
         <span class="settings-field-hint">Wird zum Termin per Mail geschickt - manuell eingeben oder vorher Text in der Notiz markieren und dann auf "Erinnerung hinzufügen" klicken.</span>
-        <textarea id="reminderTextInput" class="popover-text-input reminder-text-input" rows="4" placeholder="Erinnerungstext"></textarea>
+        <div id="reminderTextInput" class="popover-text-input reminder-text-input" data-placeholder="Erinnerungstext"></div>
       </label>
       <div class="popover-form-actions">
         <button type="button" class="popover-btn popover-btn-danger" id="reminderDeleteBtn" hidden>Löschen</button>
