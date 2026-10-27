@@ -4,6 +4,10 @@ Hier steht, was wann geändert wurde (neueste Einträge oben). Die Versionsnumme
 steht klein neben dem Benutzernamen; bei jeder Änderung erhöht sich die letzte
 Zahl (1.7.1 → 1.7.2 → …).
 
+## 1.7.22 - 27.10.2026
+
+- Das Fenster zum Anlegen und Bearbeiten einer Erinnerung (und das der einzelnen Zugangsdaten-Karte) schließt sich nicht mehr, wenn du daneben klickst. Deine Eingaben bleiben erhalten, das Fenster geht nur mit „Speichern" oder „Abbrechen" zu.
+
 ## 1.7.21 - 27.10.2026
 
 - Erinnerungen gehören in den Text: Ist ein Textfeld angeklickt (ausgewählt), auch wenn gerade kein Cursor darin blinkt, wird die Erinnerung beim Klick auf den Wecker jetzt als kleines Glockensymbol am Ende dieses Textes eingefügt. Vorher entstand dann eine eigene Karte unter dem Text. Nur wenn nichts ausgewählt ist, entsteht weiterhin eine freie Erinnerungs-Karte.

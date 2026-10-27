@@ -9281,9 +9281,7 @@
       }
     });
     restoreCredlistDraft();
-    el.credentialPopoverBackdrop.addEventListener('click', (e) => {
-      if (e.target === el.credentialPopoverBackdrop) closeCredentialPopover();
-    });
+    // Wie beim Erinnerungs-Fenster: schließt nur über Speichern/Abbrechen.
     el.credentialAddFieldBtn.addEventListener('click', () => {
       credentialFieldsDraft.push({ label: '', value: '' });
       renderCredentialFieldRows();
@@ -9347,10 +9345,8 @@
       }
       openReminderPopover(note, null, el.addReminderBtn, '');
     });
-    el.reminderPopoverBackdrop.addEventListener('click', (e) => {
-      if (reminderPopoverJustOpened) return;
-      if (e.target === el.reminderPopoverBackdrop) closeReminderPopover();
-    });
+    // Das Erinnerungs-Fenster schließt sich bewusst NICHT durch einen Klick daneben
+    // (die Eingaben gingen sonst verloren), sondern nur über Speichern/Abbrechen.
     el.reminderCancelBtn.addEventListener('click', closeReminderPopover);
     el.reminderSaveBtn.addEventListener('click', saveReminderPopover);
     el.reminderDeleteBtn.addEventListener('click', () => {
