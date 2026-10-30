@@ -30,6 +30,7 @@
     chevron: '<svg viewBox="0 0 20 20"><path d="M7 4.5 13 10l-6 5.5v-2.2L10.4 10 7 6.7z"/></svg>',
     plus: '<svg viewBox="0 0 20 20"><path d="M9.2 2.5h1.6v6.7h6.7v1.6h-6.7v6.7H9.2v-6.7H2.5V9.2h6.7z"/></svg>',
     heading: '<svg viewBox="0 0 20 20"><text x="1.5" y="15" font-size="13" font-weight="800" fill="currentColor">H</text></svg>',
+    download: '<svg viewBox="0 0 20 20"><path d="M9.25 3h1.5v7.9l2.7-2.7 1.06 1.06L10 13.5 5.5 9.26l1.06-1.06 2.69 2.7V3z" fill="currentColor"/><path d="M4 14h1.5v2.5h9V14H16v4H4v-4z" fill="currentColor"/></svg>',
     openFile: '<svg viewBox="0 0 20 20"><path d="M8 3H4.5A1.5 1.5 0 0 0 3 4.5v11A1.5 1.5 0 0 0 4.5 17h11a1.5 1.5 0 0 0 1.5-1.5V12h-1.5v3.5h-11v-11H8V3z" fill="currentColor"/><path d="M11 3h6v6h-1.5V5.6l-6.15 6.15-1.06-1.06L14.44 4.5H11V3z" fill="currentColor"/></svg>',
     mic: '<svg viewBox="0 0 20 20"><path d="M10 2.5a2.5 2.5 0 0 0-2.5 2.5v4a2.5 2.5 0 0 0 5 0V5A2.5 2.5 0 0 0 10 2.5z" fill="currentColor"/><path d="M5.5 9v.5a4.5 4.5 0 0 0 9 0V9H16v.5a6 6 0 0 1-5.25 5.95V17.5h-1.5v-2.05A6 6 0 0 1 4 9.5V9h1.5z" fill="currentColor"/></svg>',
     transcript: '<svg viewBox="0 0 20 20"><path d="M3 4h14v1.6H3V4zm0 4.2h14v1.6H3V8.2zm0 4.2h9v1.6H3v-1.6z" fill="currentColor"/></svg>',
@@ -2022,6 +2023,13 @@
     if ((obj.type === 'pdf' || obj.type === 'file') && obj.fileData) {
       const label = obj.type === 'pdf' ? 'PDF öffnen' : 'Datei öffnen';
       mainToolbar.appendChild(makeToolbarBtn(ICONS.openFile, false, () => openAttachedFile(obj), label));
+      mainToolbar.appendChild(makeToolbarBtn(ICONS.download, false, () => downloadFile(obj.fileData, obj.fileName), 'Herunterladen'));
+    }
+    if (obj.type === 'image' && obj.src) {
+      mainToolbar.appendChild(makeToolbarBtn(ICONS.download, false, () => downloadFile(obj.src, obj.fileName || 'Bild'), 'Herunterladen'));
+    }
+    if (obj.type === 'audio' && obj.src) {
+      mainToolbar.appendChild(makeToolbarBtn(ICONS.download, false, () => downloadFile(obj.src, obj.fileName || 'Sprachnotiz'), 'Herunterladen'));
     }
     if ((obj.type === 'pdf' && obj.variant === 'file') || obj.type === 'file') {
       mainToolbar.appendChild(makeToolbarBtn(ICONS.rename, false, () => startRenameFileAttachment(obj, objEl), 'Umbenennen'));
@@ -5602,6 +5610,22 @@
   // Server-URL, daher genügt window.open - für Formate, die der Browser nicht
   // selbst anzeigen kann (z. B. .docx), stößt das einen normalen Download an,
   // den man danach lokal in Word öffnet.
+  // Lädt eine abgelegte Datei unter ihrem (ggf. umbenannten) Namen herunter,
+  // statt sie nur im Browser zu öffnen. Fehlt dem Namen die Dateiendung, wird
+  // die der gespeicherten Datei angehängt.
+  function downloadFile(url, name) {
+    if (!url) return;
+    const ext = (url.match(/\.[A-Za-z0-9]{1,10}$/) || [''])[0];
+    let fileName = (name || 'Datei').replace(/[\\/:*?"<>|]+/g, '_').trim() || 'Datei';
+    if (ext && !fileName.toLowerCase().endsWith(ext.toLowerCase())) fileName += ext;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
   function openAttachedFile(obj) {
     if (!obj.fileData) return;
     window.open(obj.fileData, '_blank');
@@ -5753,6 +5777,7 @@
       `<span class="inline-pdf-chip-name">${escapeHtml(fileName || 'PDF')}</span>` +
       '<span class="inline-pdf-chip-toolbar">' +
       `<span class="inline-pdf-chip-btn" data-action="open" title="Datei öffnen"><svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.openFile}</svg></span>` +
+      `<span class="inline-pdf-chip-btn" data-action="download" title="Herunterladen"><svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.download}</svg></span>` +
       `<span class="inline-pdf-chip-btn" data-action="rename" title="Umbenennen"><svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.rename}</svg></span>` +
       `<span class="inline-pdf-chip-btn inline-pdf-chip-btn-danger" data-action="delete" title="Löschen"><svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.trash}</svg></span>` +
       '</span>';
@@ -5947,6 +5972,12 @@
           `<span class="inline-pdf-chip-btn" data-action="open" title="Datei öffnen"><svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.openFile}</svg></span>`
         );
       }
+      if (!toolbar.querySelector('[data-action="download"]')) {
+        const openPart = toolbar.querySelector('[data-action="open"]');
+        const html = `<span class="inline-pdf-chip-btn" data-action="download" title="Herunterladen"><svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.download}</svg></span>`;
+        if (openPart) openPart.insertAdjacentHTML('afterend', html);
+        else toolbar.insertAdjacentHTML('beforeend', html);
+      }
       if (!toolbar.querySelector('[data-action="rename"]')) {
         toolbar.insertAdjacentHTML(
           'beforeend',
@@ -5966,6 +5997,13 @@
         openBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           if (chip.dataset.fileData) window.open(chip.dataset.fileData, '_blank');
+        });
+      }
+      const downloadBtn = chip.querySelector('.inline-pdf-chip-btn[data-action="download"]');
+      if (downloadBtn) {
+        downloadBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          downloadFile(chip.dataset.fileData, chip.querySelector('.inline-pdf-chip-name')?.textContent || 'PDF');
         });
       }
       if (renameBtn) {
@@ -8307,6 +8345,15 @@
     img.src = url;
     img.alt = name || '';
     overlay.appendChild(img);
+    const dl = document.createElement('button');
+    dl.type = 'button';
+    dl.className = 'lightbox-download';
+    dl.innerHTML = `<svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.download}</svg> Herunterladen`;
+    dl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      downloadFile(url, name || 'Bild');
+    });
+    overlay.appendChild(dl);
     const close = () => {
       overlay.remove();
       document.removeEventListener('keydown', onKey);
@@ -8874,6 +8921,14 @@
           b.innerHTML = `<span class="journal-file-kind" style="background:${kind.color}">${escapeHtml(kind.label)}</span><span class="journal-file-name">${escapeHtml(a.name)}</span>`;
           b.addEventListener('click', () => window.open(a.url, '_blank'));
           wrap.appendChild(b);
+          const dlBtn = document.createElement('button');
+          dlBtn.type = 'button';
+          dlBtn.className = 'journal-file-dl';
+          dlBtn.title = 'Herunterladen';
+          dlBtn.setAttribute('aria-label', `${a.name} herunterladen`);
+          dlBtn.innerHTML = `<svg viewBox="0 0 20 20" class="icon" aria-hidden="true">${ICONS.download}</svg>`;
+          dlBtn.addEventListener('click', () => downloadFile(a.url, a.name));
+          wrap.appendChild(dlBtn);
         }
       }
       card.appendChild(wrap);

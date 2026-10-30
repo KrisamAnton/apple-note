@@ -4,6 +4,11 @@ Hier steht, was wann geändert wurde (neueste Einträge oben). Die Versionsnumme
 steht klein neben dem Benutzernamen; bei jeder Änderung erhöht sich die letzte
 Zahl (1.7.1 → 1.7.2 → …).
 
+## 1.7.23 - 30.10.2026
+
+- Abgelegte Dateien lassen sich jetzt **herunterladen**, nicht nur öffnen. In der grauen Leiste über einer Datei, PDF, Sprachaufnahme oder einem Bild gibt es dafür einen neuen Knopf „Herunterladen" (Pfeil nach unten). Das gleiche gilt für PDFs, die mitten im Text liegen, für Dateien im Logbuch (Pfeil neben dem Dateinamen) und für Fotos im Logbuch (Knopf in der Großansicht).
+- Die heruntergeladene Datei heißt so, wie sie in KrisNote heißt (auch nach dem Umbenennen), mit der richtigen Dateiendung.
+
 ## 1.7.22 - 27.10.2026
 
 - Das Fenster zum Anlegen und Bearbeiten einer Erinnerung (und das der einzelnen Zugangsdaten-Karte) schließt sich nicht mehr, wenn du daneben klickst. Deine Eingaben bleiben erhalten, das Fenster geht nur mit „Speichern" oder „Abbrechen" zu.
