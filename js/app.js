@@ -5613,17 +5613,40 @@
   // Lädt eine abgelegte Datei unter ihrem (ggf. umbenannten) Namen herunter,
   // statt sie nur im Browser zu öffnen. Fehlt dem Namen die Dateiendung, wird
   // die der gespeicherten Datei angehängt.
-  function downloadFile(url, name) {
+  //
+  // Die Datei wird zuerst selbst abgeholt und dann aus dem Arbeitsspeicher als
+  // Download gespeichert. Ein direkter Link auf eine Office-Datei (.xlsx,
+  // .docx ...) wird von Edge sonst abgefangen und im Office-Betrachter im
+  // Browser geöffnet, statt sie herunterzuladen. Nur sehr große Dateien laufen
+  // über einen Link mit "Content-Disposition: attachment" vom Server.
+  async function downloadFile(url, name) {
     if (!url) return;
     const ext = (url.match(/\.[A-Za-z0-9]{1,10}$/) || [''])[0];
     let fileName = (name || 'Datei').replace(/[\\/:*?"<>|]+/g, '_').trim() || 'Datei';
     if (ext && !fileName.toLowerCase().endsWith(ext.toLowerCase())) fileName += ext;
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    const save = (href, revoke) => {
+      const a = document.createElement('a');
+      a.href = href;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      if (revoke) setTimeout(() => URL.revokeObjectURL(href), 60000);
+    };
+    const viaServerLink = () => save(`${url}?download=1&name=${encodeURIComponent(fileName)}`, false);
+    try {
+      const res = await fetch(url, { credentials: 'same-origin' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const size = Number(res.headers.get('content-length')) || 0;
+      if (size > 80 * 1024 * 1024) {
+        if (res.body && res.body.cancel) res.body.cancel();
+        viaServerLink();
+        return;
+      }
+      save(URL.createObjectURL(await res.blob()), true);
+    } catch (err) {
+      viaServerLink();
+    }
   }
 
   function openAttachedFile(obj) {

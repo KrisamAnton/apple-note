@@ -4,6 +4,10 @@ Hier steht, was wann geändert wurde (neueste Einträge oben). Die Versionsnumme
 steht klein neben dem Benutzernamen; bei jeder Änderung erhöht sich die letzte
 Zahl (1.7.1 → 1.7.2 → …).
 
+## 1.7.24 - 30.10.2026
+
+- „Herunterladen" lädt Excel-, Word- und andere Office-Dateien jetzt wirklich herunter. Edge hat sie vorher von sich aus im Office-Betrachter im Browser geöffnet. Die Datei wird jetzt direkt von KrisNote geholt und als normaler Download gespeichert. Sehr große Dateien (über 80 MB) laufen über einen Download-Link des Servers.
+
 ## 1.7.23 - 30.10.2026
 
 - Abgelegte Dateien lassen sich jetzt **herunterladen**, nicht nur öffnen. In der grauen Leiste über einer Datei, PDF, Sprachaufnahme oder einem Bild gibt es dafür einen neuen Knopf „Herunterladen" (Pfeil nach unten). Das gleiche gilt für PDFs, die mitten im Text liegen, für Dateien im Logbuch (Pfeil neben dem Dateinamen) und für Fotos im Logbuch (Knopf in der Großansicht).

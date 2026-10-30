@@ -534,6 +534,12 @@ app.post('/api/register', (req, res) => {
 // Anmelde-Mittelsmann weiter oben, /files/* ist dort bewusst nicht öffentlich).
 app.get('/files/:filename', (req, res) => {
   const filePath = path.join(userFilesDir(req.username), path.basename(req.params.filename));
+  // ?download=1&name=... : als Download ausliefern (Content-Disposition: attachment),
+  // damit der Browser die Datei speichert statt sie anzuzeigen/zu öffnen.
+  if (req.query.download !== undefined) {
+    const wanted = typeof req.query.name === 'string' ? req.query.name : '';
+    res.attachment((wanted || path.basename(filePath)).replace(/[\r\n"]/g, '').slice(0, 200));
+  }
   res.sendFile(filePath, { maxAge: '1y', immutable: true }, (err) => {
     if (err) res.status(404).end();
   });
