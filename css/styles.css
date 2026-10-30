@@ -4878,3 +4878,107 @@ button.journal-tag:hover {
   width: 16px;
   height: 16px;
 }
+
+/* ---------- Dateiversionen ---------- */
+
+.file-version-badge {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  padding: 1px 8px;
+  border: none;
+  border-radius: 999px;
+  background: var(--accent-strong);
+  color: #fff;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.popover-versions {
+  min-width: 360px;
+  max-width: 440px;
+  padding: 10px;
+}
+
+.file-versions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 46vh;
+  overflow-y: auto;
+  margin-bottom: 6px;
+}
+
+.file-version-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.file-version-row.current {
+  border-color: var(--accent-strong);
+  background: var(--selection-bg);
+}
+
+.file-version-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.file-version-current {
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--accent-strong);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.file-version-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.file-version-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.file-version-actions button {
+  padding: 4px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.file-version-actions button:hover {
+  background: var(--hover-bg);
+  border-color: var(--accent-strong);
+}
+
+@media (max-width: 780px) and (pointer: coarse) {
+  .popover-versions {
+    min-width: 0;
+    max-width: none;
+  }
+  .file-version-actions button {
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+}

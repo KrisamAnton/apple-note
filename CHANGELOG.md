@@ -4,6 +4,13 @@ Hier steht, was wann geändert wurde (neueste Einträge oben). Die Versionsnumme
 steht klein neben dem Benutzernamen; bei jeder Änderung erhöht sich die letzte
 Zahl (1.7.1 → 1.7.2 → …).
 
+## 1.7.25 - 30.10.2026
+
+- Neu: **Dateiversionen**. Eine abgelegte Datei (Datei-Symbol oder PDF als Datei) kann jetzt mehrere Versionen haben, ohne dass viele fast gleiche Dateien herumliegen. Ziehst du eine Datei direkt auf ein vorhandenes Datei-Symbol, fragt KrisNote, ob sie als **neue Version** dieser Datei oder als **eigene Datei** abgelegt werden soll. Alternativ gibt es in der grauen Leiste den Knopf „Neue Version hinzufügen" (Pfeil nach oben).
+- Öffnen (auch per Doppelklick) und Herunterladen nehmen immer die **neueste** Version. Ab der zweiten Version zeigt das Symbol ein kleines „v2", „v3" usw. Ein Klick darauf (oder auf den Uhr-Knopf in der grauen Leiste) zeigt die **Liste aller Versionen** mit Datum und Größe. Jede Version lässt sich ansehen (Öffnen) oder herunterladen, und eine ältere Version kann „als aktuell festgelegt" werden. Dabei geht keine Version verloren: Es entsteht eine neue Versionsnummer.
+- Beim Herunterladen einer älteren Version heißt die Datei z. B. „Stromliste (Version 1).xlsx".
+- Das Kürzel auf dem Datei-Symbol (WORD, EXCEL ...) richtet sich bei umbenannten Dateien ohne Endung nach der gespeicherten Datei.
+
 ## 1.7.24 - 30.10.2026
 
 - „Herunterladen" lädt Excel-, Word- und andere Office-Dateien jetzt wirklich herunter. Edge hat sie vorher von sich aus im Office-Betrachter im Browser geöffnet. Die Datei wird jetzt direkt von KrisNote geholt und als normaler Download gespeichert. Sehr große Dateien (über 80 MB) laufen über einen Download-Link des Servers.

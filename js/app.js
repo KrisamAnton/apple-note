@@ -31,6 +31,8 @@
     plus: '<svg viewBox="0 0 20 20"><path d="M9.2 2.5h1.6v6.7h6.7v1.6h-6.7v6.7H9.2v-6.7H2.5V9.2h6.7z"/></svg>',
     heading: '<svg viewBox="0 0 20 20"><text x="1.5" y="15" font-size="13" font-weight="800" fill="currentColor">H</text></svg>',
     download: '<svg viewBox="0 0 20 20"><path d="M9.25 3h1.5v7.9l2.7-2.7 1.06 1.06L10 13.5 5.5 9.26l1.06-1.06 2.69 2.7V3z" fill="currentColor"/><path d="M4 14h1.5v2.5h9V14H16v4H4v-4z" fill="currentColor"/></svg>',
+    newVersion: '<svg viewBox="0 0 20 20"><path d="M9.25 13V5.1L6.55 7.8 5.5 6.74 10 2.5l4.5 4.24-1.05 1.06-2.7-2.7V13z" fill="currentColor"/><path d="M4 14h1.5v2.5h9V14H16v4H4v-4z" fill="currentColor"/></svg>',
+    versions: '<svg viewBox="0 0 20 20"><path d="M10 3a7 7 0 1 1-6.62 4.74l1.42.48A5.5 5.5 0 1 0 10 4.5V3z" fill="currentColor"/><path d="M9.25 6h1.5v3.7l2.5 1.45-.75 1.3-3.25-1.9V6z" fill="currentColor"/><path d="M3 2.8v4.6h4.6L3 2.8z" fill="currentColor"/></svg>',
     openFile: '<svg viewBox="0 0 20 20"><path d="M8 3H4.5A1.5 1.5 0 0 0 3 4.5v11A1.5 1.5 0 0 0 4.5 17h11a1.5 1.5 0 0 0 1.5-1.5V12h-1.5v3.5h-11v-11H8V3z" fill="currentColor"/><path d="M11 3h6v6h-1.5V5.6l-6.15 6.15-1.06-1.06L14.44 4.5H11V3z" fill="currentColor"/></svg>',
     mic: '<svg viewBox="0 0 20 20"><path d="M10 2.5a2.5 2.5 0 0 0-2.5 2.5v4a2.5 2.5 0 0 0 5 0V5A2.5 2.5 0 0 0 10 2.5z" fill="currentColor"/><path d="M5.5 9v.5a4.5 4.5 0 0 0 9 0V9H16v.5a6 6 0 0 1-5.25 5.95V17.5h-1.5v-2.05A6 6 0 0 1 4 9.5V9h1.5z" fill="currentColor"/></svg>',
     transcript: '<svg viewBox="0 0 20 20"><path d="M3 4h14v1.6H3V4zm0 4.2h14v1.6H3V8.2zm0 4.2h9v1.6H3v-1.6z" fill="currentColor"/></svg>',
@@ -477,6 +479,17 @@
     fontFamilyPopoverBackdrop: document.getElementById('fontFamilyPopoverBackdrop'),
     fontFamilyPopover: document.getElementById('fontFamilyPopover'),
     fontFamilyList: document.getElementById('fontFamilyList'),
+    fileVersionChoiceBackdrop: document.getElementById('fileVersionChoiceBackdrop'),
+    fileVersionNewHint: document.getElementById('fileVersionNewHint'),
+    fileVersionNewBtn: document.getElementById('fileVersionNewBtn'),
+    fileVersionSeparateBtn: document.getElementById('fileVersionSeparateBtn'),
+    fileVersionCancelBtn: document.getElementById('fileVersionCancelBtn'),
+    fileVersionsBackdrop: document.getElementById('fileVersionsBackdrop'),
+    fileVersionsPopover: document.getElementById('fileVersionsPopover'),
+    fileVersionsTitle: document.getElementById('fileVersionsTitle'),
+    fileVersionsList: document.getElementById('fileVersionsList'),
+    fileVersionsAddBtn: document.getElementById('fileVersionsAddBtn'),
+    fileVersionInput: document.getElementById('fileVersionInput'),
     wordModePopoverBackdrop: document.getElementById('wordModePopoverBackdrop'),
     wordPagesModeBtn: document.getElementById('wordPagesModeBtn'),
     wordModeHint: document.getElementById('wordModeHint'),
@@ -2024,6 +2037,15 @@
       const label = obj.type === 'pdf' ? 'PDF öffnen' : 'Datei öffnen';
       mainToolbar.appendChild(makeToolbarBtn(ICONS.openFile, false, () => openAttachedFile(obj), label));
       mainToolbar.appendChild(makeToolbarBtn(ICONS.download, false, () => downloadFile(obj.fileData, obj.fileName), 'Herunterladen'));
+    }
+    if (isVersionableObject(obj)) {
+      mainToolbar.appendChild(makeToolbarBtn(ICONS.newVersion, false, () => {
+        fileVersionTarget = { noteId: note.id, objId: obj.id };
+        el.fileVersionInput.click();
+      }, 'Neue Version hinzufügen'));
+      if (Array.isArray(obj.versions) && obj.versions.length > 1) {
+        mainToolbar.appendChild(makeToolbarBtn(ICONS.versions, false, () => openFileVersions(note, obj, mainToolbar), 'Versionen anzeigen'));
+      }
     }
     if (obj.type === 'image' && obj.src) {
       mainToolbar.appendChild(makeToolbarBtn(ICONS.download, false, () => downloadFile(obj.src, obj.fileName || 'Bild'), 'Herunterladen'));
@@ -5393,6 +5415,7 @@
       text.className = 'pdf-file-chip-text';
       text.innerHTML = `<span class="pdf-file-chip-name">${escapeHtml(obj.fileName || 'PDF')}</span><span class="pdf-file-chip-pages">${pages}</span>`;
       objEl.appendChild(text);
+      appendVersionBadge(note, obj, objEl);
     } else {
       if (typeof obj.viewZoom !== 'number') obj.viewZoom = 1;
       if (typeof obj.viewPanX !== 'number') obj.viewPanX = 0;
@@ -5646,6 +5669,190 @@
       save(URL.createObjectURL(await res.blob()), true);
     } catch (err) {
       viaServerLink();
+    }
+  }
+
+  // ----- Dateiversionen -----
+  //
+  // Eine abgelegte Datei (Datei-Symbol oder PDF als Datei) kann mehrere
+  // Versionen haben: obj.versions = [{ v, fileData, fileName, size, addedAt }].
+  // obj.fileData zeigt immer auf die neueste Version - "Öffnen" und
+  // "Herunterladen" nehmen deshalb automatisch die letzte. Ältere Versionen
+  // bleiben erhalten und sind über die Versionsliste erreichbar. Dateien ohne
+  // obj.versions gelten als Version 1.
+
+  function isVersionableObject(obj) {
+    return !!obj && !!obj.fileData && (obj.type === 'file' || (obj.type === 'pdf' && obj.variant === 'file'));
+  }
+
+  function ensureVersions(obj) {
+    if (!Array.isArray(obj.versions) || obj.versions.length === 0) {
+      obj.versions = [{ v: 1, fileData: obj.fileData, fileName: obj.fileName || 'Datei', size: null, addedAt: null }];
+    }
+    return obj.versions;
+  }
+
+  function currentVersionNumber(obj) {
+    return Array.isArray(obj.versions) && obj.versions.length ? obj.versions[obj.versions.length - 1].v : 1;
+  }
+
+  function formatBytes(n) {
+    if (!n && n !== 0) return '';
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(n < 10240 ? 1 : 0)} KB`;
+    return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  function formatVersionDate(ms) {
+    if (!ms) return 'ursprüngliche Datei';
+    const d = new Date(ms);
+    return `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${d.getFullYear()}, ${pad2(d.getHours())}:${pad2(d.getMinutes())} Uhr`;
+  }
+
+  // Kleines "v3" am Datei-Symbol; ein Klick öffnet die Versionsliste.
+  function appendVersionBadge(note, obj, objEl) {
+    if (!Array.isArray(obj.versions) || obj.versions.length < 2) return;
+    const badge = document.createElement('button');
+    badge.type = 'button';
+    badge.className = 'file-version-badge';
+    badge.title = 'Versionen anzeigen';
+    badge.setAttribute('aria-label', `Version ${currentVersionNumber(obj)}, Versionen anzeigen`);
+    badge.textContent = `v${currentVersionNumber(obj)}`;
+    badge.addEventListener('pointerdown', (e) => e.stopPropagation());
+    badge.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openFileVersions(note, obj, badge);
+    });
+    objEl.appendChild(badge);
+  }
+
+  let fileVersionTarget = null; // { noteId, objId } für den Dateiauswahl-Dialog / die Liste
+  let fileVersionChoiceResolve = null;
+
+  // Datei wurde auf ein vorhandenes Datei-Symbol gezogen: neue Version oder eigene Datei?
+  function askFileVersionMode(obj) {
+    return new Promise((resolve) => {
+      fileVersionChoiceResolve = resolve;
+      el.fileVersionNewHint.textContent = `Gehört zu „${obj.fileName || 'Datei'}": wird die neue aktuelle Datei, die bisherigen Versionen bleiben erhalten.`;
+      el.fileVersionChoiceBackdrop.hidden = false;
+    });
+  }
+
+  function resolveFileVersionMode(mode) {
+    el.fileVersionChoiceBackdrop.hidden = true;
+    if (fileVersionChoiceResolve) {
+      const resolve = fileVersionChoiceResolve;
+      fileVersionChoiceResolve = null;
+      resolve(mode);
+    }
+  }
+
+  async function addFileVersion(note, obj, file) {
+    if (!note || !obj || !file) return;
+    showBusyBanner('Neue Version wird abgelegt ...');
+    try {
+      let pageCount = null;
+      if (obj.type === 'pdf') {
+        try {
+          const pdfjsLib = await loadPdfJs();
+          const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+          pageCount = pdf.numPages;
+        } catch (err) {
+          alert('Das ist keine gültige PDF-Datei - sie kann nicht als neue Version dieser PDF abgelegt werden.');
+          return;
+        }
+      }
+      const url = await uploadFile(file);
+      const versions = ensureVersions(obj);
+      versions.push({ v: currentVersionNumber(obj) + 1, fileData: url, fileName: file.name, size: file.size, addedAt: Date.now() });
+      obj.fileData = url;
+      if (pageCount) obj.pageCount = pageCount;
+      note.updatedAt = Date.now();
+      schedulePersist();
+      renderNoteList();
+      if (currentNote() && currentNote().id === note.id) {
+        renderCanvas(note);
+        const objEl = findObjEl(obj.id);
+        if (objEl) selectObject(note, obj, objEl);
+      }
+    } catch (err) {
+      console.error('Neue Version konnte nicht abgelegt werden:', err);
+      alert('Die neue Version konnte nicht abgelegt werden.');
+    } finally {
+      hideBusyBanner();
+    }
+  }
+
+  function versionDownloadName(obj, ver) {
+    const base = (obj.fileName || ver.fileName || 'Datei').replace(/\.[A-Za-z0-9]{1,10}$/, '');
+    return `${base} (Version ${ver.v})`;
+  }
+
+  function openFileVersions(note, obj, anchorEl) {
+    fileVersionTarget = { noteId: note.id, objId: obj.id };
+    renderFileVersionsList(note, obj);
+    el.fileVersionsBackdrop.hidden = false;
+    const rect = anchorEl.getBoundingClientRect();
+    const width = 400;
+    el.fileVersionsPopover.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))}px`;
+    el.fileVersionsPopover.style.top = `${Math.max(8, Math.min(rect.bottom + 6, window.innerHeight - 320))}px`;
+  }
+
+  function closeFileVersions() {
+    el.fileVersionsBackdrop.hidden = true;
+  }
+
+  function renderFileVersionsList(note, obj) {
+    const versions = ensureVersions(obj);
+    el.fileVersionsTitle.textContent = `Versionen von „${obj.fileName || 'Datei'}"`;
+    el.fileVersionsList.innerHTML = '';
+    const latest = currentVersionNumber(obj);
+    for (const ver of [...versions].reverse()) {
+      const row = document.createElement('div');
+      row.className = `file-version-row${ver.v === latest ? ' current' : ''}`;
+      const info = document.createElement('div');
+      info.className = 'file-version-info';
+      const head = document.createElement('div');
+      head.className = 'file-version-head';
+      head.textContent = `Version ${ver.v}`;
+      if (ver.v === latest) {
+        const tag = document.createElement('span');
+        tag.className = 'file-version-current';
+        tag.textContent = 'aktuell';
+        head.appendChild(tag);
+      }
+      const meta = document.createElement('div');
+      meta.className = 'file-version-meta';
+      const parts = [formatVersionDate(ver.addedAt), formatBytes(ver.size), ver.restoredFrom ? `wiederhergestellt aus Version ${ver.restoredFrom}` : ''].filter(Boolean);
+      meta.textContent = parts.join(' · ');
+      info.append(head, meta);
+      row.appendChild(info);
+
+      const acts = document.createElement('div');
+      acts.className = 'file-version-actions';
+      const mk = (label, handler) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = label;
+        b.addEventListener('click', handler);
+        acts.appendChild(b);
+      };
+      mk('Öffnen', () => window.open(ver.fileData, '_blank'));
+      mk('Herunterladen', () => downloadFile(ver.fileData, versionDownloadName(obj, ver)));
+      if (ver.v !== latest) {
+        mk('Als aktuell festlegen', () => {
+          versions.push({ v: latest + 1, fileData: ver.fileData, fileName: ver.fileName, size: ver.size, addedAt: Date.now(), restoredFrom: ver.v });
+          obj.fileData = ver.fileData;
+          note.updatedAt = Date.now();
+          schedulePersist();
+          renderCanvas(note);
+          const objEl = findObjEl(obj.id);
+          if (objEl) selectObject(note, obj, objEl);
+          renderFileVersionsList(note, obj);
+        });
+      }
+      row.appendChild(acts);
+      el.fileVersionsList.appendChild(row);
     }
   }
 
@@ -6336,7 +6543,9 @@
   }
 
   function buildFileContent(note, obj, objEl) {
-    const kind = fileKindStyle(obj.fileName);
+    // Hat der angezeigte Name keine Dateiendung (z. B. umbenannt), bestimmt die
+    // gespeicherte Datei das Kürzel (WORD/EXCEL/...).
+    const kind = fileKindStyle(/\.[A-Za-z0-9]{1,6}$/.test(obj.fileName || '') ? obj.fileName : obj.fileData || obj.fileName);
     objEl.classList.add('file-chip');
     const icon = document.createElement('div');
     icon.className = 'file-chip-icon';
@@ -6347,6 +6556,7 @@
     text.className = 'file-chip-text';
     text.innerHTML = `<span class="file-chip-name">${escapeHtml(obj.fileName || 'Datei')}</span><span class="file-chip-kind">${kind.label}</span>`;
     objEl.appendChild(text);
+    appendVersionBadge(note, obj, objEl);
     wireFileChipInteraction(note, obj, objEl);
   }
 
@@ -9623,6 +9833,26 @@
       e.preventDefault();
       const rect = el.canvasSurface.getBoundingClientRect();
       const point = { x: (e.clientX - rect.left) / workspaceZoom, y: (e.clientY - rect.top) / workspaceZoom };
+      // Datei direkt auf ein vorhandenes Datei-Symbol gezogen: neue Version oder eigene Datei?
+      const dropNote = currentNote();
+      const hoverEl = document.elementFromPoint(e.clientX, e.clientY);
+      const targetObjEl = hoverEl && hoverEl.closest ? hoverEl.closest('.canvas-object') : null;
+      const targetObj = dropNote && targetObjEl ? dropNote.objects.find((o) => o.id === targetObjEl.dataset.id) : null;
+      if (files.length === 1 && isVersionableObject(targetObj)) {
+        const droppedFile = files[0];
+        const isPdfDrop = droppedFile.type === 'application/pdf' || droppedFile.name.toLowerCase().endsWith('.pdf');
+        if (isPdfDrop) captureInlinePdfTarget();
+        (async () => {
+          const mode = await askFileVersionMode(targetObj);
+          if (mode === 'version') await addFileVersion(dropNote, targetObj, droppedFile);
+          else if (mode === 'separate') routeDroppedFiles([droppedFile], point);
+        })();
+        return;
+      }
+      routeDroppedFiles(files, point);
+    });
+
+    function routeDroppedFiles(files, point) {
       const pdfFile = files.find((f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
       if (pdfFile) {
         // Wie beim Ribbon-Knopf (siehe wireRibbonBtn(el.addPdfBtn, ...)) die
@@ -9644,7 +9874,7 @@
         return;
       }
       addFileObjectFromFile(files[0], point);
-    });
+    }
 
     el.drawModeBtn.addEventListener('click', toggleDrawMode);
     el.inkLayer.addEventListener('pointerdown', (e) => {
@@ -9678,6 +9908,26 @@
       if (item) setBackground(item.dataset.bg);
     });
 
+    el.fileVersionNewBtn.addEventListener('click', () => resolveFileVersionMode('version'));
+    el.fileVersionSeparateBtn.addEventListener('click', () => resolveFileVersionMode('separate'));
+    el.fileVersionCancelBtn.addEventListener('click', () => resolveFileVersionMode(null));
+    el.fileVersionChoiceBackdrop.addEventListener('click', (e) => {
+      if (e.target === el.fileVersionChoiceBackdrop) resolveFileVersionMode(null);
+    });
+    el.fileVersionsBackdrop.addEventListener('click', (e) => {
+      if (e.target === el.fileVersionsBackdrop) closeFileVersions();
+    });
+    el.fileVersionsAddBtn.addEventListener('click', () => el.fileVersionInput.click());
+    el.fileVersionInput.addEventListener('change', async () => {
+      const file = el.fileVersionInput.files[0];
+      el.fileVersionInput.value = '';
+      const target = fileVersionTarget;
+      const note = target && findNote(target.noteId);
+      const obj = note && note.objects.find((o) => o.id === target.objId);
+      if (!file || !obj) return;
+      closeFileVersions();
+      await addFileVersion(note, obj, file);
+    });
     el.wordModePopoverBackdrop.addEventListener('click', (e) => {
       if (e.target === el.wordModePopoverBackdrop) resolveWordInsertMode(null);
     });

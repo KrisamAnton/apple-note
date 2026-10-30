@@ -547,6 +547,34 @@
     </div>
   </div>
 
+  <!-- Datei auf ein vorhandenes Datei-Symbol gezogen: neue Version oder eigene Datei -->
+  <div class="popover-backdrop" id="fileVersionChoiceBackdrop" hidden>
+    <div class="popover" id="fileVersionChoicePopover">
+      <p class="popover-title">Datei ablegen</p>
+      <button type="button" class="credential-choice-btn" id="fileVersionNewBtn">
+        <span class="credential-choice-title">Als neue Version ablegen</span>
+        <span class="credential-choice-hint" id="fileVersionNewHint"></span>
+      </button>
+      <button type="button" class="credential-choice-btn" id="fileVersionSeparateBtn">
+        <span class="credential-choice-title">Als eigene Datei ablegen</span>
+        <span class="credential-choice-hint">Wie bisher in einem eigenen Fenster auf der Fläche.</span>
+      </button>
+      <button type="button" class="credential-choice-btn" id="fileVersionCancelBtn">
+        <span class="credential-choice-title">Abbrechen</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Versionen einer Datei -->
+  <div class="popover-backdrop" id="fileVersionsBackdrop" hidden>
+    <div class="popover popover-versions" id="fileVersionsPopover">
+      <p class="popover-title" id="fileVersionsTitle">Versionen</p>
+      <div class="file-versions-list" id="fileVersionsList"></div>
+      <button type="button" class="credential-add-field-btn" id="fileVersionsAddBtn">+ Neue Version hinzufügen</button>
+      <input type="file" id="fileVersionInput" hidden />
+    </div>
+  </div>
+
   <!-- Word-Datei einfügen: Text anzeigen oder nur Datei ablegen -->
   <div class="popover-backdrop" id="wordModePopoverBackdrop" hidden>
     <div class="popover popover-wide" id="wordModePopover">
