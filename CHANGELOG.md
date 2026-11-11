@@ -4,6 +4,14 @@ Hier steht, was wann geändert wurde (neueste Einträge oben). Die Versionsnumme
 steht klein neben dem Benutzernamen; bei jeder Änderung erhöht sich die letzte
 Zahl (1.7.1 → 1.7.2 → …).
 
+## 1.7.26 - 11.11.2026
+
+- Neu: **Sammlungen**. Über das „+" in der Notizliste gibt es jetzt „Neue Sammlung". Eine Sammlung verwaltet gleichartige Einträge, z. B. Konzert-/Musicalkarten und Reisen, Versicherungen oder Rechnungen. Du wählst eine Vorlage (Veranstaltungen & Reisen, Versicherungen, Rechnungen & Garantien oder leer) und legst die **Felder selbst fest**: Text, Datum, Betrag, Zahl, Auswahl oder Ja/Nein. Die Felder lassen sich jederzeit unter „Felder bearbeiten" ändern, umsortieren und löschen.
+- Jeder Eintrag ist eine ganz normale **Unterseite** der Sammlung (mit PDFs, Text, Erinnerungen usw.) und hat oben ein Fenster mit seinen Angaben. Der **Seitentitel entsteht automatisch** aus den Feldern, die „Titel" angehakt haben, z. B. „14.11.2026 Musical - Die Schöne und das Biest". Wird der Titel von Hand geändert, bleibt er so, bis man „Titel automatisch erzeugen" klickt.
+- Die Sammlung selbst zeigt alle Einträge als **Tabelle** (nach Datum sortiert, mit Summe der Beträge und Suchfeld). Vergangene Einträge werden nach dem Haupt-Datum automatisch unter „Vergangen" eingeordnet.
+- **Dokument hineinziehen**: Ziehst du ein PDF, Bild oder eine Datei auf die Sammlung, liest KrisNote den Text (bei Scans per Texterkennung), erkennt Datum, Beträge, Nummern und Titel und schaut, ob es **schon einen passenden Eintrag gibt** (z. B. über die Polizzennummer oder den Titel). Du siehst vor dem Ablegen einen Vorschlag: „Ablegen bei: ✓ bestehender Eintrag" oder „Neuer Eintrag" mit den erkannten Angaben zum Prüfen und Korrigieren. Erst nach „Ablegen" wird etwas gespeichert.
+- Die Angaben der Einträge werden auch von der Suche gefunden.
+
 ## 1.7.25 - 30.10.2026
 
 - Neu: **Dateiversionen**. Eine abgelegte Datei (Datei-Symbol oder PDF als Datei) kann jetzt mehrere Versionen haben, ohne dass viele fast gleiche Dateien herumliegen. Ziehst du eine Datei direkt auf ein vorhandenes Datei-Symbol, fragt KrisNote, ob sie als **neue Version** dieser Datei oder als **eigene Datei** abgelegt werden soll. Alternativ gibt es in der grauen Leiste den Knopf „Neue Version hinzufügen" (Pfeil nach oben).

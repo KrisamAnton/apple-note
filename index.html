@@ -204,7 +204,11 @@
             <textarea id="titleInput" class="title-input" placeholder="Titel" rows="1"></textarea>
           </div>
 
+          <div class="record-panel" id="recordPanel" hidden></div>
+
           <div class="journal-view" id="journalView" hidden></div>
+
+          <div class="collection-view" id="collectionView" hidden></div>
 
           <div class="canvas-workspace" id="canvasWorkspace">
             <div class="draw-toolbar" id="drawToolbar" hidden>
@@ -539,6 +543,10 @@
       <button type="button" class="credential-choice-btn" id="newNoteJournalBtn">
         <span class="credential-choice-title">Neues Logbuch</span>
         <span class="credential-choice-hint">Einträge mit Datum, Schlagwörtern und Anhängen als Zeitleiste</span>
+      </button>
+      <button type="button" class="credential-choice-btn" id="newNoteCollectionBtn">
+        <span class="credential-choice-title">Neue Sammlung</span>
+        <span class="credential-choice-hint">Einträge mit eigenen Feldern, z. B. Veranstaltungen, Versicherungen, Rechnungen. Dokumente werden automatisch dem passenden Eintrag zugeordnet.</span>
       </button>
       <button type="button" class="credential-choice-btn" id="newNoteJournalFromBtn" hidden>
         <span class="credential-choice-title">Logbuch aus dieser Seite erstellen</span>

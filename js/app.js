@@ -161,6 +161,8 @@
     }
     if (!note.ink) note.ink = { strokes: [] };
     if (note.type === 'journal' && !Array.isArray(note.entries)) note.entries = [];
+    if (note.type === 'collection' && !note.schema) note.schema = { fields: [], mainDateId: '', pastArchive: false, defaultPdfMode: 'pages' };
+    if (note.record && (!note.record.values || typeof note.record.values !== 'object')) note.record.values = {};
     if (!note.background) note.background = 'dots';
     if (note.parentNoteId === undefined) note.parentNoteId = null;
 
@@ -436,6 +438,9 @@
     collapseAllBtn: document.getElementById('collapseAllBtn'),
     newNoteBtn: document.getElementById('newNoteBtn'),
     journalView: document.getElementById('journalView'),
+    collectionView: document.getElementById('collectionView'),
+    recordPanel: document.getElementById('recordPanel'),
+    newNoteCollectionBtn: document.getElementById('newNoteCollectionBtn'),
     newNoteMenuBackdrop: document.getElementById('newNoteMenuBackdrop'),
     newNoteMenuPopover: document.getElementById('newNoteMenuPopover'),
     newNotePageBtn: document.getElementById('newNotePageBtn'),
@@ -633,7 +638,8 @@
       .map((o) => `${o.title || ''} ${o.text || ''}`)
       .join(' ');
     const journalText = (note.entries || []).map(journalEntrySearchText).join(' ');
-    return `${note.title || ''} ${objectText} ${credentialText} ${credlistText} ${reminderText} ${journalText} ${noteTranscriptText(note)}`;
+    const recordText = note.record ? recordSearchText(note) : '';
+    return `${note.title || ''} ${objectText} ${credentialText} ${credlistText} ${reminderText} ${journalText} ${recordText} ${noteTranscriptText(note)}`;
   }
 
   // Baut aus einer flachen Notizliste (z. B. eines Ordners) eine Tiefensuche-Reihenfolge
@@ -656,7 +662,11 @@
     }
     const byOrderAsc = (a, b) => (a.order ?? 0) - (b.order ?? 0);
     roots.sort(byOrderAsc);
-    for (const list of childrenOf.values()) list.sort(byOrderAsc);
+    for (const [pid, list] of childrenOf.entries()) {
+      const parent = findNote(pid);
+      if (parent && parent.type === 'collection') list.sort((a, b) => compareRecordsByDate(parent, a, b));
+      else list.sort(byOrderAsc);
+    }
 
     const result = [];
     function visit(note, depth) {
@@ -1447,7 +1457,7 @@
 
       const main = document.createElement('div');
       main.className = 'note-item-main';
-      main.innerHTML = `<div class="note-title">${note.type === 'journal' ? '<span class="note-type-icon" aria-hidden="true">📒</span>' : ''}${escapeHtml(note.title)}</div>`;
+      main.innerHTML = `<div class="note-title">${note.type === 'journal' ? '<span class="note-type-icon" aria-hidden="true">📒</span>' : note.type === 'collection' ? '<span class="note-type-icon" aria-hidden="true">🗂️</span>' : ''}${escapeHtml(note.title)}</div>`;
       if (isSearchMode && searchWords.length) {
         for (const line of buildSearchHitLines(note, searchWords, searchFileHitMap)) {
           const hitEl = document.createElement('div');
@@ -1591,7 +1601,10 @@
       el.editorEmpty.hidden = false;
       el.editor.hidden = true;
       el.editor.classList.remove('is-journal');
+      el.editor.classList.remove('is-collection');
       el.journalView.hidden = true;
+      el.collectionView.hidden = true;
+      el.recordPanel.hidden = true;
       return;
     }
     el.editorEmpty.hidden = true;
@@ -1602,8 +1615,13 @@
     const isJournal = note.type === 'journal';
     el.editor.classList.toggle('is-journal', isJournal);
     el.journalView.hidden = !isJournal;
+    const isCollection = note.type === 'collection';
+    el.editor.classList.toggle('is-collection', isCollection);
+    el.collectionView.hidden = !isCollection;
+    renderRecordPanel(note);
     renderCanvas(note);
     if (isJournal) renderJournal(note);
+    if (isCollection) renderCollection(note);
     syncCredlistVisibility();
   }
 
@@ -1648,6 +1666,13 @@
     const note = findNote(selectedNoteId);
     if (!note) return;
     note.title = el.titleInput.value.replace(/\n/g, ' ').trim();
+    if (note.record) {
+      // Von Hand geänderter Titel bleibt; leer = wieder automatisch erzeugen.
+      const wasManual = !!note.record.titleManual;
+      note.record.titleManual = !!note.title;
+      if (!note.title) applyRecordTitle(note);
+      if (wasManual !== note.record.titleManual) renderRecordPanel(note);
+    }
     note.updatedAt = Date.now();
     schedulePersist();
     renderNoteList();
@@ -9348,6 +9373,1363 @@
     el.newNoteMenuBackdrop.hidden = true;
   }
 
+  // ---------- Sammlungen (Vorlagen mit frei bestimmbaren Feldern) ----------
+  //
+  // Eine Sammlung (note.type === 'collection') legt fest, welche Felder ihre
+  // Einträge haben (note.schema) - z. B. Veranstaltungen, Versicherungen oder
+  // Rechnungen. Jeder Eintrag ist eine ganz normale Unterseite der Sammlung
+  // (mit allem, was eine Seite kann: PDFs anzeigen, Text, Erinnerungen ...), die
+  // zusätzlich oben ein Feld-Fenster mit ihren Angaben hat (note.record.values).
+  // Die Sammlung selbst zeigt alle Einträge als Tabelle und erkennt beim
+  // Hineinziehen eines Dokuments, ob es schon zu einem Eintrag gehört.
+
+  const FIELD_TYPES = [
+    { id: 'text', label: 'Text' },
+    { id: 'date', label: 'Datum' },
+    { id: 'money', label: 'Betrag (€)' },
+    { id: 'number', label: 'Zahl' },
+    { id: 'choice', label: 'Auswahl' },
+    { id: 'checkbox', label: 'Ja/Nein' },
+  ];
+
+  const COLLECTION_TEMPLATES = [
+    {
+      id: 'event',
+      icon: '🎭',
+      name: 'Veranstaltungen & Reisen',
+      description: 'Karten, Konzerte, Musicals, Urlaube: mit Datum, Preis, Begleitung und Rückzahlung.',
+      pastArchive: true,
+      mainDate: 'Datum',
+      fields: [
+        { name: 'Datum', type: 'date', inTitle: true },
+        { name: 'Titel', type: 'text', inTitle: true, identifier: true, inTable: false },
+        { name: 'Uhrzeit', type: 'text', inTable: false },
+        { name: 'Ort', type: 'text' },
+        { name: 'Art', type: 'choice', options: ['Musical', 'Konzert', 'Theater', 'Urlaub', 'Ausflug', 'Sonstiges'] },
+        { name: 'Begleitung', type: 'text' },
+        { name: 'Anzahl Karten', type: 'number', inTable: false },
+        { name: 'Preis gesamt', type: 'money' },
+        { name: 'Bezahlt mit', type: 'text', inTable: false },
+        { name: 'Rückzahlung von', type: 'text', inTable: false },
+        { name: 'Rückzahlung Betrag', type: 'money', inTable: false },
+        { name: 'Rückzahlung erhalten', type: 'checkbox' },
+        { name: 'Anlass', type: 'text' },
+        { name: 'Dabei / Extras', type: 'text', inTable: false },
+        { name: 'Buchungsnummer', type: 'text', identifier: true, inTable: false },
+      ],
+    },
+    {
+      id: 'insurance',
+      icon: '🛡️',
+      name: 'Versicherungen',
+      description: 'Polizzen mit Gesellschaft, Beitrag und Hauptfälligkeit. Neue Dokumente werden über die Polizzennummer erkannt.',
+      pastArchive: false,
+      mainDate: 'Hauptfälligkeit',
+      fields: [
+        { name: 'Name', type: 'text', inTitle: true, identifier: true, inTable: false },
+        { name: 'Gesellschaft', type: 'text' },
+        { name: 'Polizzennummer', type: 'text', identifier: true },
+        { name: 'Art', type: 'choice', options: ['Haftpflicht', 'Haushalt', 'Kfz', 'Unfall', 'Leben', 'Kranken', 'Rechtsschutz', 'Sonstige'] },
+        { name: 'Beitrag', type: 'money' },
+        { name: 'Zahlweise', type: 'choice', options: ['monatlich', 'vierteljährlich', 'halbjährlich', 'jährlich'] },
+        { name: 'Beginn', type: 'date', inTable: false },
+        { name: 'Hauptfälligkeit', type: 'date' },
+        { name: 'Versicherungssumme', type: 'money', inTable: false },
+        { name: 'Selbstbehalt', type: 'money', inTable: false },
+      ],
+    },
+    {
+      id: 'invoice',
+      icon: '🧾',
+      name: 'Rechnungen & Garantien',
+      description: 'Belege mit Händler, Betrag, Rechnungsnummer und Garantiedauer.',
+      pastArchive: false,
+      mainDate: 'Datum',
+      fields: [
+        { name: 'Datum', type: 'date', inTitle: true },
+        { name: 'Bezeichnung', type: 'text', inTitle: true, identifier: true, inTable: false },
+        { name: 'Händler', type: 'text' },
+        { name: 'Betrag', type: 'money' },
+        { name: 'Rechnungsnummer', type: 'text', identifier: true },
+        { name: 'Garantie bis', type: 'date' },
+        { name: 'Kategorie', type: 'choice', options: ['Haushalt', 'Auto', 'Elektronik', 'Haus', 'Gesundheit', 'Sonstiges'] },
+        { name: 'Bezahlt', type: 'checkbox' },
+      ],
+    },
+    {
+      id: 'empty',
+      icon: '🗂️',
+      name: 'Leere Sammlung',
+      description: 'Du legst die Felder selbst fest.',
+      pastArchive: false,
+      mainDate: '',
+      fields: [{ name: 'Name', type: 'text', inTitle: true, inTable: false }],
+    },
+  ];
+
+  function instantiateTemplate(tpl) {
+    const fields = tpl.fields.map((f) => ({
+      id: uid(),
+      name: f.name,
+      type: f.type,
+      options: f.options ? [...f.options] : [],
+      identifier: !!f.identifier,
+      inTable: f.inTable !== false,
+      inTitle: !!f.inTitle,
+    }));
+    const main = fields.find((f) => f.name === tpl.mainDate && f.type === 'date');
+    return { fields, mainDateId: main ? main.id : '', pastArchive: !!tpl.pastArchive, defaultPdfMode: 'pages' };
+  }
+
+  function collectionFields(collection) {
+    return (collection && collection.schema && collection.schema.fields) || [];
+  }
+
+  function collectionRecords(collection) {
+    return state.notes.filter((n) => n.record && n.record.collectionId === collection.id && !isTrashed(n));
+  }
+
+  function recordCollection(note) {
+    const c = note && note.record ? findNote(note.record.collectionId) : null;
+    return c && c.type === 'collection' ? c : null;
+  }
+
+  // Dezimalzahl aus österreichisch/deutscher Schreibweise ("1.234,56 €").
+  function parseDecimal(str) {
+    let s = String(str == null ? '' : str).replace(/[^\d,.\-]/g, '');
+    if (!s) return null;
+    if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+    else if (/^-?\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function formatMoney(n) {
+    return n == null || n === '' ? '' : Number(n).toLocaleString('de-AT', { style: 'currency', currency: 'EUR' });
+  }
+
+  function formatNumberValue(n) {
+    return n == null || n === '' ? '' : Number(n).toLocaleString('de-AT', { maximumFractionDigits: 2 });
+  }
+
+  function fieldDisplayText(field, value) {
+    if (value == null || value === '') return field.type === 'checkbox' ? 'Nein' : '';
+    switch (field.type) {
+      case 'date': return formatDateDe(value);
+      case 'money': return formatMoney(value);
+      case 'number': return formatNumberValue(value);
+      case 'checkbox': return value ? 'Ja' : 'Nein';
+      default: return String(value);
+    }
+  }
+
+  function buildRecordTitle(collection, values) {
+    const parts = [];
+    for (const f of collectionFields(collection)) {
+      if (!f.inTitle) continue;
+      const t = fieldDisplayText(f, values[f.id]);
+      if (t && !(f.type === 'checkbox' && t === 'Nein')) parts.push(t);
+    }
+    return parts.join(' ');
+  }
+
+  // Seitentitel eines Eintrags aus seinen Angaben erzeugen - außer er wurde von
+  // Hand geändert.
+  function applyRecordTitle(note) {
+    const collection = recordCollection(note);
+    if (!collection || note.record.titleManual) return;
+    const title = buildRecordTitle(collection, note.record.values) || 'Neuer Eintrag';
+    if (note.title === title) return;
+    note.title = title;
+    if (note.id === selectedNoteId) {
+      el.titleInput.value = title;
+      autoGrow(el.titleInput);
+    }
+  }
+
+  function recordSearchText(note) {
+    const collection = recordCollection(note);
+    if (!collection) return '';
+    return collectionFields(collection)
+      .map((f) => {
+        const v = note.record.values[f.id];
+        if (v == null || v === '' || f.type === 'checkbox') return '';
+        return `${fieldDisplayText(f, v)} ${typeof v === 'string' ? v : ''}`;
+      })
+      .join(' ');
+  }
+
+  function mainDateOf(collection, note) {
+    const id = collection.schema && collection.schema.mainDateId;
+    const v = id && note.record ? note.record.values[id] : '';
+    return typeof v === 'string' ? v : '';
+  }
+
+  function isPastRecord(collection, note) {
+    if (!collection.schema || !collection.schema.pastArchive) return false;
+    const d = mainDateOf(collection, note);
+    return !!d && d < isoToday();
+  }
+
+  // Reihenfolge der Einträge: Kommendes nach Datum aufsteigend, danach Vergangenes absteigend.
+  function compareRecordsByDate(collection, a, b) {
+    const da = mainDateOf(collection, a);
+    const db = mainDateOf(collection, b);
+    const pa = isPastRecord(collection, a);
+    const pb = isPastRecord(collection, b);
+    if (pa !== pb) return pa ? 1 : -1;
+    if (da !== db) {
+      if (!da) return 1;
+      if (!db) return -1;
+      return pa ? (da < db ? 1 : -1) : (da < db ? -1 : 1);
+    }
+    return (a.title || '').localeCompare(b.title || '', 'de');
+  }
+
+  function createCollection(tpl, name) {
+    const now = Date.now();
+    const note = {
+      id: uid(),
+      type: 'collection',
+      title: name || tpl.name,
+      objects: [],
+      ink: { strokes: [] },
+      background: 'dots',
+      folderId: selectedFolderId,
+      parentNoteId: null,
+      order: nextOrderForParent(null),
+      createdAt: now,
+      updatedAt: now,
+      schema: instantiateTemplate(tpl),
+    };
+    state.notes.unshift(note);
+    schedulePersist();
+    selectedNoteId = note.id;
+    noteBackStack = [];
+    goToView('editor');
+    renderFolders();
+    renderNoteList();
+    renderEditor();
+    return note;
+  }
+
+  function createRecord(collection, values) {
+    const now = Date.now();
+    const note = {
+      id: uid(),
+      title: '',
+      objects: [],
+      ink: { strokes: [] },
+      background: 'dots',
+      folderId: collection.folderId,
+      parentNoteId: collection.id,
+      order: nextOrderForParent(collection.id),
+      createdAt: now,
+      updatedAt: now,
+      record: { collectionId: collection.id, values: { ...(values || {}) }, titleManual: false },
+    };
+    state.notes.unshift(note);
+    applyRecordTitle(note);
+    collapsedNoteIds.delete(collection.id);
+    schedulePersist();
+    return note;
+  }
+
+  // ----- Eingabefelder für einen Wert (Feld-Fenster und Dialoge) -----
+
+  function buildFieldControl(field, value, onChange) {
+    let control;
+    switch (field.type) {
+      case 'date': {
+        control = document.createElement('input');
+        control.type = 'date';
+        control.autocomplete = 'off';
+        control.value = typeof value === 'string' ? value : '';
+        control.addEventListener('change', () => onChange(control.value || ''));
+        break;
+      }
+      case 'money':
+      case 'number': {
+        const fmt = field.type === 'money' ? formatMoney : formatNumberValue;
+        control = makePlainField('plain-number', '', value == null ? '' : fmt(value), () => {});
+        control.addEventListener('blur', () => {
+          const n = parseDecimal(control.value);
+          control.value = n == null ? '' : fmt(n);
+          onChange(n);
+        });
+        break;
+      }
+      case 'choice': {
+        control = document.createElement('select');
+        const opts = [''].concat(field.options || []);
+        if (value && !opts.includes(value)) opts.push(value);
+        for (const o of opts) {
+          const opt = document.createElement('option');
+          opt.value = o;
+          opt.textContent = o || '-';
+          control.appendChild(opt);
+        }
+        control.value = value || '';
+        control.addEventListener('change', () => onChange(control.value));
+        break;
+      }
+      case 'checkbox': {
+        control = document.createElement('input');
+        control.type = 'checkbox';
+        control.checked = !!value;
+        control.addEventListener('change', () => onChange(control.checked));
+        break;
+      }
+      default: {
+        control = makePlainField('plain-text', '', value == null ? '' : String(value), (v) => onChange(v));
+      }
+    }
+    control.classList.add('field-control', `field-control-${field.type}`);
+    return control;
+  }
+
+  // ----- Feld-Fenster oben in einem Eintrag -----
+
+  let recordPanelCollapsed = false;
+
+  function renderRecordPanel(note) {
+    const panel = el.recordPanel;
+    const collection = recordCollection(note);
+    panel.innerHTML = '';
+    if (!collection) {
+      panel.hidden = true;
+      return;
+    }
+    panel.hidden = false;
+    panel.classList.toggle('collapsed', recordPanelCollapsed);
+
+    const head = document.createElement('div');
+    head.className = 'record-panel-head';
+    const back = document.createElement('button');
+    back.type = 'button';
+    back.className = 'record-panel-back';
+    back.textContent = `↑ ${collection.title || 'Sammlung'}`;
+    back.title = 'Zur Übersicht der Sammlung';
+    back.addEventListener('click', () => selectNote(collection.id));
+    head.appendChild(back);
+    const spacer = document.createElement('span');
+    spacer.className = 'journal-spacer';
+    head.appendChild(spacer);
+    if (note.record.titleManual) {
+      const auto = document.createElement('button');
+      auto.type = 'button';
+      auto.className = 'record-panel-link';
+      auto.textContent = 'Titel automatisch erzeugen';
+      auto.addEventListener('click', () => {
+        note.record.titleManual = false;
+        applyRecordTitle(note);
+        schedulePersist();
+        renderNoteList();
+        renderRecordPanel(note);
+      });
+      head.appendChild(auto);
+    }
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'record-panel-link';
+    toggle.textContent = recordPanelCollapsed ? 'Angaben einblenden' : 'Angaben ausblenden';
+    toggle.addEventListener('click', () => {
+      recordPanelCollapsed = !recordPanelCollapsed;
+      renderRecordPanel(note);
+    });
+    head.appendChild(toggle);
+    panel.appendChild(head);
+    if (recordPanelCollapsed) return;
+
+    const grid = document.createElement('div');
+    grid.className = 'record-panel-grid';
+    for (const field of collectionFields(collection)) {
+      const wrap = document.createElement('label');
+      wrap.className = `record-field record-field-${field.type}`;
+      const label = document.createElement('span');
+      label.className = 'record-field-label';
+      label.textContent = field.name;
+      wrap.appendChild(label);
+      wrap.appendChild(buildFieldControl(field, note.record.values[field.id], (v) => {
+        note.record.values[field.id] = v;
+        note.updatedAt = Date.now();
+        const before = note.title;
+        applyRecordTitle(note);
+        schedulePersist();
+        if (note.title !== before) renderNoteList();
+      }));
+      grid.appendChild(wrap);
+    }
+    if (!grid.childElementCount) {
+      const empty = document.createElement('div');
+      empty.className = 'journal-empty';
+      empty.textContent = 'Diese Sammlung hat noch keine Felder. Lege sie in der Sammlung unter „Felder bearbeiten" an.';
+      grid.appendChild(empty);
+    }
+    panel.appendChild(grid);
+  }
+
+  // ----- Allgemeines Fenster (Dialog); schließt NICHT durch Klick daneben -----
+
+  function openModal({ title, wide, build, buttons }) {
+    const backdrop = document.createElement('div');
+    backdrop.className = 'modal-backdrop dyn-modal';
+    const modal = document.createElement('div');
+    modal.className = `modal${wide ? ' modal-wide' : ''}`;
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    const h = document.createElement('p');
+    h.className = 'modal-title';
+    h.textContent = title;
+    const body = document.createElement('div');
+    body.className = 'modal-body';
+    const actions = document.createElement('div');
+    actions.className = 'popover-form-actions';
+    modal.append(h, body, actions);
+    backdrop.appendChild(modal);
+    document.body.appendChild(backdrop);
+    const api = { body, close: () => backdrop.remove(), actions };
+    for (const b of buttons || []) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `popover-btn popover-btn-${b.kind === 'primary' ? 'primary' : 'secondary'}`;
+      btn.textContent = b.label;
+      btn.addEventListener('click', async () => {
+        const keepOpen = await b.onClick(api);
+        if (keepOpen !== false) api.close();
+      });
+      actions.appendChild(btn);
+    }
+    build(api);
+    return api;
+  }
+
+  // ----- Felder der Sammlung bearbeiten -----
+
+  function openSchemaEditor(collection) {
+    const draft = JSON.parse(JSON.stringify(collection.schema));
+    let rowsHost;
+    let mainSelect;
+    const renderMain = () => {
+      if (!mainSelect) return;
+      const cur = draft.mainDateId;
+      mainSelect.innerHTML = '';
+      const none = document.createElement('option');
+      none.value = '';
+      none.textContent = 'keines';
+      mainSelect.appendChild(none);
+      for (const f of draft.fields.filter((x) => x.type === 'date')) {
+        const o = document.createElement('option');
+        o.value = f.id;
+        o.textContent = f.name || 'Datum';
+        mainSelect.appendChild(o);
+      }
+      mainSelect.value = draft.fields.some((f) => f.id === cur && f.type === 'date') ? cur : '';
+      draft.mainDateId = mainSelect.value;
+    };
+    const renderRows = () => {
+      rowsHost.innerHTML = '';
+      draft.fields.forEach((f, idx) => {
+        const row = document.createElement('div');
+        row.className = 'schema-row';
+        const name = makePlainField('schema-name', 'Name des Feldes', f.name, (v) => { f.name = v; });
+        const type = document.createElement('select');
+        for (const t of FIELD_TYPES) {
+          const o = document.createElement('option');
+          o.value = t.id;
+          o.textContent = t.label;
+          type.appendChild(o);
+        }
+        type.value = f.type;
+        const opts = makePlainField('schema-options', 'Auswahl-Möglichkeiten, mit Komma getrennt', (f.options || []).join(', '), (v) => {
+          f.options = v.split(',').map((x) => x.trim()).filter(Boolean);
+        });
+        opts.hidden = f.type !== 'choice';
+        type.addEventListener('change', () => {
+          f.type = type.value;
+          opts.hidden = f.type !== 'choice';
+          renderMain();
+        });
+        const flags = document.createElement('div');
+        flags.className = 'schema-flags';
+        const mkFlag = (key, label, hint) => {
+          const l = document.createElement('label');
+          l.title = hint;
+          const c = document.createElement('input');
+          c.type = 'checkbox';
+          c.checked = !!f[key];
+          c.addEventListener('change', () => { f[key] = c.checked; });
+          l.append(c, document.createTextNode(` ${label}`));
+          flags.appendChild(l);
+        };
+        mkFlag('inTable', 'Tabelle', 'Spalte in der Übersicht anzeigen');
+        mkFlag('inTitle', 'Titel', 'Teil des automatischen Seitentitels');
+        mkFlag('identifier', 'Erkennung', 'Daran erkennt KrisNote, zu welchem Eintrag ein Dokument gehört (z. B. Polizzennummer)');
+        const move = document.createElement('div');
+        move.className = 'schema-move';
+        const mkMove = (label, delta, title) => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.textContent = label;
+          b.title = title;
+          b.disabled = idx + delta < 0 || idx + delta >= draft.fields.length;
+          b.addEventListener('click', () => {
+            const [item] = draft.fields.splice(idx, 1);
+            draft.fields.splice(idx + delta, 0, item);
+            renderRows();
+          });
+          move.appendChild(b);
+        };
+        mkMove('↑', -1, 'Nach oben');
+        mkMove('↓', 1, 'Nach unten');
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.textContent = '×';
+        del.title = 'Feld entfernen';
+        del.className = 'schema-del';
+        del.addEventListener('click', () => {
+          draft.fields.splice(idx, 1);
+          if (draft.mainDateId === f.id) draft.mainDateId = '';
+          renderRows();
+          renderMain();
+        });
+        row.append(name, type, opts, flags, move, del);
+        rowsHost.appendChild(row);
+      });
+    };
+    openModal({
+      title: `Felder von „${collection.title}"`,
+      wide: true,
+      build: ({ body }) => {
+        const intro = document.createElement('p');
+        intro.className = 'schema-intro';
+        intro.textContent = 'Lege fest, welche Angaben jeder Eintrag hat. „Tabelle": Spalte in der Übersicht. „Titel": Teil des automatischen Seitentitels (in der Reihenfolge der Felder). „Erkennung": daran erkennt KrisNote beim Hineinziehen eines Dokuments, zu welchem Eintrag es gehört.';
+        body.appendChild(intro);
+        rowsHost = document.createElement('div');
+        rowsHost.className = 'schema-rows';
+        body.appendChild(rowsHost);
+        const add = document.createElement('button');
+        add.type = 'button';
+        add.className = 'credential-add-field-btn';
+        add.textContent = '+ Feld hinzufügen';
+        add.addEventListener('click', () => {
+          draft.fields.push({ id: uid(), name: '', type: 'text', options: [], identifier: false, inTable: true, inTitle: false });
+          renderRows();
+          const names = rowsHost.querySelectorAll('.schema-name');
+          if (names.length) names[names.length - 1].focus();
+        });
+        body.appendChild(add);
+        const extra = document.createElement('div');
+        extra.className = 'schema-extra';
+        const mainLabel = document.createElement('label');
+        mainLabel.textContent = 'Haupt-Datum (zum Sortieren): ';
+        mainSelect = document.createElement('select');
+        mainSelect.addEventListener('change', () => { draft.mainDateId = mainSelect.value; });
+        mainLabel.appendChild(mainSelect);
+        const pastLabel = document.createElement('label');
+        const pastCheck = document.createElement('input');
+        pastCheck.type = 'checkbox';
+        pastCheck.checked = !!draft.pastArchive;
+        pastCheck.addEventListener('change', () => { draft.pastArchive = pastCheck.checked; });
+        pastLabel.append(pastCheck, document.createTextNode(' Vergangenes automatisch unter „Vergangen" einordnen (nach dem Haupt-Datum)'));
+        extra.append(mainLabel, pastLabel);
+        body.appendChild(extra);
+        renderRows();
+        renderMain();
+      },
+      buttons: [
+        { label: 'Abbrechen', onClick: () => true },
+        {
+          label: 'Speichern',
+          kind: 'primary',
+          onClick: () => {
+            draft.fields = draft.fields.filter((f) => (f.name || '').trim());
+            draft.fields.forEach((f) => { f.name = f.name.trim(); });
+            if (!draft.fields.some((f) => f.id === draft.mainDateId)) draft.mainDateId = '';
+            collection.schema = draft;
+            for (const rec of collectionRecords(collection)) applyRecordTitle(rec);
+            collection.updatedAt = Date.now();
+            schedulePersist();
+            renderNoteList();
+            renderCollection(collection);
+            return true;
+          },
+        },
+      ],
+    });
+  }
+
+  // ----- Neue Sammlung anlegen -----
+
+  function openNewCollectionDialog() {
+    let chosen = 'event';
+    let nameField;
+    const cards = [];
+    openModal({
+      title: 'Neue Sammlung',
+      wide: true,
+      build: ({ body }) => {
+        const intro = document.createElement('p');
+        intro.className = 'schema-intro';
+        intro.textContent = 'Eine Sammlung verwaltet gleichartige Einträge mit eigenen Feldern, z. B. Versicherungen. Such dir eine Vorlage aus; die Felder kannst du danach jederzeit ändern.';
+        body.appendChild(intro);
+        const list = document.createElement('div');
+        list.className = 'template-list';
+        for (const tpl of COLLECTION_TEMPLATES) {
+          const card = document.createElement('button');
+          card.type = 'button';
+          card.className = `template-card${tpl.id === chosen ? ' selected' : ''}`;
+          card.innerHTML = `<span class="template-icon" aria-hidden="true">${tpl.icon}</span><span class="template-text"><strong>${escapeHtml(tpl.name)}</strong><span>${escapeHtml(tpl.description)}</span></span>`;
+          card.addEventListener('click', () => {
+            chosen = tpl.id;
+            cards.forEach((c) => c.classList.toggle('selected', c === card));
+            if (!nameField.value || COLLECTION_TEMPLATES.some((t) => t.name === nameField.value)) nameField.value = tpl.name;
+          });
+          cards.push(card);
+          list.appendChild(card);
+        }
+        body.appendChild(list);
+        const label = document.createElement('label');
+        label.className = 'schema-name-row';
+        label.textContent = 'Name der Sammlung: ';
+        nameField = makePlainField('schema-name', 'z. B. Versicherungen', COLLECTION_TEMPLATES[0].name, () => {});
+        label.appendChild(nameField);
+        body.appendChild(label);
+      },
+      buttons: [
+        { label: 'Abbrechen', onClick: () => true },
+        {
+          label: 'Anlegen',
+          kind: 'primary',
+          onClick: () => {
+            const tpl = COLLECTION_TEMPLATES.find((t) => t.id === chosen) || COLLECTION_TEMPLATES[0];
+            createCollection(tpl, (nameField.value || '').trim() || tpl.name);
+            return true;
+          },
+        },
+      ],
+    });
+  }
+
+  // ----- Übersicht der Sammlung (Tabelle) -----
+
+  let collFilter = '';
+  let collMessage = null; // { collectionId, text, recordId }
+  const collPastOpen = new Set();
+
+  function recordMatchesFilter(collection, rec, query) {
+    if (!query) return true;
+    const hay = foldText(`${rec.title || ''} ${recordSearchText(rec)}`);
+    return query.split(/\s+/).filter(Boolean).every((w) => hay.includes(foldText(w)));
+  }
+
+  function renderCollection(collection) {
+    const host = el.collectionView;
+    host.innerHTML = '';
+    const inner = document.createElement('div');
+    inner.className = 'collection-inner';
+    host.appendChild(inner);
+    const fields = collectionFields(collection);
+    const all = collectionRecords(collection).sort((a, b) => compareRecordsByDate(collection, a, b));
+
+    // Kopfzeile
+    const bar = document.createElement('div');
+    bar.className = 'collection-bar';
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'popover-btn popover-btn-primary';
+    addBtn.textContent = '+ Neuer Eintrag';
+    addBtn.addEventListener('click', () => {
+      const rec = createRecord(collection, {});
+      selectNote(rec.id);
+    });
+    const schemaBtn = document.createElement('button');
+    schemaBtn.type = 'button';
+    schemaBtn.className = 'popover-btn popover-btn-secondary';
+    schemaBtn.textContent = 'Felder bearbeiten';
+    schemaBtn.addEventListener('click', () => openSchemaEditor(collection));
+    const search = makePlainField('coll-search', 'Suchen in dieser Sammlung …', collFilter, (v) => {
+      collFilter = v;
+      renderCollectionTable(collection, tableHost);
+    });
+    bar.append(addBtn, schemaBtn, search);
+    inner.appendChild(bar);
+
+    // Ablagefläche für Dokumente
+    const drop = document.createElement('div');
+    drop.className = 'collection-drop';
+    drop.tabIndex = 0;
+    drop.innerHTML = '<strong>Dokument hierher ziehen</strong><span>PDF, Bild oder Datei: KrisNote liest den Text, erkennt, zu welchem Eintrag es gehört, und schlägt sonst einen neuen Eintrag vor. (Oder hier klicken.)</span>';
+    const pick = () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.multiple = true;
+      input.style.display = 'none';
+      document.body.appendChild(input);
+      input.addEventListener('change', () => {
+        const picked = input.files ? [...input.files] : [];
+        input.remove();
+        if (picked.length) handleCollectionFiles(collection, picked);
+      });
+      input.click();
+    };
+    drop.addEventListener('click', pick);
+    drop.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        pick();
+      }
+    });
+    inner.appendChild(drop);
+    if (collMessage && collMessage.collectionId === collection.id) {
+      const msg = document.createElement('div');
+      msg.className = 'collection-message';
+      msg.append(document.createTextNode(`${collMessage.text} `));
+      if (collMessage.recordId && findNote(collMessage.recordId)) {
+        const open = document.createElement('button');
+        open.type = 'button';
+        open.className = 'record-panel-link';
+        open.textContent = 'Eintrag öffnen';
+        open.addEventListener('click', () => selectNote(collMessage.recordId));
+        msg.appendChild(open);
+      }
+      inner.appendChild(msg);
+    }
+
+    const tableHost = document.createElement('div');
+    tableHost.className = 'collection-table-host';
+    inner.appendChild(tableHost);
+    if (!fields.length) {
+      const hint = document.createElement('div');
+      hint.className = 'journal-empty';
+      hint.textContent = 'Diese Sammlung hat noch keine Felder. Klicke auf „Felder bearbeiten".';
+      tableHost.appendChild(hint);
+    } else {
+      renderCollectionTable(collection, tableHost);
+    }
+    void all;
+  }
+
+  function renderCollectionTable(collection, host) {
+    host.innerHTML = '';
+    const fields = collectionFields(collection);
+    const columns = fields.filter((f) => f.inTable);
+    const query = collFilter.trim();
+    const all = collectionRecords(collection).sort((a, b) => compareRecordsByDate(collection, a, b));
+    const visible = all.filter((r) => recordMatchesFilter(collection, r, query));
+    if (!all.length) {
+      const hint = document.createElement('div');
+      hint.className = 'journal-empty';
+      hint.textContent = 'Noch keine Einträge. Ziehe ein Dokument in die Fläche oben oder lege einen neuen Eintrag an.';
+      host.appendChild(hint);
+      return;
+    }
+    if (!visible.length) {
+      const hint = document.createElement('div');
+      hint.className = 'journal-empty';
+      hint.textContent = 'Keine Einträge gefunden.';
+      host.appendChild(hint);
+      return;
+    }
+    const upcoming = visible.filter((r) => !isPastRecord(collection, r));
+    const past = visible.filter((r) => isPastRecord(collection, r));
+    const pastOpen = !!query || collPastOpen.has(collection.id);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'collection-table-wrap';
+    const table = document.createElement('table');
+    table.className = 'collection-table';
+    const head = document.createElement('tr');
+    const thTitle = document.createElement('th');
+    thTitle.textContent = 'Eintrag';
+    head.appendChild(thTitle);
+    for (const f of columns) {
+      const th = document.createElement('th');
+      th.textContent = f.name;
+      if (f.type === 'money' || f.type === 'number') th.className = 'num';
+      head.appendChild(th);
+    }
+    const thead = document.createElement('thead');
+    thead.appendChild(head);
+    table.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    const addRow = (rec) => {
+      const tr = document.createElement('tr');
+      tr.className = 'collection-row';
+      tr.tabIndex = 0;
+      const open = () => selectNote(rec.id);
+      tr.addEventListener('click', open);
+      tr.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') open();
+      });
+      const tdTitle = document.createElement('td');
+      tdTitle.className = 'collection-title-cell';
+      tdTitle.textContent = rec.title || 'Ohne Titel';
+      const files = (rec.objects || []).filter((o) => !o.inline && (o.type === 'pdf' || o.type === 'file' || o.type === 'image')).length;
+      if (files) {
+        const badge = document.createElement('span');
+        badge.className = 'collection-files';
+        badge.textContent = `📎 ${files}`;
+        badge.title = `${files} Datei(en) auf der Seite`;
+        tdTitle.appendChild(badge);
+      }
+      tr.appendChild(tdTitle);
+      for (const f of columns) {
+        const td = document.createElement('td');
+        const v = rec.record.values[f.id];
+        if (f.type === 'checkbox') td.textContent = v ? '✓' : '–';
+        else td.textContent = fieldDisplayText(f, v);
+        if (f.type === 'money' || f.type === 'number') td.className = 'num';
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    };
+    upcoming.forEach(addRow);
+    if (past.length) {
+      const sep = document.createElement('tr');
+      sep.className = 'collection-sep';
+      const td = document.createElement('td');
+      td.colSpan = columns.length + 1;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'collection-sep-btn';
+      btn.textContent = `${pastOpen ? '▾' : '▸'} Vergangen (${past.length})`;
+      btn.addEventListener('click', () => {
+        if (collPastOpen.has(collection.id)) collPastOpen.delete(collection.id);
+        else collPastOpen.add(collection.id);
+        renderCollectionTable(collection, host);
+      });
+      td.appendChild(btn);
+      sep.appendChild(td);
+      tbody.appendChild(sep);
+      if (pastOpen) past.forEach(addRow);
+    }
+    table.appendChild(tbody);
+
+    const moneyCols = columns.filter((f) => f.type === 'money');
+    if (moneyCols.length) {
+      const tfoot = document.createElement('tfoot');
+      const tr = document.createElement('tr');
+      const first = document.createElement('td');
+      first.textContent = `Summe (${visible.length} ${visible.length === 1 ? 'Eintrag' : 'Einträge'})`;
+      tr.appendChild(first);
+      for (const f of columns) {
+        const td = document.createElement('td');
+        if (f.type === 'money') {
+          const sum = visible.reduce((s, r) => s + (Number(r.record.values[f.id]) || 0), 0);
+          td.textContent = formatMoney(sum);
+          td.className = 'num';
+        }
+        tr.appendChild(td);
+      }
+      tfoot.appendChild(tr);
+      table.appendChild(tfoot);
+    }
+    wrap.appendChild(table);
+    host.appendChild(wrap);
+  }
+
+  // ----- Dokumente erkennen und ablegen -----
+
+  const MONTH_NAMES_DE = {
+    januar: 1, jänner: 1, jaenner: 1, februar: 2, märz: 3, maerz: 3, april: 4, mai: 5, juni: 6, juli: 7,
+    august: 8, september: 9, oktober: 10, november: 11, dezember: 12,
+    jan: 1, feb: 2, mär: 3, mrz: 3, apr: 4, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, okt: 10, nov: 11, dez: 12,
+  };
+
+  function findDatesInText(text) {
+    const found = [];
+    const push = (y, m, d, index) => {
+      y = Number(y);
+      m = Number(m);
+      d = Number(d);
+      if (y < 100) y += 2000;
+      if (m < 1 || m > 12 || d < 1 || d > 31 || y < 1990 || y > 2100) return;
+      found.push({ iso: `${y}-${pad2(m)}-${pad2(d)}`, index });
+    };
+    let m;
+    const re1 = /\b(\d{1,2})\.\s?(\d{1,2})\.\s?(\d{4}|\d{2})\b/g;
+    while ((m = re1.exec(text))) push(m[3], m[2], m[1], m.index);
+    const re2 = /\b(\d{4})-(\d{2})-(\d{2})\b/g;
+    while ((m = re2.exec(text))) push(m[1], m[2], m[3], m.index);
+    const names = Object.keys(MONTH_NAMES_DE).sort((a, b) => b.length - a.length).join('|');
+    const re3 = new RegExp(`\\b(\\d{1,2})\\.?\\s+(${names})\\.?,?\\s+(\\d{4})\\b`, 'gi');
+    while ((m = re3.exec(text))) push(m[3], MONTH_NAMES_DE[m[2].toLowerCase()], m[1], m.index);
+    found.sort((a, b) => a.index - b.index);
+    return found;
+  }
+
+  function findAmountsInText(text) {
+    const found = [];
+    const num = '-?\\d{1,3}(?:\\.\\d{3})*,\\d{2}|-?\\d+,\\d{2}|\\d+\\.\\d{2}';
+    const re = new RegExp(`(?:€|EUR)\\s*(${num})|(${num})\\s*(?:€|EUR)`, 'gi');
+    let m;
+    while ((m = re.exec(text))) {
+      const v = parseDecimal(m[1] || m[2]);
+      if (v != null) found.push({ value: v, index: m.index });
+    }
+    return found;
+  }
+
+  function fieldKeywords(field) {
+    return foldText(field.name)
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w.length >= 4);
+  }
+
+  function contextBefore(text, index, len) {
+    return foldText(text.slice(Math.max(0, index - len), index));
+  }
+
+  const GENERIC_TOTAL_WORDS = ['gesamt', 'summe', 'total', 'brutto', 'zu zahlen', 'zahlbetrag', 'preis', 'betrag', 'beitrag', 'pramie', 'premie'];
+
+  function findIdentifierValue(field, text) {
+    const raw = field.name.trim();
+    const stem = raw.replace(/\s*(nummer|nr\.?)$/i, '').trim();
+    const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s*');
+    const value = '([A-Za-z0-9][A-Za-z0-9\\-\\/.]{3,})';
+    const patterns = [];
+    if (stem && stem !== raw) {
+      patterns.push(new RegExp(`${esc(stem)}[\\s-]*(?:nummer|nr\\.?|no\\.?|#)\\s*[:.]?\\s*${value}`, 'gi'));
+    } else {
+      patterns.push(new RegExp(`${esc(raw)}\\s*[:.#]\\s*${value}`, 'gi'));
+    }
+    for (const re of patterns) {
+      let m;
+      while ((m = re.exec(text))) {
+        const v = m[1].replace(/[.\-\/]+$/, '');
+        if (/\d/.test(v) && v.length >= 4) return v;
+      }
+    }
+    return '';
+  }
+
+  const TITLE_NOISE_RE = /\b(ticket|tickets|e-?ticket|rechnung|polizze|polizzen|beleg|best(?:ä|ae)tigung|buchung|scan|kopie|copy|dokument)\b/gi;
+
+  function guessTitleFromDoc(fileName, text) {
+    let t = String(fileName || '').replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ');
+    t = t.replace(/\b\d{1,2}[.\-]\d{1,2}[.\-](?:\d{4}|\d{2})\b/g, '').replace(/\b\d{4}-\d{2}-\d{2}\b/g, '');
+    t = t.replace(TITLE_NOISE_RE, '').replace(/\s+/g, ' ').replace(/^[\s\-–,.]+|[\s\-–,.]+$/g, '').trim();
+    if (t.length >= 3 && /[A-Za-zÄÖÜäöüß]{3}/.test(t)) return t.slice(0, 80);
+    const lines = String(text || '').split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length >= 4 && /[A-Za-zÄÖÜäöüß]{3}/.test(l));
+    return lines.length ? lines[0].slice(0, 80) : '';
+  }
+
+  // Liest aus Dateiname und Text eines Dokuments Werte für die Felder der Sammlung.
+  function analyzeDocument(collection, fileName, text) {
+    const fields = collectionFields(collection);
+    const values = {};
+    const dates = findDatesInText(text);
+    const amounts = findAmountsInText(text);
+    const today = isoToday();
+    const mainId = collection.schema.mainDateId;
+
+    // Datumsfelder: erst über Stichwort im Feldnamen, sonst (nur Haupt-Datum) das nächste kommende Datum.
+    for (const f of fields.filter((x) => x.type === 'date')) {
+      const words = fieldKeywords(f);
+      let pick = null;
+      for (const d of dates) {
+        const ctx = contextBefore(text, d.index, 45);
+        if (words.some((w) => ctx.includes(w))) {
+          pick = d;
+          break;
+        }
+      }
+      if (!pick && f.id === mainId && dates.length) {
+        pick = dates.find((d) => d.iso >= today) || dates[0];
+      }
+      if (pick) values[f.id] = pick.iso;
+    }
+
+    // Beträge: Stichwort aus dem Feldnamen, bei dem ersten Betragsfeld auch allgemeine Summen-Wörter.
+    const moneyFields = fields.filter((x) => x.type === 'money');
+    moneyFields.forEach((f, i) => {
+      const words = fieldKeywords(f);
+      let best = null;
+      let bestScore = 0;
+      for (const a of amounts) {
+        const ctx = contextBefore(text, a.index, 40);
+        let score = 0;
+        if (words.some((w) => ctx.includes(w))) score += 3;
+        if (i === 0 && GENERIC_TOTAL_WORDS.some((w) => ctx.includes(w))) score += 2;
+        if (score > bestScore || (score === bestScore && score > 0 && best && a.value > best.value)) {
+          best = a;
+          bestScore = score;
+        }
+      }
+      if (!best && i === 0 && amounts.length === 1) best = amounts[0];
+      if (best) values[f.id] = best.value;
+    });
+
+    // Kennungen (Polizzennummer, Buchungsnummer ...)
+    for (const f of fields.filter((x) => x.type === 'text' && x.identifier)) {
+      const v = findIdentifierValue(f, text);
+      if (v) values[f.id] = v;
+    }
+
+    // Titel: aus dem Dateinamen (sonst erste Textzeile).
+    const titleField = fields.find((x) => x.type === 'text' && x.inTitle) || fields.find((x) => x.type === 'text');
+    if (titleField && !values[titleField.id]) {
+      const guess = guessTitleFromDoc(fileName, text);
+      if (guess) values[titleField.id] = guess;
+    }
+
+    // Auswahlfelder: eine Möglichkeit, die im Text vorkommt.
+    const hay = foldText(`${fileName} ${text}`);
+    for (const f of fields.filter((x) => x.type === 'choice')) {
+      const opt = (f.options || []).find((o) => o && new RegExp(`(^|[^a-z0-9])${foldText(o).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`).test(hay));
+      if (opt) values[f.id] = opt;
+    }
+    return { values, dates };
+  }
+
+  const TITLE_STOP_WORDS = new Set(['ticket', 'tickets', 'karte', 'karten', 'rechnung', 'polizze', 'beleg', 'dokument', 'wien', 'oesterreich', 'austria', 'mit', 'und']);
+
+  function titleTokens(str) {
+    return foldText(str)
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w.length >= 4 && !TITLE_STOP_WORDS.has(w) && !/^\d+$/.test(w));
+  }
+
+  // Sucht den Eintrag, zu dem ein Dokument gehört. Liefert alle Einträge mit Treffer, beste zuerst.
+  function matchRecords(collection, fileName, text, dates) {
+    const fields = collectionFields(collection);
+    const hay = foldText(`${fileName} ${text}`);
+    const compact = hay.replace(/[^a-z0-9]/g, '');
+    const hayWords = new Set(hay.split(/[^a-z0-9]+/).filter(Boolean));
+    const results = [];
+    for (const rec of collectionRecords(collection)) {
+      let score = 0;
+      const reasons = [];
+      for (const f of fields) {
+        const v = rec.record.values[f.id];
+        if (typeof v !== 'string' || !v) continue;
+        if (f.identifier && f.type === 'text') {
+          const c = foldText(v).replace(/[^a-z0-9]/g, '');
+          if (c.length >= 5 && /\d/.test(c) && compact.includes(c)) {
+            score += 100;
+            reasons.push(`${f.name} „${v}" steht im Dokument`);
+          }
+        }
+      }
+      const titleSource = fields
+        .filter((f) => f.type === 'text' && (f.inTitle || f.identifier))
+        .map((f) => rec.record.values[f.id])
+        .filter((v) => typeof v === 'string' && v)
+        .join(' ');
+      const tokens = [...new Set(titleTokens(titleSource || rec.title || ''))];
+      if (tokens.length) {
+        const hits = tokens.filter((t) => hayWords.has(t) || compact.includes(t));
+        const fullTitle = foldText(titleSource).replace(/[^a-z0-9]/g, '');
+        if (fullTitle.length >= 5 && compact.includes(fullTitle)) {
+          score += 70;
+          reasons.push(`Titel „${titleSource}" kommt vor`);
+        } else if (tokens.length >= 2 && hits.length / tokens.length >= 0.6) {
+          score += 45;
+          reasons.push(`Titel passt (${hits.join(', ')})`);
+        } else if (tokens.length === 1 && hits.length === 1 && tokens[0].length >= 6) {
+          score += 35;
+          reasons.push(`Titel „${titleSource}" kommt vor`);
+        }
+      }
+      if (score > 0) {
+        const md = mainDateOf(collection, rec);
+        if (md && dates.some((d) => d.iso === md)) {
+          score += 15;
+          reasons.push('gleiches Datum');
+        }
+      }
+      if (score > 0) results.push({ record: rec, score, reasons });
+    }
+    results.sort((a, b) => b.score - a.score);
+    return results;
+  }
+
+  async function extractDocumentText(file) {
+    if (file.size > 50 * 1024 * 1024) return { text: '', tools: {}, error: 'zu groß' };
+    try {
+      const fd = new FormData();
+      fd.append('file', file, file.name || 'upload');
+      const res = await fetch('/api/extract-text', { method: 'POST', body: fd });
+      if (!res.ok) return { text: '', tools: {}, error: `HTTP ${res.status}` };
+      return await res.json();
+    } catch (err) {
+      return { text: '', tools: {}, error: String(err) };
+    }
+  }
+
+  function isPdfFileName(file) {
+    return file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+  }
+
+  async function handleCollectionFiles(collection, files) {
+    let done = 0;
+    let last = null;
+    for (let i = 0; i < files.length; i += 1) {
+      const file = files[i];
+      showBusyBanner(`Lese „${file.name}" (${i + 1} von ${files.length}) …`);
+      let extracted;
+      try {
+        extracted = await extractDocumentText(file);
+      } finally {
+        hideBusyBanner();
+      }
+      const text = extracted.text || '';
+      const analysis = analyzeDocument(collection, file.name, text);
+      const matches = matchRecords(collection, file.name, text, analysis.dates);
+      const choice = await askDocumentPlacement(collection, file, { ...analysis, text, matches, extracted }, i + 1, files.length);
+      if (choice === 'stop') break;
+      if (!choice) continue;
+      showBusyBanner(`Lege „${file.name}" ab …`);
+      try {
+        const rec = await placeDocument(collection, file, analysis, choice);
+        if (rec) {
+          done += 1;
+          last = rec;
+        }
+      } catch (err) {
+        console.error('Dokument konnte nicht abgelegt werden:', err);
+        alert(`„${file.name}" konnte nicht abgelegt werden.`);
+      } finally {
+        hideBusyBanner();
+      }
+    }
+    if (done) {
+      collMessage = {
+        collectionId: collection.id,
+        recordId: last ? last.id : null,
+        text: done === 1 && last ? `✓ Abgelegt bei „${last.title}".` : `✓ ${done} Dokumente abgelegt.`,
+      };
+    }
+    if (selectedNoteId === collection.id) renderCollection(collection);
+    renderNoteList();
+  }
+
+  function isEmptyValue(v) {
+    return v == null || v === '' || v === false;
+  }
+
+  async function placeDocument(collection, file, analysis, choice) {
+    let rec;
+    if (choice.targetId === '__new__') {
+      const values = {};
+      for (const [k, v] of Object.entries(choice.values)) if (!isEmptyValue(v)) values[k] = v;
+      rec = createRecord(collection, values);
+    } else {
+      rec = findNote(choice.targetId);
+      if (!rec) return null;
+      if (choice.fill) {
+        for (const f of collectionFields(collection)) {
+          const cur = rec.record.values[f.id];
+          const nv = analysis.values[f.id];
+          if (isEmptyValue(cur) && !isEmptyValue(nv)) rec.record.values[f.id] = nv;
+        }
+        applyRecordTitle(rec);
+      }
+    }
+    await addAttachmentToNote(rec, file, choice.mode);
+    rec.updatedAt = Date.now();
+    schedulePersist();
+    return rec;
+  }
+
+  // Legt eine Datei auf einer (nicht geöffneten) Seite ab - wie das Hineinziehen auf
+  // die Fläche, aber ohne Rückfragen. Mehrere Dateien werden untereinander gesetzt.
+  async function addAttachmentToNote(note, file, mode) {
+    const bottom = (note.objects || [])
+      .filter((o) => !o.inline && typeof o.y === 'number')
+      .reduce((m, o) => Math.max(m, o.y + (o.h || 0)), 0);
+    const place = (w, h) => ({
+      x: 30,
+      y: clamp(bottom ? bottom + 24 : 30, 0, Math.max(0, SURFACE_H - h)),
+    });
+    const push = (obj) => {
+      bringToFront(note, obj);
+      note.objects.push(obj);
+    };
+    if (isPdfFileName(file)) {
+      const pdfjsLib = await loadPdfJs();
+      const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+      const fileData = await uploadFile(file);
+      let src = null;
+      let w = 240;
+      let h = 60;
+      const variant = mode === 'file' ? 'file' : 'pages';
+      if (variant === 'pages') {
+        const rendered = await renderPdfAllPages(pdf);
+        const scale = Math.min(1, 360 / rendered.width);
+        w = Math.round(rendered.width * scale) || 200;
+        h = Math.round(rendered.height * scale) || 260;
+        src = await uploadFile(await canvasToJpegBlob(rendered.canvas, 0.82), `${file.name}.jpg`);
+      }
+      const { x, y } = place(w, h);
+      push({ id: uid(), type: 'pdf', x, y, w, h, z: 0, src, pageCount: pdf.numPages, fileName: file.name, variant, fileData });
+      return;
+    }
+    if (file.type.startsWith('image/')) {
+      const localUrl = URL.createObjectURL(file);
+      const size = await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+        img.onerror = reject;
+        img.src = localUrl;
+      });
+      URL.revokeObjectURL(localUrl);
+      const src = await uploadFile(file);
+      const scale = Math.min(1, 360 / size.w);
+      const w = Math.round(size.w * scale) || 200;
+      const h = Math.round(size.h * scale) || 150;
+      const { x, y } = place(w, h);
+      push({ id: uid(), type: 'image', x, y, w, h, z: 0, src });
+      return;
+    }
+    const fileData = await uploadFile(file);
+    const { x, y } = place(240, 60);
+    push({ id: uid(), type: 'file', x, y, w: 240, h: 60, z: 0, fileName: file.name, fileData });
+  }
+
+  // Fenster: Wohin gehört das Dokument? Liefert die Auswahl, 'stop' (alles abbrechen) oder null (überspringen).
+  function askDocumentPlacement(collection, file, doc, index, total) {
+    return new Promise((resolve) => {
+      const fields = collectionFields(collection);
+      const records = collectionRecords(collection).sort((a, b) => compareRecordsByDate(collection, a, b));
+      const best = doc.matches[0] || null;
+      const matchIds = new Set(doc.matches.map((m) => m.record.id));
+      const orderedRecords = [...doc.matches.map((m) => m.record), ...records.filter((r) => !matchIds.has(r.id))];
+      const draft = { ...doc.values };
+      const state2 = { targetId: best ? best.record.id : '__new__', fill: true, mode: collection.schema.defaultPdfMode === 'file' ? 'file' : 'pages' };
+      let detail;
+      let noteLine;
+
+      const renderDetail = () => {
+        detail.innerHTML = '';
+        if (state2.targetId === '__new__') {
+          const h = document.createElement('p');
+          h.className = 'placement-heading';
+          h.textContent = Object.keys(doc.values).length
+            ? 'Neuer Eintrag – aus dem Dokument erkannte Angaben (bitte prüfen):'
+            : 'Neuer Eintrag – es konnten keine Angaben erkannt werden. Du kannst sie hier oder später eintragen:';
+          detail.appendChild(h);
+          const grid = document.createElement('div');
+          grid.className = 'record-panel-grid';
+          for (const f of fields) {
+            const wrap = document.createElement('label');
+            wrap.className = `record-field record-field-${f.type}`;
+            const label = document.createElement('span');
+            label.className = 'record-field-label';
+            label.textContent = f.name;
+            wrap.appendChild(label);
+            wrap.appendChild(buildFieldControl(f, draft[f.id], (v) => { draft[f.id] = v; }));
+            grid.appendChild(wrap);
+          }
+          detail.appendChild(grid);
+        } else {
+          const rec = findNote(state2.targetId);
+          const fillable = rec
+            ? fields.filter((f) => isEmptyValue(rec.record.values[f.id]) && !isEmptyValue(doc.values[f.id]))
+            : [];
+          if (fillable.length) {
+            const l = document.createElement('label');
+            l.className = 'placement-fill';
+            const c = document.createElement('input');
+            c.type = 'checkbox';
+            c.checked = state2.fill;
+            c.addEventListener('change', () => { state2.fill = c.checked; });
+            l.append(c, document.createTextNode(` Leere Angaben ergänzen: ${fillable.map((f) => `${f.name} = ${fieldDisplayText(f, doc.values[f.id])}`).join('; ')}`));
+            detail.appendChild(l);
+          } else {
+            const p = document.createElement('p');
+            p.className = 'placement-heading';
+            p.textContent = 'Das Dokument wird auf der Seite dieses Eintrags abgelegt.';
+            detail.appendChild(p);
+          }
+        }
+        if (state2.targetId === '__new__') {
+          noteLine.textContent = best ? '' : 'Kein passender Eintrag gefunden – es wird ein neuer Eintrag vorgeschlagen.';
+        } else {
+          const m = doc.matches.find((x) => x.record.id === state2.targetId);
+          noteLine.textContent = m ? `Erkannt: ${m.reasons.join('; ')}.` : '';
+        }
+      };
+
+      openModal({
+        title: total > 1 ? `Dokument ablegen (${index} von ${total})` : 'Dokument ablegen',
+        wide: true,
+        build: ({ body }) => {
+          const fileLine = document.createElement('p');
+          fileLine.className = 'placement-file';
+          fileLine.textContent = `📄 ${file.name}`;
+          body.appendChild(fileLine);
+          if (!doc.text) {
+            const hint = document.createElement('p');
+            hint.className = 'placement-hint';
+            const t = doc.extracted && doc.extracted.tools ? doc.extracted.tools : {};
+            hint.textContent = isPdfFileName(file) || file.type.startsWith('image/')
+              ? `Aus dem Dokument konnte kein Text gelesen werden${t.ocr === false && file.type.startsWith('image/') ? ' (Texterkennung ist auf dem Server nicht installiert)' : ''} – es wird nur der Dateiname ausgewertet.`
+              : 'Aus diesem Dateityp wird kein Text gelesen – es wird nur der Dateiname ausgewertet.';
+            body.appendChild(hint);
+          }
+          const row = document.createElement('label');
+          row.className = 'placement-row';
+          row.append(document.createTextNode('Ablegen bei: '));
+          const select = document.createElement('select');
+          const newOpt = document.createElement('option');
+          newOpt.value = '__new__';
+          newOpt.textContent = '＋ Neuer Eintrag';
+          select.appendChild(newOpt);
+          for (const r of orderedRecords) {
+            const o = document.createElement('option');
+            o.value = r.id;
+            o.textContent = `${matchIds.has(r.id) ? '✓ ' : ''}${r.title || 'Ohne Titel'}`;
+            select.appendChild(o);
+          }
+          select.value = state2.targetId;
+          select.addEventListener('change', () => {
+            state2.targetId = select.value;
+            renderDetail();
+          });
+          row.appendChild(select);
+          body.appendChild(row);
+          noteLine = document.createElement('p');
+          noteLine.className = 'placement-hint';
+          body.appendChild(noteLine);
+          detail = document.createElement('div');
+          detail.className = 'placement-detail';
+          body.appendChild(detail);
+          if (isPdfFileName(file)) {
+            const modeRow = document.createElement('label');
+            modeRow.className = 'placement-row';
+            modeRow.append(document.createTextNode('PDF anzeigen als: '));
+            const modeSel = document.createElement('select');
+            for (const [v, t] of [['pages', 'Seiten (direkt sichtbar)'], ['file', 'Datei-Symbol (klein)']]) {
+              const o = document.createElement('option');
+              o.value = v;
+              o.textContent = t;
+              modeSel.appendChild(o);
+            }
+            modeSel.value = state2.mode;
+            modeSel.addEventListener('change', () => { state2.mode = modeSel.value; });
+            modeRow.appendChild(modeSel);
+            body.appendChild(modeRow);
+          }
+          renderDetail();
+        },
+        buttons: [
+          { label: 'Alles abbrechen', onClick: () => { resolve('stop'); return true; } },
+          ...(total > 1 ? [{ label: 'Überspringen', onClick: () => { resolve(null); return true; } }] : []),
+          {
+            label: 'Ablegen',
+            kind: 'primary',
+            onClick: () => {
+              resolve({ targetId: state2.targetId, values: { ...draft }, fill: state2.fill, mode: state2.mode });
+              return true;
+            },
+          },
+        ],
+      });
+    });
+  }
+
   async function init() {
     setupPlainField(el.reminderTitleInput, false);
     setupPlainField(el.reminderTextInput, true);
@@ -9452,6 +10834,23 @@
     // Klick-Event selbst als "parentNoteId" durchgereicht (createNote() ohne
     // Argument = neue Hauptseite).
     el.newNoteBtn.addEventListener('click', openNewNoteMenu);
+    el.collectionView.addEventListener('dragover', (e) => {
+      if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) {
+        e.preventDefault();
+        el.collectionView.classList.add('drag-over');
+      }
+    });
+    el.collectionView.addEventListener('dragleave', (e) => {
+      if (e.target === el.collectionView || !el.collectionView.contains(e.relatedTarget)) el.collectionView.classList.remove('drag-over');
+    });
+    el.collectionView.addEventListener('drop', (e) => {
+      el.collectionView.classList.remove('drag-over');
+      const files = e.dataTransfer ? [...e.dataTransfer.files] : [];
+      if (!files.length) return;
+      e.preventDefault();
+      const collection = currentNote();
+      if (collection && collection.type === 'collection') handleCollectionFiles(collection, files);
+    });
     el.newNoteMenuBackdrop.addEventListener('click', (e) => {
       if (e.target === el.newNoteMenuBackdrop) closeNewNoteMenu();
     });
@@ -9462,6 +10861,10 @@
     el.newNoteJournalBtn.addEventListener('click', () => {
       closeNewNoteMenu();
       createNote(null, { type: 'journal', title: 'Logbuch' });
+    });
+    el.newNoteCollectionBtn.addEventListener('click', () => {
+      closeNewNoteMenu();
+      openNewCollectionDialog();
     });
     el.newNoteJournalFromBtn.addEventListener('click', () => {
       closeNewNoteMenu();

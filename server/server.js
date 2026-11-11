@@ -855,6 +855,20 @@ app.get('/api/search', async (req, res) => {
   res.json({ hits: indexer.search(req.username, words), pending: status.pending, tools: status.tools });
 });
 
+// Liest den Text einer Datei, ohne sie abzulegen (Erkennung beim Hineinziehen
+// in eine Sammlung, siehe app.js). Die Datei wird nur kurz im Arbeitsspeicher
+// und in einem Temp-Ordner gehalten und danach verworfen.
+app.post('/api/extract-text', convertUpload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Keine Datei erhalten' });
+  const ext = path.extname(req.file.originalname || '').toLowerCase();
+  try {
+    res.json(await indexer.extractBufferText(req.file.buffer, ext));
+  } catch (err) {
+    console.error('Text konnte nicht gelesen werden:', err.message);
+    res.json({ text: '', tools: {}, error: 'Der Text konnte nicht gelesen werden.' });
+  }
+});
+
 app.get('/api/search/status', async (req, res) => {
   res.json(await indexer.status(req.username));
 });

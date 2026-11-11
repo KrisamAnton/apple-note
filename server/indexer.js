@@ -456,11 +456,49 @@ function createIndexer({ usersDataDir, userStateFile, userFilesDir, userIndexDir
     return hits;
   }
 
+  // Liest den Text einer hochgeladenen Datei (ohne sie abzulegen): für die
+  // automatische Erkennung beim Hineinziehen in eine Sammlung. Es werden
+  // höchstens die ersten Seiten gelesen.
+  async function extractBufferText(buffer, ext) {
+    const available = await tools();
+    const kind = kindOf(ext);
+    const result = (pages) => ({
+      text: pages.slice(0, 10).join('\n\n').slice(0, 100000),
+      tools: { pdftotext: available.pdftotext, office: available.office, ocr: available.ocr },
+    });
+    if (!kind) return result([]);
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'krisnote-extract-'));
+    try {
+      const file = path.join(tmpDir, `datei${ext}`);
+      fs.writeFileSync(file, buffer);
+      if (kind === 'text') return result([buffer.subarray(0, MAX_TEXT_BYTES).toString('utf8')]);
+      if (kind === 'image') {
+        if (!available.ocr) return result([]);
+        return result([await ocrImage(file, available.ocrLang)]);
+      }
+      let pdfPath = file;
+      if (kind === 'office') {
+        if (!available.pdftotext || !available.office) return result([]);
+        pdfPath = path.join(tmpDir, 'dokument.pdf');
+        fs.writeFileSync(pdfPath, await officeToPdf(buffer, ext));
+      }
+      if (!available.pdftotext) return result([]);
+      let pages = await pdfPages(pdfPath);
+      if (looksScanned(pages) && available.ocr && available.pdftoppm) {
+        const ocrPages = await ocrPdfPages(pdfPath, Math.min(Math.max(pages.length, 1), 5), available.ocrLang);
+        if (ocrPages.length) pages = ocrPages;
+      }
+      return result(pages);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  }
+
   async function status(username) {
     return { tools: await tools(), pending: pendingCount(username) };
   }
 
-  return { onStateSaved, scanUser, scanAllUsers, search, status, foldAligned };
+  return { onStateSaved, scanUser, scanAllUsers, search, status, extractBufferText, foldAligned };
 }
 
 module.exports = { createIndexer, foldAligned };
