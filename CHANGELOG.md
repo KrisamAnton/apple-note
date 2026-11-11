@@ -4,6 +4,12 @@ Hier steht, was wann geändert wurde (neueste Einträge oben). Die Versionsnumme
 steht klein neben dem Benutzernamen; bei jeder Änderung erhöht sich die letzte
 Zahl (1.7.1 → 1.7.2 → …).
 
+## 1.7.30 - 11.11.2026
+
+- Neu: **Tickets anzeigen**. In jedem Eintrag einer Sammlung gibt es oben den Knopf „🎫 Tickets anzeigen" (und in der Tabelle ein kleines „🎫 3"). Er öffnet eine Vollbild-Ansicht: **ein Ticket pro Bildschirm**, mit dem Finger oder dem Mausrad von oben nach unten durchblätterbar. Die Tickets werden scharf dargestellt und lassen sich **vergrößern** (Knöpfe − / +, Doppeltipp oder Zwei-Finger-Zoom), um z. B. den Barcode oder QR-Code zu scannen; vergrößert kann man das Ticket mit dem Finger verschieben. Am Handy bleibt der Bildschirm dabei an.
+- Der Schalter links oben wechselt zwischen **„Nur Tickets"** und **„Alle Dateien"**. In „Alle Dateien" kann man bei jedem PDF oder Bild mit „Als Ticket markieren" festlegen, was ein Ticket ist (z. B. Rechnungen bleiben draußen); in „Nur Tickets" gibt es pro Ticket „Kein Ticket".
+- Beim automatischen Ablegen in einer Sammlung markiert KrisNote Dokumente, die wie ein Ticket aussehen (Ticketnummer, „Ticket", „Einlass", Barcode/QR), gleich selbst als Ticket. Bereits abgelegte Dateien markierst du einmal in der Ansicht „Alle Dateien".
+
 ## 1.7.29 - 11.11.2026
 
 - Sammlungen am Handy: Das Angaben-Fenster oben im Eintrag ist am Handy zuerst **eingeklappt** („Angaben einblenden"), damit man die abgelegten Dateien direkt sieht. Ist es aufgeklappt, lässt es sich **innerhalb des Fensters scrollen** und nimmt höchstens knapp die halbe Bildschirmhöhe ein, die Seite mit den Dateien darunter bleibt sichtbar. Die Felder stehen am Handy in zwei Spalten.

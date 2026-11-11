@@ -9713,6 +9713,14 @@
     back.title = 'Zur Übersicht der Sammlung';
     back.addEventListener('click', () => selectNote(collection.id));
     head.appendChild(back);
+    const ticketBtn = document.createElement('button');
+    ticketBtn.type = 'button';
+    ticketBtn.className = 'record-panel-ticket';
+    const nTickets = ticketCountOf(note);
+    ticketBtn.textContent = nTickets ? `🎫 Tickets anzeigen (${nTickets})` : '🎫 Tickets anzeigen';
+    ticketBtn.title = 'Tickets dieses Eintrags einzeln im Vollbild zeigen (zum Vorzeigen und Scannen)';
+    ticketBtn.addEventListener('click', () => openTicketViewer(note));
+    head.appendChild(ticketBtn);
     const spacer = document.createElement('span');
     spacer.className = 'journal-spacer';
     head.appendChild(spacer);
@@ -10175,6 +10183,19 @@
       tdTitle.className = 'collection-title-cell';
       tdTitle.textContent = rec.title || 'Ohne Titel';
       const files = (rec.objects || []).filter((o) => !o.inline && (o.type === 'pdf' || o.type === 'file' || o.type === 'image')).length;
+      const nTick = ticketCountOf(rec);
+      if (nTick) {
+        const tb = document.createElement('button');
+        tb.type = 'button';
+        tb.className = 'collection-ticket-btn';
+        tb.textContent = `🎫 ${nTick}`;
+        tb.title = 'Tickets im Vollbild anzeigen';
+        tb.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openTicketViewer(rec);
+        });
+        tdTitle.appendChild(tb);
+      }
       if (files) {
         const badge = document.createElement('span');
         badge.className = 'collection-files';
@@ -10770,7 +10791,8 @@
       if (opt) values[f.id] = opt;
     }
     const tid = ticketIdOf(doc.flat) || ticketIdOf(fileName || '');
-    return { values, dates: dates.map((d) => d.iso), flat: doc.flat, ticketKey: tid ? tid.full : '' };
+    const looksTicket = !!tid || (/\b(ticket|tickets|e-ticket|eintrittskarte|einlass|barcode|qr-?code)\b/i.test(`${fileName} ${doc.flat}`) && !(/\brechnung\b/i.test(doc.flat) && !/einlass|barcode|qr/i.test(doc.flat)));
+    return { values, dates: dates.map((d) => d.iso), flat: doc.flat, ticketKey: tid ? tid.full : '', looksTicket };
   }
 
   const TITLE_STOP_WORDS = new Set(['ticket', 'tickets', 'karte', 'karten', 'rechnung', 'polizze', 'beleg', 'dokument', 'wien', 'oesterreich', 'austria', 'mit', 'und', 'festival', 'musical', 'konzert', 'hotel']);
@@ -11099,6 +11121,10 @@
       }
     }
     const objId = await addAttachmentToNote(rec, file, choice.mode);
+    if (analysis.looksTicket) {
+      const att = (rec.objects || []).find((o) => o.id === objId);
+      if (att && (att.type === 'pdf' || att.type === 'image')) att.isTicket = true;
+    }
     rec.updatedAt = Date.now();
     schedulePersist();
     return { recordId: rec.id, title: rec.title, created, objId, prevValues, prevParts };
@@ -11329,6 +11355,421 @@
         ],
       });
     });
+  }
+
+  // ---------- Ticket-Ansicht ----------
+  //
+  // Vollbild-Ansicht für Karten: ein Ticket pro Bildschirm, von oben nach unten
+  // durchscrollbar, mit Vergrößern (z. B. für den Barcode). PDFs und Bilder einer Seite
+  // lassen sich als "Ticket" markieren (obj.isTicket); der Schalter oben links
+  // wechselt zwischen "Nur Tickets" und "Alle Dateien".
+
+  function isTicketObject(o) {
+    return !!o && !o.inline && o.isTicket === true && (o.type === 'pdf' || o.type === 'image');
+  }
+
+  function ticketCandidates(note) {
+    return (note.objects || [])
+      .filter((o) => !o.inline && ((o.type === 'pdf' && (o.fileData || o.src)) || (o.type === 'image' && o.src)))
+      .sort((a, b) => (a.y || 0) - (b.y || 0) || (a.x || 0) - (b.x || 0));
+  }
+
+  function ticketCountOf(note) {
+    return (note.objects || []).filter(isTicketObject).length;
+  }
+
+  let ticketViewer = null;
+
+  function closeTicketViewer() {
+    if (!ticketViewer) return;
+    const v = ticketViewer;
+    ticketViewer = null;
+    window.removeEventListener('resize', v.onResize);
+    document.removeEventListener('keydown', v.onKey);
+    if (v.observer) v.observer.disconnect();
+    if (v.wakeLock) v.wakeLock.release().catch(() => {});
+    v.root.remove();
+  }
+
+  async function openTicketViewer(note) {
+    closeTicketViewer();
+    const candidates = ticketCandidates(note);
+    const v = {
+      note,
+      onlyTickets: candidates.some(isTicketObject),
+      slides: [],
+      docs: new Map(),
+      observer: null,
+      wakeLock: null,
+    };
+    ticketViewer = v;
+
+    const root = document.createElement('div');
+    root.className = 'ticket-viewer';
+    root.innerHTML =
+      '<div class="tv-bar">' +
+      '<label class="tv-switch" title="Nur markierte Tickets oder alle Dateien dieser Seite"><input type="checkbox"><span class="tv-switch-track"></span><span class="tv-switch-text"></span></label>' +
+      '<span class="tv-title"></span>' +
+      '<button type="button" class="tv-close" aria-label="Schließen">✕</button>' +
+      '</div>' +
+      '<div class="tv-scroll"></div>' +
+      '<div class="tv-foot">' +
+      '<button type="button" class="tv-btn tv-zoom-out" aria-label="Verkleinern">−</button>' +
+      '<span class="tv-count"></span>' +
+      '<button type="button" class="tv-btn tv-zoom-in" aria-label="Vergrößern">+</button>' +
+      '</div>';
+    document.body.appendChild(root);
+    v.root = root;
+    const scroll = root.querySelector('.tv-scroll');
+    const checkbox = root.querySelector('.tv-switch input');
+    const switchText = root.querySelector('.tv-switch-text');
+    const countEl = root.querySelector('.tv-count');
+    root.querySelector('.tv-title').textContent = note.title || '';
+    v.scroll = scroll;
+
+    const isTouch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    if (isTouch && navigator.wakeLock) {
+      navigator.wakeLock.request('screen').then((lock) => { v.wakeLock = lock; }).catch(() => {});
+    }
+
+    const availSize = () => ({
+      w: Math.max(120, window.innerWidth - 20),
+      h: Math.max(120, scroll.clientHeight - 54),
+    });
+
+    const layoutSlide = (sd) => {
+      const { w, h } = availSize();
+      const aspect = sd.aspect || 0.707;
+      let fw = w;
+      let fh = fw / aspect;
+      if (fh > h) {
+        fh = h;
+        fw = fh * aspect;
+      }
+      sd.frame.style.width = `${Math.round(fw)}px`;
+      sd.frame.style.height = `${Math.round(fh)}px`;
+      sd.slide.style.height = `${scroll.clientHeight}px`;
+      clampSlide(sd);
+      applySlide(sd);
+    };
+
+    const clampSlide = (sd) => {
+      const W = sd.frame.clientWidth;
+      const H = sd.frame.clientHeight;
+      sd.tx = Math.min(0, Math.max(W - W * sd.s, sd.tx));
+      sd.ty = Math.min(0, Math.max(H - H * sd.s, sd.ty));
+    };
+
+    const applySlide = (sd) => {
+      sd.inner.style.transform = `translate(${sd.tx}px, ${sd.ty}px) scale(${sd.s})`;
+      sd.frame.classList.toggle('zoomed', sd.s > 1.01);
+      const anyZoomed = v.slides.some((x) => x.s > 1.01);
+      scroll.style.overflowY = anyZoomed ? 'hidden' : '';
+    };
+
+    const zoomSlide = (sd, newS, cx, cy) => {
+      newS = Math.min(6, Math.max(1, newS));
+      const px = (cx - sd.tx) / sd.s;
+      const py = (cy - sd.ty) / sd.s;
+      sd.s = newS;
+      sd.tx = cx - px * newS;
+      sd.ty = cy - py * newS;
+      if (newS <= 1.01) {
+        sd.s = 1;
+        sd.tx = 0;
+        sd.ty = 0;
+      }
+      clampSlide(sd);
+      applySlide(sd);
+    };
+
+    const currentSlide = () => {
+      const mid = scroll.scrollTop + scroll.clientHeight / 2;
+      let best = null;
+      let bd = Infinity;
+      for (const sd of v.slides) {
+        const c = sd.slide.offsetTop + sd.slide.offsetHeight / 2;
+        const d = Math.abs(c - mid);
+        if (d < bd) {
+          bd = d;
+          best = sd;
+        }
+      }
+      return best;
+    };
+
+    const updateCount = () => {
+      const cur = currentSlide();
+      countEl.textContent = v.slides.length ? `${v.slides.indexOf(cur) + 1} / ${v.slides.length}` : '';
+    };
+
+    const attachGestures = (sd) => {
+      const pointers = new Map();
+      let pinch = null;
+      const frame = sd.frame;
+      frame.addEventListener('pointerdown', (e) => {
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (pointers.size === 2) {
+          const [a, b] = [...pointers.values()];
+          const rect = frame.getBoundingClientRect();
+          pinch = {
+            dist: Math.hypot(a.x - b.x, a.y - b.y) || 1,
+            s: sd.s,
+            midX: (a.x + b.x) / 2 - rect.left,
+            midY: (a.y + b.y) / 2 - rect.top,
+            tx: sd.tx,
+            ty: sd.ty,
+          };
+        }
+        if (sd.s > 1.01 || pointers.size === 2) {
+          try { frame.setPointerCapture(e.pointerId); } catch (err) { /* ignorieren */ }
+        }
+      });
+      frame.addEventListener('pointermove', (e) => {
+        const prev = pointers.get(e.pointerId);
+        if (!prev) return;
+        const cur = { x: e.clientX, y: e.clientY };
+        if (pinch && pointers.size === 2) {
+          pointers.set(e.pointerId, cur);
+          const [a, b] = [...pointers.values()];
+          const rect = frame.getBoundingClientRect();
+          const dist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+          const newS = Math.min(6, Math.max(1, pinch.s * (dist / pinch.dist)));
+          const px = (pinch.midX - pinch.tx) / pinch.s;
+          const py = (pinch.midY - pinch.ty) / pinch.s;
+          const mx = (a.x + b.x) / 2 - rect.left;
+          const my = (a.y + b.y) / 2 - rect.top;
+          sd.s = newS;
+          sd.tx = mx - px * newS;
+          sd.ty = my - py * newS;
+          clampSlide(sd);
+          applySlide(sd);
+          e.preventDefault();
+          return;
+        }
+        pointers.set(e.pointerId, cur);
+        if (sd.s > 1.01 && pointers.size === 1) {
+          sd.tx += cur.x - prev.x;
+          sd.ty += cur.y - prev.y;
+          clampSlide(sd);
+          applySlide(sd);
+          e.preventDefault();
+        }
+      });
+      const end = (e) => {
+        pointers.delete(e.pointerId);
+        if (pointers.size < 2) pinch = null;
+        if (sd.s <= 1.02 && sd.s !== 1) {
+          sd.s = 1;
+          sd.tx = 0;
+          sd.ty = 0;
+          applySlide(sd);
+        }
+      };
+      frame.addEventListener('pointerup', end);
+      frame.addEventListener('pointercancel', end);
+      frame.addEventListener('dblclick', (e) => {
+        const rect = frame.getBoundingClientRect();
+        if (sd.s > 1.01) zoomSlide(sd, 1, 0, 0);
+        else zoomSlide(sd, 2.6, e.clientX - rect.left, e.clientY - rect.top);
+      });
+      frame.addEventListener('wheel', (e) => {
+        if (!e.ctrlKey && sd.s <= 1.01) return;
+        e.preventDefault();
+        const rect = frame.getBoundingClientRect();
+        zoomSlide(sd, sd.s * (e.deltaY < 0 ? 1.15 : 1 / 1.15), e.clientX - rect.left, e.clientY - rect.top);
+      }, { passive: false });
+    };
+
+    const getPdfDoc = (url) => {
+      if (!v.docs.has(url)) {
+        v.docs.set(url, (async () => {
+          const pdfjsLib = await loadPdfJs();
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return pdfjsLib.getDocument({ data: await res.arrayBuffer() }).promise;
+        })());
+      }
+      return v.docs.get(url);
+    };
+
+    const showImage = (sd, src) => new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        sd.aspect = img.naturalWidth / img.naturalHeight;
+        img.className = 'tv-media';
+        sd.inner.appendChild(img);
+        layoutSlide(sd);
+        resolve();
+      };
+      img.onerror = () => {
+        sd.loading.textContent = 'Konnte nicht geladen werden.';
+        resolve();
+      };
+      img.src = src;
+    });
+
+    const renderSlide = async (sd) => {
+      if (sd.rendered) return;
+      sd.rendered = true;
+      const obj = sd.obj;
+      try {
+        if (obj.type === 'image') {
+          await showImage(sd, obj.src);
+        } else {
+          let ok = false;
+          if (obj.fileData) {
+            try {
+              const doc = await getPdfDoc(obj.fileData);
+              const page = await doc.getPage(sd.pageNo);
+              const base = page.getViewport({ scale: 1 });
+              const dpr = window.devicePixelRatio || 1;
+              const targetW = Math.min(3200, Math.max(1500, window.innerWidth * dpr * 2.2));
+              const vp = page.getViewport({ scale: targetW / base.width });
+              const canvas = document.createElement('canvas');
+              canvas.width = Math.round(vp.width);
+              canvas.height = Math.round(vp.height);
+              canvas.className = 'tv-media';
+              await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+              sd.aspect = canvas.width / canvas.height;
+              sd.inner.appendChild(canvas);
+              layoutSlide(sd);
+              ok = true;
+            } catch (err) {
+              console.warn('Ticket-PDF konnte nicht gerendert werden:', err);
+            }
+          }
+          if (!ok && obj.src) await showImage(sd, obj.src);
+          else if (!ok) sd.loading.textContent = 'Konnte nicht geladen werden.';
+        }
+        if (sd.loading.parentNode && sd.inner.children.length > 1) sd.loading.remove();
+      } catch (err) {
+        console.warn(err);
+        sd.loading.textContent = 'Konnte nicht geladen werden.';
+      }
+    };
+
+    const buildSlides = () => {
+      if (v.observer) v.observer.disconnect();
+      scroll.innerHTML = '';
+      scroll.style.overflowY = '';
+      v.slides = [];
+      const list = candidates.filter((o) => (v.onlyTickets ? isTicketObject(o) : true));
+      checkbox.checked = v.onlyTickets;
+      switchText.textContent = v.onlyTickets ? 'Nur Tickets' : 'Alle Dateien';
+      if (!list.length) {
+        const empty = document.createElement('div');
+        empty.className = 'tv-empty';
+        const p = document.createElement('p');
+        p.textContent = candidates.length
+          ? 'Noch kein PDF oder Bild als Ticket markiert.'
+          : 'Auf dieser Seite gibt es noch keine PDFs oder Bilder.';
+        empty.appendChild(p);
+        if (candidates.length) {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'tv-btn tv-btn-wide';
+          b.textContent = 'Alle Dateien anzeigen und Tickets markieren';
+          b.addEventListener('click', () => {
+            v.onlyTickets = false;
+            buildSlides();
+          });
+          empty.appendChild(b);
+        }
+        scroll.appendChild(empty);
+        updateCount();
+        return;
+      }
+      for (const obj of list) {
+        const pages = obj.type === 'pdf' ? Math.min(Math.max(obj.pageCount || 1, 1), 8) : 1;
+        for (let p = 1; p <= pages; p += 1) {
+          const slide = document.createElement('div');
+          slide.className = 'tv-slide';
+          const cap = document.createElement('div');
+          cap.className = 'tv-cap';
+          const name = document.createElement('span');
+          name.textContent = `${obj.fileName || (obj.type === 'image' ? 'Bild' : 'PDF')}${pages > 1 ? ` · Seite ${p}/${pages}` : ''}`;
+          cap.appendChild(name);
+          if (!v.onlyTickets && p === 1) {
+            const flag = document.createElement('button');
+            flag.type = 'button';
+            flag.className = `tv-flag${obj.isTicket ? ' on' : ''}`;
+            flag.textContent = obj.isTicket ? '🎫 Ticket ✓' : '🎫 Als Ticket markieren';
+            flag.addEventListener('click', () => {
+              obj.isTicket = !obj.isTicket;
+              note.updatedAt = Date.now();
+              schedulePersist();
+              flag.className = `tv-flag${obj.isTicket ? ' on' : ''}`;
+              flag.textContent = obj.isTicket ? '🎫 Ticket ✓' : '🎫 Als Ticket markieren';
+              if (selectedNoteId === note.id) renderRecordPanel(note);
+            });
+            cap.appendChild(flag);
+          } else if (v.onlyTickets && p === 1) {
+            const unflag = document.createElement('button');
+            unflag.type = 'button';
+            unflag.className = 'tv-flag';
+            unflag.textContent = 'Kein Ticket';
+            unflag.addEventListener('click', () => {
+              obj.isTicket = false;
+              note.updatedAt = Date.now();
+              schedulePersist();
+              if (selectedNoteId === note.id) renderRecordPanel(note);
+              buildSlides();
+            });
+            cap.appendChild(unflag);
+          }
+          const frame = document.createElement('div');
+          frame.className = 'tv-frame';
+          const inner = document.createElement('div');
+          inner.className = 'tv-inner';
+          const loading = document.createElement('div');
+          loading.className = 'tv-loading';
+          loading.textContent = 'Lade …';
+          inner.appendChild(loading);
+          frame.appendChild(inner);
+          slide.append(cap, frame);
+          scroll.appendChild(slide);
+          const sd = { obj, pageNo: p, slide, frame, inner, loading, s: 1, tx: 0, ty: 0, aspect: 0.707, rendered: false };
+          slide._sd = sd;
+          v.slides.push(sd);
+          attachGestures(sd);
+        }
+      }
+      v.observer = new IntersectionObserver((entries) => {
+        for (const e of entries) if (e.isIntersecting) renderSlide(e.target._sd);
+      }, { root: scroll, rootMargin: '150% 0px' });
+      v.slides.forEach((sd) => {
+        layoutSlide(sd);
+        v.observer.observe(sd.slide);
+      });
+      updateCount();
+    };
+
+    v.onResize = () => {
+      v.slides.forEach(layoutSlide);
+      updateCount();
+    };
+    v.onKey = (e) => {
+      if (e.key === 'Escape') closeTicketViewer();
+      else if (e.key === 'ArrowDown' || e.key === 'PageDown') scroll.scrollBy({ top: scroll.clientHeight, behavior: 'smooth' });
+      else if (e.key === 'ArrowUp' || e.key === 'PageUp') scroll.scrollBy({ top: -scroll.clientHeight, behavior: 'smooth' });
+    };
+    window.addEventListener('resize', v.onResize);
+    document.addEventListener('keydown', v.onKey);
+    scroll.addEventListener('scroll', updateCount);
+    root.querySelector('.tv-close').addEventListener('click', closeTicketViewer);
+    checkbox.addEventListener('change', () => {
+      v.onlyTickets = checkbox.checked;
+      buildSlides();
+    });
+    const zoomBy = (factor) => {
+      const sd = currentSlide();
+      if (!sd) return;
+      zoomSlide(sd, sd.s * factor, sd.frame.clientWidth / 2, sd.frame.clientHeight / 2);
+    };
+    root.querySelector('.tv-zoom-in').addEventListener('click', () => zoomBy(1.6));
+    root.querySelector('.tv-zoom-out').addEventListener('click', () => zoomBy(1 / 1.6));
+    buildSlides();
   }
 
   async function init() {
