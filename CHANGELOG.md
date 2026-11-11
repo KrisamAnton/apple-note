@@ -4,6 +4,13 @@ Hier steht, was wann geändert wurde (neueste Einträge oben). Die Versionsnumme
 steht klein neben dem Benutzernamen; bei jeder Änderung erhöht sich die letzte
 Zahl (1.7.1 → 1.7.2 → …).
 
+## 1.7.28 - 11.11.2026
+
+- Sammlungen: Der **Titel wird jetzt aus dem Dokument selbst erkannt**, nicht mehr nur aus dem Dateinamen. Du musst Dateien wie „TICKET-2313302972319-3.pdf" nicht umbenennen. KrisNote nimmt z. B. die Zeile über „Samstag, 14.11.2026 19:30" oder die größte Schrift und macht aus GROSSBUCHSTABEN eine normale Schreibweise („Die Schöne und das Biest").
+- Mehrere Tickets derselben Bestellung (z. B. „…2972319-1", „-2", „-3") werden automatisch **einem Eintrag** zugeordnet. Ticketnummer dient als Bestellnummer, **Anzahl Karten** und **Preis gesamt** zählen dabei mit (3 × 189 € = 567 €). Mit „Alles rückgängig" wird das ebenfalls zurückgesetzt.
+- Mehr wird erkannt: Uhrzeit direkt nach dem Datum („19:30"), Veranstaltungsort aus dem Text („im Raimund Theater"), Art „Musical" bei Vereinigte Bühnen Wien.
+- Bilder (Fotos, Screenshots) und gescannte PDFs werden per Texterkennung gelesen, wenn auf dem Server `tesseract-ocr` installiert ist.
+
 ## 1.7.27 - 11.11.2026
 
 - Sammlungen: **vollautomatisches Ablegen**. Du kannst jetzt mehrere Dokumente auf einmal auf eine Sammlung ziehen. KrisNote arbeitet sie der Reihe nach ab, liest jedes Dokument, füllt die Angaben aus (Datum, Uhrzeit, Titel, Ort, Preis, Buchungs-/Bestellnummer, Art, Zahlungsart) und entscheidet selbst: gehört es zu einem schon vorhandenen Eintrag (gleiche Buchungsnummer, gleicher Titel, gleiches Datum und Ort), wird es dort abgelegt, sonst entsteht automatisch ein neuer Eintrag. Danach zeigt eine Zusammenfassung, was passiert ist, mit „Öffnen" und **„Alles rückgängig"**.

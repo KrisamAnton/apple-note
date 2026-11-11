@@ -10262,7 +10262,9 @@
     rows.forEach((r, i) => {
       r.gap = i > 0 && r.y - rows[i - 1].y > median * 1.8;
     });
-    return { rows, flat: rows.map((r) => r.segs.map((s) => s.s).join(' ')).join('\n') };
+    const heights = rows.flatMap((r) => r.segs.map((sg) => sg.h || 0)).filter((h) => h > 0).sort((a, b) => a - b);
+    const medianH = heights.length ? heights[Math.floor(heights.length / 2)] : 0;
+    return { rows, medianH, flat: rows.map((r) => r.segs.map((s) => s.s).join(' ')).join('\n') };
   }
 
   function docFromText(text) {
@@ -10300,7 +10302,7 @@
             line = { y, items: [] };
             lines.push(line);
           }
-          line.items.push({ x, w: it.width || it.str.length * 4, s: it.str });
+          line.items.push({ x, w: it.width || it.str.length * 4, s: it.str, h: Math.abs(it.transform[3]) || it.height || 0 });
         }
         lines.sort((a, b) => a.y - b.y);
         for (const line of lines) {
@@ -10311,8 +10313,9 @@
             if (last && it.x - (last.x + last.w) <= 12) {
               last.s += (it.x - (last.x + last.w) > 1.5 ? ' ' : '') + it.s;
               last.w = it.x + it.w - last.x;
+              last.h = Math.max(last.h || 0, it.h || 0);
             } else {
-              segs.push({ x: it.x, w: it.w, s: it.s });
+              segs.push({ x: it.x, w: it.w, s: it.s, h: it.h || 0 });
             }
           }
           for (const s of segs) s.s = s.s.replace(/\s+/g, ' ').trim();
@@ -10506,14 +10509,16 @@
   function findDocTime(ctxs) {
     let best = null;
     for (const c of ctxs) {
-      const re = /\b(\d{1,2})[:.](\d{2})\s*(?:Uhr|h)\b|\bum\s+(\d{1,2})[:.](\d{2})\b/gi;
+      const re = /\b(\d{1,2})[:.](\d{2})\s*(?:Uhr|h)\b|\bum\s+(\d{1,2})[:.](\d{2})\b|\b\d{1,2}\.\d{1,2}\.(?:\d{4}|\d{2}),?\s+(?:um\s+)?(\d{1,2}):(\d{2})\b/gi;
       let m;
       while ((m = re.exec(c.seg.s))) {
-        const hh = Number(m[1] || m[3]);
-        const mm = Number(m[2] || m[4]);
+        const hh = Number(m[1] || m[3] || m[5]);
+        const mm = Number(m[2] || m[4] || m[6]);
         if (hh > 23 || mm > 59) continue;
         const ctx = foldText(`${c.seg.s.slice(0, m.index)} ${c.prev} ${c.up}`);
         let score = 0;
+        if (m[5] !== undefined) score += 3;
+        if (['bestell', 'buchung', 'erstellt', 'gedruckt', 'storn'].some((w) => ctx.includes(w))) score -= 4;
         if (ctx.includes('beginn')) score += 3;
         if (ctx.includes('einlass')) score -= 1;
         if (ctx.includes('vorauss')) score -= 3;
@@ -10566,29 +10571,58 @@
   function findDocTitle(doc, ctxs, fileName) {
     // 1. "Die Unterkunft X erwartet Sie" / "Ihre Buchung im X"
     const hotel = /Unterkunft\s+(.+?)\s+erwartet/i.exec(doc.flat);
-    if (hotel && titleLike(hotel[1])) return hotel[1].trim();
+    if (hotel && titleLike(hotel[1])) return prettyTitle(hotel[1]);
     // 2. Zeile nach "... präsentiert"
     for (let ri = 0; ri < doc.rows.length; ri += 1) {
       for (const seg of doc.rows[ri].segs) {
         if (!/pr[aä]sentiert\s*:?$/i.test(seg.s)) continue;
         const nx = segAt(doc, ri, seg, 1, 160, true, true);
-        if (nx && nx.seg && titleLike(nx.seg.s)) return nx.seg.s.trim();
+        if (nx && nx.seg && titleLike(nx.seg.s)) return prettyTitle(nx.seg.s);
       }
     }
     // 3. Beschriftung "Veranstaltung:" / "Event:" / "Titel:"
-    const labeled = valueAfterLabel(doc, 'veranstaltung|event|titel|show|konzert', (v) => titleLike(v));
-    if (labeled) return labeled;
+    const labeled = valueAfterLabel(doc, 'veranstaltung|event|titel', (v) => titleLike(v));
+    if (labeled) return prettyTitle(labeled);
     // 4. Zeile direkt über "Einlass / Beginn + Datum"
     for (const c of ctxs) {
       if (!/^(einlass|beginn|beginnt|datum)\b/i.test(c.seg.s.trim())) continue;
       if (!parseDatesInString(`${c.seg.s} ${c.next} ${c.down}`).length) continue;
       let cur = segAt(doc, c.ri, c.seg, -1, DOC_COL_TOL, false);
       for (let k = 0; k < 2 && cur && cur.seg; k += 1) {
-        if (titleLike(cur.seg.s)) return cur.seg.s.trim();
+        if (titleLike(cur.seg.s)) return prettyTitle(cur.seg.s);
         cur = segAt(doc, cur.ri, cur.seg, -1, DOC_COL_TOL, false);
       }
     }
+    // 5. Zeile direkt über der Datumszeile ("Samstag, 14.11.2026 19:30")
+    for (const c of ctxs) {
+      const s = c.seg.s.trim();
+      if (s.length > 45 || !parseDatesInString(s).length) continue;
+      const cur = segAt(doc, c.ri, c.seg, -1, 120, true, true);
+      if (cur && cur.seg && titleLike(cur.seg.s)) return prettyTitle(cur.seg.s);
+    }
+    // 6. größte Schrift im Dokument
+    if (doc.medianH) {
+      let best = null;
+      for (const c of ctxs) {
+        if ((c.seg.h || 0) < doc.medianH * 1.25 || !titleLike(c.seg.s)) continue;
+        if (!best || c.seg.h > best.seg.h) best = c;
+      }
+      if (best) return prettyTitle(best.seg.s);
+    }
     return titleFromFileName(fileName);
+  }
+
+  const SMALL_WORDS = new Set(['und', 'das', 'die', 'der', 'den', 'dem', 'des', 'von', 'vom', 'im', 'in', 'am', 'an', 'auf', 'für', 'zum', 'zur', 'mit', 'the', 'of', 'and', 'a']);
+
+  // GROSSGESCHRIEBENE Titel in normale Schreibweise bringen ("DIE SCHÖNE UND DAS BIEST" -> "Die Schöne und das Biest").
+  function prettyTitle(str) {
+    const t = String(str).replace(/\s+/g, ' ').trim();
+    if (t !== t.toUpperCase() || t === t.toLowerCase() || t.split(' ').length < 2) return t;
+    return t
+      .toLowerCase()
+      .split(' ')
+      .map((w, i) => (i > 0 && SMALL_WORDS.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)))
+      .join(' ');
   }
 
   function findDocPlace(doc) {
@@ -10599,6 +10633,7 @@
     const compose = (lines) => {
       const city = lines.map(cityOf).find(Boolean) || '';
       const name = lines.find((l) => !cityOf(l)) || '';
+      if (city && name && foldText(name).includes(foldText(city))) return name;
       return [name, city].filter(Boolean).join(', ');
     };
     // a) Beschriftung "Veranstaltungsort" mit Zeilen darunter
@@ -10625,6 +10660,9 @@
         return compose([name, seg.s].filter(Boolean));
       }
     }
+    // c0) "... im Raimund Theater"
+    const venue = /\b(?:im|in der|am)\s+((?:[A-ZÄÖÜ][\wäöüß-]+\s+){0,3}(?:Theater|Halle|Stadion|Arena|Konzerthaus|Oper|Stadthalle|Saal))\b/.exec(doc.flat);
+    if (venue) return venue[1].trim();
     // c) "Ihre Buchung in Portorož ist bestätigt"
     const m = /Buchung\s+in\s+([A-ZÄÖÜ][^\s,.]+(?:\s[A-ZÄÖÜ][^\s,.]+)?)\s+ist/i.exec(doc.flat);
     return m ? m[1].trim() : '';
@@ -10632,14 +10670,31 @@
 
   const ORDER_FIELD_RE = /buchung|bestell|referenz|reserv|best[aä]tig|vorgang|auftrag/i;
 
-  function findOrderNumber(doc) {
+  // Nummer vor dem Bindestrich einer Ticketnummer ("2313302972319-3") bzw. eine lange
+  // Nummer, die im Dokument zweimal vorkommt.
+  function ticketIdOf(text) {
+    const m = /(\d{9,15})\s*-\s*(\d{1,3})\b/.exec(text);
+    return m ? { base: m[1], full: `${m[1]}-${m[2]}` } : null;
+  }
+
+  function findOrderNumber(doc, fileName) {
     const ok = (v) => /^[A-Za-z0-9][A-Za-z0-9\-\/]{3,24}$/.test(v) && /\d/.test(v);
+    const labeled = findOrderLabeled(doc, ok);
+    if (labeled) return labeled;
+    const t = ticketIdOf(doc.flat) || ticketIdOf(fileName || '');
+    if (t) return t.base;
+    const counts = {};
+    for (const n of doc.flat.match(/\b\d{10,15}\b/g) || []) counts[n] = (counts[n] || 0) + 1;
+    return Object.keys(counts).find((n) => counts[n] >= 2) || '';
+  }
+
+  function findOrderLabeled(doc, ok) {
     return valueAfterLabel(doc, '(?:buchungs|bestell|referenz|reservierungs|best[aä]tigungs|auftrags|vorgangs)[\\s-]*(?:nummer|nr\\.?|code)', ok, true);
   }
 
   const KIND_SYNONYMS = {
     konzert: ['konzert', 'festival', 'tournee', 'tour ', 'open air', 'concert', 'live in', 'stehplatz', 'support:'],
-    musical: ['musical'],
+    musical: ['musical', 'vereinigte buhnen', 'raimund theater', 'ronacher', 'theater an der wien'],
     theater: ['theater', 'schauspiel', 'oper ', 'ballett', 'kabarett'],
     urlaub: ['unterkunft', 'hotel', 'apartment', 'ferienwohnung', 'booking.com', 'resort', 'ubernachtung'],
     ausflug: ['ausflug', 'therme', 'tierpark', 'museum'],
@@ -10696,7 +10751,7 @@
       if (titleField && f.id === titleField.id) v = findDocTitle(doc, ctxs, fileName);
       else if (/^(ort|veranstaltungsort|spielort|location)\b/.test(name)) v = findDocPlace(doc);
       else if (/(uhrzeit|beginn|zeit)\b/.test(name) && !/datum/.test(name)) v = findDocTime(ctxs);
-      else if (ORDER_FIELD_RE.test(name) && (f.identifier || /nummer|nr\b/.test(name))) v = findOrderNumber(doc);
+      else if (ORDER_FIELD_RE.test(name) && (f.identifier || /nummer|nr\b/.test(name))) v = findOrderNumber(doc, fileName);
       else if (/^(bezahlt mit|bezahlt|zahlungsart|zahlungsmittel|zahlung)$/.test(name)) v = valueAfterLabel(doc, 'zahlungsart|bezahlt mit|zahlungsmittel');
       if (!v && f.identifier) v = findIdentifierValue(f, doc.flat);
       if (!v && !(titleField && f.id === titleField.id)) v = valueAfterLabel(doc, reEsc(f.name), (x) => x.length < 80);
@@ -10713,7 +10768,8 @@
       });
       if (opt) values[f.id] = opt;
     }
-    return { values, dates: dates.map((d) => d.iso), flat: doc.flat };
+    const tid = ticketIdOf(doc.flat) || ticketIdOf(fileName || '');
+    return { values, dates: dates.map((d) => d.iso), flat: doc.flat, ticketKey: tid ? tid.full : '' };
   }
 
   const TITLE_STOP_WORDS = new Set(['ticket', 'tickets', 'karte', 'karten', 'rechnung', 'polizze', 'beleg', 'dokument', 'wien', 'oesterreich', 'austria', 'mit', 'und', 'festival', 'musical', 'konzert', 'hotel']);
@@ -10912,6 +10968,8 @@
       } else {
         rec.objects = (rec.objects || []).filter((o) => o.id !== l.objId);
         for (const [fid, old] of Object.entries(l.prevValues || {})) rec.record.values[fid] = old;
+        if (l.prevParts) rec.record.parts = l.prevParts;
+        else delete rec.record.parts;
         applyRecordTitle(rec);
       }
     }
@@ -10970,18 +11028,36 @@
     });
   }
 
+  function totalMoneyField(collection) {
+    return collectionFields(collection).find((f) => f.type === 'money' && /preis|gesamt|summe|kosten/i.test(f.name)) || null;
+  }
+
+  function ticketCountField(collection) {
+    return collectionFields(collection).find((f) => f.type === 'number' && /anzahl/i.test(f.name)) || null;
+  }
+
   async function placeDocument(collection, file, analysis, choice) {
     let rec;
     let created = false;
+    let prevParts = null;
     const prevValues = {};
     if (choice.targetId === '__new__') {
       const values = {};
       for (const [k, v] of Object.entries(choice.values)) if (!isEmptyValue(v)) values[k] = v;
       rec = createRecord(collection, values);
       created = true;
+      const mf = totalMoneyField(collection);
+      if (mf && analysis.ticketKey && !isEmptyValue(values[mf.id])) {
+        rec.record.parts = [{ key: analysis.ticketKey, amount: values[mf.id] }];
+        const cf = ticketCountField(collection);
+        if (cf && isEmptyValue(values[cf.id])) rec.record.values[cf.id] = 1;
+      }
     } else {
       rec = findNote(choice.targetId);
       if (!rec) return null;
+      const mf = totalMoneyField(collection);
+      const hadMoney = !!mf && !isEmptyValue(rec.record.values[mf.id]);
+      prevParts = rec.record.parts ? JSON.parse(JSON.stringify(rec.record.parts)) : null;
       if (choice.fill) {
         for (const f of collectionFields(collection)) {
           const cur = rec.record.values[f.id];
@@ -10993,11 +11069,38 @@
         }
         applyRecordTitle(rec);
       }
+      // Mehrere Tickets zum selben Eintrag: Gesamtpreis und Anzahl mitzählen
+      const amount = mf ? analysis.values[mf.id] : null;
+      const key = analysis.ticketKey;
+      if (mf && key && amount != null && amount !== '') {
+        const cf = ticketCountField(collection);
+        const parts = rec.record.parts;
+        if (parts) {
+          if (!parts.some((pt) => pt.key === key)) {
+            const sum = parts.reduce((t, pt) => t + (Number(pt.amount) || 0), 0);
+            if (Math.abs((Number(rec.record.values[mf.id]) || 0) - sum) < 0.005) {
+              if (!(mf.id in prevValues)) prevValues[mf.id] = rec.record.values[mf.id];
+              rec.record.values[mf.id] = Math.round((sum + Number(amount)) * 100) / 100;
+              parts.push({ key, amount });
+              if (cf && (isEmptyValue(rec.record.values[cf.id]) || rec.record.values[cf.id] === parts.length - 1)) {
+                if (!(cf.id in prevValues)) prevValues[cf.id] = rec.record.values[cf.id];
+                rec.record.values[cf.id] = parts.length;
+              }
+            }
+          }
+        } else if (!hadMoney) {
+          rec.record.parts = [{ key, amount }];
+          if (cf && isEmptyValue(rec.record.values[cf.id])) {
+            prevValues[cf.id] = '';
+            rec.record.values[cf.id] = 1;
+          }
+        }
+      }
     }
     const objId = await addAttachmentToNote(rec, file, choice.mode);
     rec.updatedAt = Date.now();
     schedulePersist();
-    return { recordId: rec.id, title: rec.title, created, objId, prevValues };
+    return { recordId: rec.id, title: rec.title, created, objId, prevValues, prevParts };
   }
 
   // Legt eine Datei auf einer (nicht geöffneten) Seite ab - wie das Hineinziehen auf
