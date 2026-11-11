@@ -5430,3 +5430,16 @@ button.journal-tag:hover {
 .summary-error {
   border-color: #d33;
 }
+
+/* Feld-Fenster darf nie die ganze Seite verdrängen: eigener Bildlauf */
+.record-panel {
+  flex: 0 0 auto;
+  max-height: 45vh;
+  overflow-y: auto;
+}
+
+@media (max-width: 780px) {
+  .record-panel-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

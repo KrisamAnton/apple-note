@@ -4,6 +4,11 @@ Hier steht, was wann geändert wurde (neueste Einträge oben). Die Versionsnumme
 steht klein neben dem Benutzernamen; bei jeder Änderung erhöht sich die letzte
 Zahl (1.7.1 → 1.7.2 → …).
 
+## 1.7.29 - 11.11.2026
+
+- Sammlungen am Handy: Das Angaben-Fenster oben im Eintrag ist am Handy zuerst **eingeklappt** („Angaben einblenden"), damit man die abgelegten Dateien direkt sieht. Ist es aufgeklappt, lässt es sich **innerhalb des Fensters scrollen** und nimmt höchstens knapp die halbe Bildschirmhöhe ein, die Seite mit den Dateien darunter bleibt sichtbar. Die Felder stehen am Handy in zwei Spalten.
+- Der Haken in der Sammlung heißt jetzt „Jedes Dokument vor dem Ablegen manuell prüfen (nicht angehakt: KrisNote legt alles automatisch ab)".
+
 ## 1.7.28 - 11.11.2026
 
 - Sammlungen: Der **Titel wird jetzt aus dem Dokument selbst erkannt**, nicht mehr nur aus dem Dateinamen. Du musst Dateien wie „TICKET-2313302972319-3.pdf" nicht umbenennen. KrisNote nimmt z. B. die Zeile über „Samstag, 14.11.2026 19:30" oder die größte Schrift und macht aus GROSSBUCHSTABEN eine normale Schreibweise („Die Schöne und das Biest").

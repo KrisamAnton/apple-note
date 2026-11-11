@@ -9690,7 +9690,8 @@
 
   // ----- Feld-Fenster oben in einem Eintrag -----
 
-  let recordPanelCollapsed = false;
+  // Am Handy zunächst eingeklappt, damit die abgelegten Dateien darunter sichtbar sind.
+  let recordPanelCollapsed = window.matchMedia && window.matchMedia('(max-width: 780px)').matches;
 
   function renderRecordPanel(note) {
     const panel = el.recordPanel;
@@ -10060,7 +10061,7 @@
     reviewCheck.type = 'checkbox';
     reviewCheck.checked = collReviewEnabled();
     reviewCheck.addEventListener('change', () => setCollReviewEnabled(reviewCheck.checked));
-    reviewLabel.append(reviewCheck, document.createTextNode(' Jedes Dokument vor dem Ablegen einzeln prüfen (sonst legt KrisNote alles automatisch ab)'));
+    reviewLabel.append(reviewCheck, document.createTextNode(' Jedes Dokument vor dem Ablegen manuell prüfen (nicht angehakt: KrisNote legt alles automatisch ab)'));
     inner.appendChild(reviewLabel);
 
     // Ablagefläche für Dokumente
