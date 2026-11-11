@@ -4,6 +4,13 @@ Hier steht, was wann geändert wurde (neueste Einträge oben). Die Versionsnumme
 steht klein neben dem Benutzernamen; bei jeder Änderung erhöht sich die letzte
 Zahl (1.7.1 → 1.7.2 → …).
 
+## 1.7.27 - 11.11.2026
+
+- Sammlungen: **vollautomatisches Ablegen**. Du kannst jetzt mehrere Dokumente auf einmal auf eine Sammlung ziehen. KrisNote arbeitet sie der Reihe nach ab, liest jedes Dokument, füllt die Angaben aus (Datum, Uhrzeit, Titel, Ort, Preis, Buchungs-/Bestellnummer, Art, Zahlungsart) und entscheidet selbst: gehört es zu einem schon vorhandenen Eintrag (gleiche Buchungsnummer, gleicher Titel, gleiches Datum und Ort), wird es dort abgelegt, sonst entsteht automatisch ein neuer Eintrag. Danach zeigt eine Zusammenfassung, was passiert ist, mit „Öffnen" und **„Alles rückgängig"**.
+- Wer lieber jedes Dokument vorher prüfen möchte, hakt in der Sammlung „Jedes Dokument vor dem Ablegen einzeln prüfen" an.
+- Besseres Auslesen: Tickets mit mehreren Spalten (z. B. bringticket, ticketdirect), Buchungsbestätigungen (z. B. Booking.com, auch ohne Jahreszahl wie „Fr., 23. Okt."), Datumsformate wie „24.Okt.26", Titel, Veranstaltungsort mit Ort, Beginn statt Einlass.
+- Behoben: Wenn der Server aus einem PDF keinen Text lesen konnte, wurde gar nichts erkannt. Jetzt liest KrisNote den Text von PDFs zusätzlich direkt im Browser.
+
 ## 1.7.26 - 11.11.2026
 
 - Neu: **Sammlungen**. Über das „+" in der Notizliste gibt es jetzt „Neue Sammlung". Eine Sammlung verwaltet gleichartige Einträge, z. B. Konzert-/Musicalkarten und Reisen, Versicherungen oder Rechnungen. Du wählst eine Vorlage (Veranstaltungen & Reisen, Versicherungen, Rechnungen & Garantien oder leer) und legst die **Felder selbst fest**: Text, Datum, Betrag, Zahl, Auswahl oder Ja/Nein. Die Felder lassen sich jederzeit unter „Felder bearbeiten" ändern, umsortieren und löschen.

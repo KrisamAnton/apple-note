@@ -10054,12 +10054,20 @@
     });
     bar.append(addBtn, schemaBtn, search);
     inner.appendChild(bar);
+    const reviewLabel = document.createElement('label');
+    reviewLabel.className = 'collection-review';
+    const reviewCheck = document.createElement('input');
+    reviewCheck.type = 'checkbox';
+    reviewCheck.checked = collReviewEnabled();
+    reviewCheck.addEventListener('change', () => setCollReviewEnabled(reviewCheck.checked));
+    reviewLabel.append(reviewCheck, document.createTextNode(' Jedes Dokument vor dem Ablegen einzeln prüfen (sonst legt KrisNote alles automatisch ab)'));
+    inner.appendChild(reviewLabel);
 
     // Ablagefläche für Dokumente
     const drop = document.createElement('div');
     drop.className = 'collection-drop';
     drop.tabIndex = 0;
-    drop.innerHTML = '<strong>Dokument hierher ziehen</strong><span>PDF, Bild oder Datei: KrisNote liest den Text, erkennt, zu welchem Eintrag es gehört, und schlägt sonst einen neuen Eintrag vor. (Oder hier klicken.)</span>';
+    drop.innerHTML = '<strong>Dokumente hierher ziehen (auch mehrere auf einmal)</strong><span>KrisNote liest jedes Dokument, füllt die Angaben aus und legt es beim passenden Eintrag ab - oder legt automatisch einen neuen Eintrag an. Danach kannst du alles ansehen oder rückgängig machen. (Oder hier klicken.)</span>';
     const pick = () => {
       const input = document.createElement('input');
       input.type = 'file';
@@ -10231,35 +10239,208 @@
 
   // ----- Dokumente erkennen und ablegen -----
 
+  // ----- Dokument lesen: Zeilen aus Textstücken mit Position -----
+  //
+  // Ein Dokument wird als Liste von Zeilen mit Textstücken (Segmenten) dargestellt:
+  // { rows: [{ y, gap, segs: [{ x, w, s }] }], flat }. Bei PDFs mit Text kommt die
+  // echte Position aus pdf.js, sonst wird sie aus dem gelesenen Text abgeschätzt.
+  // So lässt sich "unter der Beschriftung" bzw. "neben der Beschriftung" finden,
+  // auch bei Tickets mit mehreren Spalten.
+
+  const DOC_COL_TOL = 28;
+
+  const reEsc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  function finishDoc(rows) {
+    const diffs = [];
+    for (let i = 1; i < rows.length; i += 1) {
+      const d = rows[i].y - rows[i - 1].y;
+      if (d > 0 && d < 200) diffs.push(d);
+    }
+    diffs.sort((a, b) => a - b);
+    const median = diffs.length ? diffs[Math.floor(diffs.length / 2)] : 1;
+    rows.forEach((r, i) => {
+      r.gap = i > 0 && r.y - rows[i - 1].y > median * 1.8;
+    });
+    return { rows, flat: rows.map((r) => r.segs.map((s) => s.s).join(' ')).join('\n') };
+  }
+
+  function docFromText(text) {
+    const rows = [];
+    String(text || '').split(/\r?\n/).forEach((line, i) => {
+      if (!line.trim()) return;
+      const segs = [];
+      const re = /\S+(?: {1,2}\S+)*/g;
+      let m;
+      while ((m = re.exec(line))) segs.push({ x: m.index * 5, w: m[0].length * 5, s: m[0] });
+      if (segs.length) rows.push({ y: i, segs });
+    });
+    return finishDoc(rows);
+  }
+
+  // Text samt Position aus einer PDF-Datei mit pdf.js (funktioniert auch, wenn der
+  // Server keinen Text liefern kann).
+  async function docFromPdfClient(file) {
+    try {
+      const pdfjsLib = await loadPdfJs();
+      const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+      const rows = [];
+      for (let p = 1; p <= Math.min(pdf.numPages, 4); p += 1) {
+        const page = await pdf.getPage(p);
+        const view = page.view;
+        const height = view[3] - view[1];
+        const content = await page.getTextContent();
+        const lines = [];
+        for (const it of content.items) {
+          if (!it.str || !it.str.trim()) continue;
+          const x = it.transform[4];
+          const y = p * 10000 + (height - it.transform[5]);
+          let line = lines.find((l) => Math.abs(l.y - y) < 3);
+          if (!line) {
+            line = { y, items: [] };
+            lines.push(line);
+          }
+          line.items.push({ x, w: it.width || it.str.length * 4, s: it.str });
+        }
+        lines.sort((a, b) => a.y - b.y);
+        for (const line of lines) {
+          line.items.sort((a, b) => a.x - b.x);
+          const segs = [];
+          for (const it of line.items) {
+            const last = segs[segs.length - 1];
+            if (last && it.x - (last.x + last.w) <= 12) {
+              last.s += (it.x - (last.x + last.w) > 1.5 ? ' ' : '') + it.s;
+              last.w = it.x + it.w - last.x;
+            } else {
+              segs.push({ x: it.x, w: it.w, s: it.s });
+            }
+          }
+          for (const s of segs) s.s = s.s.replace(/\s+/g, ' ').trim();
+          const clean = segs.filter((s) => s.s);
+          if (clean.length) rows.push({ y: line.y, segs: clean });
+        }
+      }
+      return finishDoc(rows);
+    } catch (err) {
+      console.warn('pdf.js konnte keinen Text lesen:', err);
+      return null;
+    }
+  }
+
+  const segCenter = (s) => s.x + s.w / 2;
+
+  function segAt(doc, ri, seg, delta, tol, centered, ignoreGap) {
+    const row = doc.rows[ri + delta];
+    if (!row) return null;
+    // Beim Nachbarn darunter: gap-Markierung gehört zur unteren Zeile.
+    if (!ignoreGap && delta > 0 && row.gap) return { gapped: true, ri: ri + delta, seg: null };
+    if (!ignoreGap && delta < 0 && doc.rows[ri].gap) return { gapped: true, ri: ri + delta, seg: null };
+    let best = null;
+    let bd = Infinity;
+    for (const s of row.segs) {
+      const d = centered ? Math.abs(segCenter(s) - segCenter(seg)) : Math.abs(s.x - seg.x);
+      if (d < bd) {
+        bd = d;
+        best = s;
+      }
+    }
+    return best && bd <= tol ? { ri: ri + delta, seg: best } : null;
+  }
+
+  const LABELISH_RE = /^(buchungsdaten|kundendaten|veranstalter|verk[aä]ufer|preis|kategorie|referenznummer|bestellnummer|eingang|seite|ticketnummer|zahlungsart|veranstaltungsort|einlass|beginn|datum|uhrzeit|name|adresse)\b/i;
+
+  function labelish(s) {
+    return /:\s*$/.test(s) || LABELISH_RE.test(s);
+  }
+
+  function columnBelow(doc, ri, seg, max) {
+    const out = [];
+    let cur = { ri, seg };
+    while (out.length < max) {
+      const nx = segAt(doc, cur.ri, cur.seg, 1, DOC_COL_TOL, false);
+      if (!nx || nx.gapped || labelish(nx.seg.s)) break;
+      out.push(nx.seg.s);
+      cur = nx;
+    }
+    return out;
+  }
+
+  // Wert zu einer Beschriftung: Rest im selben Textstück ("Nummer: 123"), das nächste
+  // Stück in derselben Zeile oder das Stück direkt darunter.
+  function valueAfterLabel(doc, labelSrc, valueOk, anywhere) {
+    const re = new RegExp(`${anywhere ? '(?:^|[\\s(,;])' : '^'}(?:${labelSrc})(?![A-Za-zÄÖÜäöüß])\\s*[:#]?\\s*(.*)$`, 'i');
+    const ok = valueOk || ((v) => v.length > 0);
+    for (let ri = 0; ri < doc.rows.length; ri += 1) {
+      const row = doc.rows[ri];
+      for (let si = 0; si < row.segs.length; si += 1) {
+        const m = re.exec(row.segs[si].s);
+        if (!m) continue;
+        const rest = (m[m.length - 1] || '').trim();
+        if (rest && ok(rest)) return rest;
+        const next = row.segs[si + 1];
+        if (next && ok(next.s.trim())) return next.s.trim();
+        const below = segAt(doc, ri, row.segs[si], 1, 40, false);
+        if (below && below.seg && ok(below.seg.s.trim())) return below.seg.s.trim();
+      }
+    }
+    return '';
+  }
+
+  // ----- Datum, Uhrzeit, Beträge -----
+
   const MONTH_NAMES_DE = {
     januar: 1, jänner: 1, jaenner: 1, februar: 2, märz: 3, maerz: 3, april: 4, mai: 5, juni: 6, juli: 7,
     august: 8, september: 9, oktober: 10, november: 11, dezember: 12,
     jan: 1, feb: 2, mär: 3, mrz: 3, apr: 4, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, okt: 10, nov: 11, dez: 12,
   };
+  const WEEKDAY_NUM = { so: 0, mo: 1, di: 2, mi: 3, do: 4, fr: 5, sa: 6 };
 
-  function findDatesInText(text) {
+  function guessYear(day, month, weekday) {
+    const today = new Date();
+    const y0 = today.getFullYear();
+    const candidates = [y0 - 1, y0, y0 + 1, y0 + 2];
+    if (weekday != null) {
+      const fit = candidates.filter((y) => new Date(y, month - 1, day).getDay() === weekday);
+      const recent = fit.find((y) => new Date(y, month - 1, day).getTime() >= today.getTime() - 60 * 864e5);
+      if (recent) return recent;
+      if (fit.length) return fit[fit.length - 1];
+    }
+    const next = candidates.find((y) => new Date(y, month - 1, day).getTime() >= today.getTime() - 30 * 864e5);
+    return next || y0;
+  }
+
+  function parseDatesInString(text) {
     const found = [];
-    const push = (y, m, d, index) => {
+    const push = (y, m, d, index, end) => {
       y = Number(y);
       m = Number(m);
       d = Number(d);
       if (y < 100) y += 2000;
       if (m < 1 || m > 12 || d < 1 || d > 31 || y < 1990 || y > 2100) return;
-      found.push({ iso: `${y}-${pad2(m)}-${pad2(d)}`, index });
+      found.push({ iso: `${y}-${pad2(m)}-${pad2(d)}`, index, end });
     };
     let m;
-    const re1 = /\b(\d{1,2})\.\s?(\d{1,2})\.\s?(\d{4}|\d{2})\b/g;
-    while ((m = re1.exec(text))) push(m[3], m[2], m[1], m.index);
+    const re1 = /\b(\d{1,2})\.\s?(\d{1,2})\.\s?(\d{4}|\d{2})(?![\d:])/g;
+    while ((m = re1.exec(text))) push(m[3], m[2], m[1], m.index, m.index + m[0].length);
     const re2 = /\b(\d{4})-(\d{2})-(\d{2})\b/g;
-    while ((m = re2.exec(text))) push(m[1], m[2], m[3], m.index);
+    while ((m = re2.exec(text))) push(m[1], m[2], m[3], m.index, m.index + m[0].length);
     const names = Object.keys(MONTH_NAMES_DE).sort((a, b) => b.length - a.length).join('|');
-    const re3 = new RegExp(`\\b(\\d{1,2})\\.?\\s+(${names})\\.?,?\\s+(\\d{4})\\b`, 'gi');
-    while ((m = re3.exec(text))) push(m[3], MONTH_NAMES_DE[m[2].toLowerCase()], m[1], m.index);
+    const re3 = new RegExp(`\\b(\\d{1,2})\\s*\\.?\\s*(${names})\\.?(?:\\s*,?\\s*(\\d{4}|\\d{2}(?![\\d:])))?(?![A-Za-zäöüÄÖÜ])`, 'gi');
+    while ((m = re3.exec(text))) {
+      const month = MONTH_NAMES_DE[m[2].toLowerCase()];
+      let year = m[3];
+      if (!year) {
+        const before = text.slice(Math.max(0, m.index - 14), m.index);
+        const wd = /\b(montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag|mo|di|mi|do|fr|sa|so)\.?,?\s*$/i.exec(before);
+        year = guessYear(Number(m[1]), month, wd ? WEEKDAY_NUM[wd[1].slice(0, 2).toLowerCase()] : null);
+      }
+      push(year, month, m[1], m.index, m.index + m[0].length);
+    }
     found.sort((a, b) => a.index - b.index);
     return found;
   }
 
-  function findAmountsInText(text) {
+  function amountsInString(text) {
     const found = [];
     const num = '-?\\d{1,3}(?:\\.\\d{3})*,\\d{2}|-?\\d+,\\d{2}|\\d+\\.\\d{2}';
     const re = new RegExp(`(?:€|EUR)\\s*(${num})|(${num})\\s*(?:€|EUR)`, 'gi');
@@ -10271,14 +10452,614 @@
     return found;
   }
 
+  // Alle Textstücke mit Umgebung (Text davor, Stück links, Stück darüber) - für die Bewertung.
+  function docContexts(doc) {
+    const out = [];
+    doc.rows.forEach((row, ri) => {
+      row.segs.forEach((seg, si) => {
+        const prev = si > 0 ? row.segs[si - 1].s : '';
+        const above = segAt(doc, ri, seg, -1, 40, false);
+        const aboveC = segAt(doc, ri, seg, -1, 60, true);
+        const up = (above && above.seg ? above.seg.s : '') || (aboveC && aboveC.seg ? aboveC.seg.s : '');
+        const next = row.segs[si + 1] ? row.segs[si + 1].s : '';
+        const below = segAt(doc, ri, seg, 1, 70, true);
+        out.push({ ri, si, seg, prev, up, next, down: below && below.seg ? below.seg.s : '' });
+      });
+    });
+    return out;
+  }
+
+  const DATE_POS = ['beginn', 'einlass', 'datum', 'termin', 'anreise', 'check-in', 'check in', 'findet statt', 'veranstaltung', 'unterkunft', 'erwartet', 'konzert', 'gultig am', 'faellig', 'falligkeit'];
+  const DATE_NEG = ['bestell', 'rechnungsdatum', 'ausgestellt', 'gebucht', 'buchungsdatum', 'bezahlt', 'storn', 'kostenfrei', 'gedruckt', 'erstellt', 'geboren', 'zahlung', 'bis zum'];
+  const WEEKDAY_WORD_RE = /\b(montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag|mo|di|mi|do|fr|sa|so)\.?,?\s*$/i;
+
+  function findDocDates(doc, ctxs) {
+    const out = [];
+    let order = 0;
+    for (const c of ctxs) {
+      for (const d of parseDatesInString(c.seg.s)) {
+        const before = c.seg.s.slice(0, d.index);
+        const after = c.seg.s.slice(d.end, d.end + 50);
+        const ctx = foldText(`${before} ${c.prev} ${c.up} ${after}`);
+        let score = 0;
+        for (const w of DATE_POS) if (ctx.includes(w)) score += 2;
+        for (const w of DATE_NEG) if (ctx.includes(w)) score -= 4;
+        if (WEEKDAY_WORD_RE.test(before) || WEEKDAY_WORD_RE.test(c.up) || WEEKDAY_WORD_RE.test(c.prev)) score += 3;
+        out.push({ iso: d.iso, ctx, score, order: order++ });
+      }
+    }
+    return out;
+  }
+
+  function bestDate(dates, today) {
+    if (!dates.length) return null;
+    const sorted = [...dates].sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      const fa = a.iso >= today ? 0 : 1;
+      const fb = b.iso >= today ? 0 : 1;
+      if (fa !== fb) return fa - fb;
+      return a.order - b.order;
+    });
+    return sorted[0];
+  }
+
+  function findDocTime(ctxs) {
+    let best = null;
+    for (const c of ctxs) {
+      const re = /\b(\d{1,2})[:.](\d{2})\s*(?:Uhr|h)\b|\bum\s+(\d{1,2})[:.](\d{2})\b/gi;
+      let m;
+      while ((m = re.exec(c.seg.s))) {
+        const hh = Number(m[1] || m[3]);
+        const mm = Number(m[2] || m[4]);
+        if (hh > 23 || mm > 59) continue;
+        const ctx = foldText(`${c.seg.s.slice(0, m.index)} ${c.prev} ${c.up}`);
+        let score = 0;
+        if (ctx.includes('beginn')) score += 3;
+        if (ctx.includes('einlass')) score -= 1;
+        if (ctx.includes('vorauss')) score -= 3;
+        if (ctx.includes('ende') || ctx.includes('bis ')) score -= 2;
+        if (parseDatesInString(`${c.up} ${c.prev} ${c.seg.s.slice(0, m.index)}`).length) score += 2;
+        if (!best || score > best.score) best = { value: `${pad2(hh)}:${pad2(mm)}`, score };
+      }
+    }
+    return best && best.score >= 0 ? best.value : '';
+  }
+
+  function findDocAmounts(ctxs) {
+    const out = [];
+    ctxs.forEach((c, i) => {
+      const add = (value, index) => {
+        out.push({ value, ctx: foldText(`${c.seg.s.slice(0, index)} ${c.prev} ${c.up}`) });
+      };
+      for (const a of amountsInString(c.seg.s)) add(a.value, a.index);
+      if (/^-?\d{1,3}(?:\.\d{3})*,\d{2}$/.test(c.seg.s.trim())) {
+        const nextSeg = (ctxs[i + 1] && ctxs[i + 1].seg.s) || '';
+        if (/^(EUR|€)$/i.test(nextSeg.trim())) add(parseDecimal(c.seg.s), 0);
+      }
+    });
+    return out;
+  }
+
+  // ----- Titel, Ort, Nummern -----
+
+  const TITLE_BAD_RE = /^(buchungsdaten|kundendaten|veranstalter|verk[aä]ufer|preis|kategorie|referenznummer|bestellnummer|eingang|seite|ticket|tickets|ticketnummer|zahlungsart|rechnung|beleg|polizze|nutzungs|allgemeine|hinweis|datum|uhrzeit|veranstaltungsort|einlass|beginn|support|stehplatz|sitzplatz|normalpreis|vielen dank|ihre )/i;
+
+  function titleLike(str) {
+    const s = String(str || '').trim();
+    if (s.length < 3 || s.length > 80) return false;
+    if (!/[A-Za-zÄÖÜäöüß]{3}/.test(s)) return false;
+    if (/@|https?:|www\./i.test(s) || /:\s*$/.test(s) || TITLE_BAD_RE.test(s)) return false;
+    if ((s.match(/\d/g) || []).length > s.length * 0.4) return false;
+    if (/\d{1,2}\.\d{1,2}\.\d{2,4}/.test(s) || /\b\d{1,2}[:.]\d{2}\s*Uhr/i.test(s)) return false;
+    return true;
+  }
+
+  const TITLE_NOISE_RE = /\b(ticket|tickets|e-?ticket|rechnung|polizze|polizzen|beleg|best(?:ä|ae)tigung|buchung|scan|kopie|copy|dokument)\b/gi;
+
+  function titleFromFileName(fileName) {
+    let t = String(fileName || '').replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ');
+    t = t.replace(/\b\d{1,2}[.\-]\d{1,2}[.\-](?:\d{4}|\d{2})\b/g, '').replace(/\b\d{4}-\d{2}-\d{2}\b/g, '');
+    t = t.replace(TITLE_NOISE_RE, '').replace(/\s+/g, ' ').replace(/^[\s\-–,.]+|[\s\-–,.]+$/g, '').trim();
+    return titleLike(t) ? t.slice(0, 80) : '';
+  }
+
+  function findDocTitle(doc, ctxs, fileName) {
+    // 1. "Die Unterkunft X erwartet Sie" / "Ihre Buchung im X"
+    const hotel = /Unterkunft\s+(.+?)\s+erwartet/i.exec(doc.flat);
+    if (hotel && titleLike(hotel[1])) return hotel[1].trim();
+    // 2. Zeile nach "... präsentiert"
+    for (let ri = 0; ri < doc.rows.length; ri += 1) {
+      for (const seg of doc.rows[ri].segs) {
+        if (!/pr[aä]sentiert\s*:?$/i.test(seg.s)) continue;
+        const nx = segAt(doc, ri, seg, 1, 160, true, true);
+        if (nx && nx.seg && titleLike(nx.seg.s)) return nx.seg.s.trim();
+      }
+    }
+    // 3. Beschriftung "Veranstaltung:" / "Event:" / "Titel:"
+    const labeled = valueAfterLabel(doc, 'veranstaltung|event|titel|show|konzert', (v) => titleLike(v));
+    if (labeled) return labeled;
+    // 4. Zeile direkt über "Einlass / Beginn + Datum"
+    for (const c of ctxs) {
+      if (!/^(einlass|beginn|beginnt|datum)\b/i.test(c.seg.s.trim())) continue;
+      if (!parseDatesInString(`${c.seg.s} ${c.next} ${c.down}`).length) continue;
+      let cur = segAt(doc, c.ri, c.seg, -1, DOC_COL_TOL, false);
+      for (let k = 0; k < 2 && cur && cur.seg; k += 1) {
+        if (titleLike(cur.seg.s)) return cur.seg.s.trim();
+        cur = segAt(doc, cur.ri, cur.seg, -1, DOC_COL_TOL, false);
+      }
+    }
+    return titleFromFileName(fileName);
+  }
+
+  function findDocPlace(doc) {
+    const cityOf = (line) => {
+      const m = /^\d{4,5}\s+(.+)$/.exec(line.trim());
+      return m ? m[1].trim() : '';
+    };
+    const compose = (lines) => {
+      const city = lines.map(cityOf).find(Boolean) || '';
+      const name = lines.find((l) => !cityOf(l)) || '';
+      return [name, city].filter(Boolean).join(', ');
+    };
+    // a) Beschriftung "Veranstaltungsort" mit Zeilen darunter
+    const labelRe = /^(veranstaltungsort|spielort|veranstaltungsst[aä]tte|location|venue)\b\s*:?\s*(.*)$/i;
+    for (let ri = 0; ri < doc.rows.length; ri += 1) {
+      for (const seg of doc.rows[ri].segs) {
+        const m = labelRe.exec(seg.s);
+        if (!m) continue;
+        const lines = m[2] ? [m[2]] : [];
+        lines.push(...columnBelow(doc, ri, seg, 3));
+        const out = compose(lines);
+        if (out) return out;
+      }
+    }
+    // b) Zeile "PLZ Ort" mit Straße und Name darüber
+    const street = /(stra(ß|ss)e|gasse|weg|platz|allee|ring|kai|zeile)\b|\s\d+[a-z]?$/i;
+    for (let ri = 0; ri < doc.rows.length; ri += 1) {
+      for (const seg of doc.rows[ri].segs) {
+        if (!/^\d{4,5}\s+[A-ZÄÖÜ]/.test(seg.s)) continue;
+        const a1 = segAt(doc, ri, seg, -1, DOC_COL_TOL, false);
+        if (!a1 || !a1.seg || !street.test(a1.seg.s)) continue;
+        const a2 = segAt(doc, a1.ri, a1.seg, -1, DOC_COL_TOL, false);
+        const name = a2 && a2.seg && !labelish(a2.seg.s) ? a2.seg.s.trim() : '';
+        return compose([name, seg.s].filter(Boolean));
+      }
+    }
+    // c) "Ihre Buchung in Portorož ist bestätigt"
+    const m = /Buchung\s+in\s+([A-ZÄÖÜ][^\s,.]+(?:\s[A-ZÄÖÜ][^\s,.]+)?)\s+ist/i.exec(doc.flat);
+    return m ? m[1].trim() : '';
+  }
+
+  const ORDER_FIELD_RE = /buchung|bestell|referenz|reserv|best[aä]tig|vorgang|auftrag/i;
+
+  function findOrderNumber(doc) {
+    const ok = (v) => /^[A-Za-z0-9][A-Za-z0-9\-\/]{3,24}$/.test(v) && /\d/.test(v);
+    return valueAfterLabel(doc, '(?:buchungs|bestell|referenz|reservierungs|best[aä]tigungs|auftrags|vorgangs)[\\s-]*(?:nummer|nr\\.?|code)', ok, true);
+  }
+
+  const KIND_SYNONYMS = {
+    konzert: ['konzert', 'festival', 'tournee', 'tour ', 'open air', 'concert', 'live in', 'stehplatz', 'support:'],
+    musical: ['musical'],
+    theater: ['theater', 'schauspiel', 'oper ', 'ballett', 'kabarett'],
+    urlaub: ['unterkunft', 'hotel', 'apartment', 'ferienwohnung', 'booking.com', 'resort', 'ubernachtung'],
+    ausflug: ['ausflug', 'therme', 'tierpark', 'museum'],
+    kfz: ['kfz', 'fahrzeug'],
+  };
+
+  // Liest aus einem Dokument Werte für die Felder der Sammlung.
+  function analyzeDocument(collection, fileName, serverText, clientDoc) {
+    const fields = collectionFields(collection);
+    const doc = clientDoc && clientDoc.rows.length ? clientDoc : docFromText(serverText);
+    const ctxs = docContexts(doc);
+    const values = {};
+    const today = isoToday();
+    const mainId = collection.schema.mainDateId;
+    const dates = findDocDates(doc, ctxs);
+    const amounts = findDocAmounts(ctxs);
+    const fold = (s) => foldText(s);
+
+    // Datum
+    for (const f of fields.filter((x) => x.type === 'date')) {
+      const words = fieldKeywords(f).filter((w) => w !== 'datum');
+      let pick = null;
+      if (words.length) pick = dates.find((d) => words.some((w) => d.ctx.includes(w)));
+      if (!pick && f.id === mainId) pick = bestDate(dates, today);
+      if (pick) values[f.id] = pick.iso;
+    }
+
+    // Beträge
+    fields.filter((x) => x.type === 'money').forEach((f, i) => {
+      const words = fieldKeywords(f);
+      let best = null;
+      let bestScore = 0;
+      for (const a of amounts) {
+        let score = 0;
+        if (words.some((w) => a.ctx.includes(w))) score += 3;
+        if (i === 0 && GENERIC_TOTAL_WORDS.some((w) => a.ctx.includes(w))) score += 2;
+        if (score > bestScore || (score === bestScore && score > 0 && best && a.value > best.value)) {
+          best = a;
+          bestScore = score;
+        }
+      }
+      if (!best && i === 0) {
+        const unique = [...new Set(amounts.map((a) => a.value))];
+        if (unique.length && unique.length <= 3) best = { value: Math.max(...unique) };
+      }
+      if (best) values[f.id] = best.value;
+    });
+
+    // Textfelder nach Rolle (aus dem Feldnamen abgeleitet)
+    const titleField = fields.find((x) => x.type === 'text' && x.inTitle) || fields.find((x) => x.type === 'text');
+    for (const f of fields.filter((x) => x.type === 'text')) {
+      const name = fold(f.name);
+      let v = '';
+      if (titleField && f.id === titleField.id) v = findDocTitle(doc, ctxs, fileName);
+      else if (/^(ort|veranstaltungsort|spielort|location)\b/.test(name)) v = findDocPlace(doc);
+      else if (/(uhrzeit|beginn|zeit)\b/.test(name) && !/datum/.test(name)) v = findDocTime(ctxs);
+      else if (ORDER_FIELD_RE.test(name) && (f.identifier || /nummer|nr\b/.test(name))) v = findOrderNumber(doc);
+      else if (/^(bezahlt mit|bezahlt|zahlungsart|zahlungsmittel|zahlung)$/.test(name)) v = valueAfterLabel(doc, 'zahlungsart|bezahlt mit|zahlungsmittel');
+      if (!v && f.identifier) v = findIdentifierValue(f, doc.flat);
+      if (!v && !(titleField && f.id === titleField.id)) v = valueAfterLabel(doc, reEsc(f.name), (x) => x.length < 80);
+      if (v) values[f.id] = v;
+    }
+
+    // Auswahlfelder
+    const hay = fold(`${fileName} ${doc.flat}`);
+    for (const f of fields.filter((x) => x.type === 'choice')) {
+      const opt = (f.options || []).find((o) => {
+        const key = fold(o).trim();
+        if (!key) return false;
+        return hay.includes(key) || (KIND_SYNONYMS[key] || []).some((w) => hay.includes(w));
+      });
+      if (opt) values[f.id] = opt;
+    }
+    return { values, dates: dates.map((d) => d.iso), flat: doc.flat };
+  }
+
+  const TITLE_STOP_WORDS = new Set(['ticket', 'tickets', 'karte', 'karten', 'rechnung', 'polizze', 'beleg', 'dokument', 'wien', 'oesterreich', 'austria', 'mit', 'und', 'festival', 'musical', 'konzert', 'hotel']);
+
+  function titleTokens(str) {
+    return foldText(str)
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w.length >= 4 && !TITLE_STOP_WORDS.has(w) && !/^\d+$/.test(w));
+  }
+
+  const compactFold = (s) => foldText(s).replace(/[^a-z0-9]/g, '');
+
+  // Sucht den Eintrag, zu dem ein Dokument gehört. Liefert alle Einträge mit Treffer, beste zuerst.
+  function matchRecords(collection, fileName, text, analysis) {
+    const fields = collectionFields(collection);
+    const hay = foldText(`${fileName} ${text}`);
+    const compact = hay.replace(/[^a-z0-9]/g, '');
+    const hayWords = new Set(hay.split(/[^a-z0-9]+/).filter(Boolean));
+    const mainId = collection.schema.mainDateId;
+    const results = [];
+    for (const rec of collectionRecords(collection)) {
+      let score = 0;
+      const reasons = [];
+      for (const f of fields) {
+        const v = rec.record.values[f.id];
+        if (typeof v !== 'string' || !v) continue;
+        if (f.identifier && f.type === 'text') {
+          const c = compactFold(v);
+          if (c.length >= 5 && /\d/.test(c) && compact.includes(c)) {
+            score += 100;
+            reasons.push(`${f.name} „${v}" steht im Dokument`);
+          }
+        }
+      }
+      const titleSource = fields
+        .filter((f) => f.type === 'text' && (f.inTitle || f.identifier))
+        .map((f) => rec.record.values[f.id])
+        .filter((v) => typeof v === 'string' && v)
+        .join(' ');
+      const tokens = [...new Set(titleTokens(titleSource || rec.title || ''))];
+      const fullTitle = compactFold(titleSource);
+      if (fullTitle.length >= 5 && compact.includes(fullTitle)) {
+        score += 70;
+        reasons.push(`Titel „${titleSource}" kommt vor`);
+      } else if (tokens.length) {
+        const hits = tokens.filter((t) => hayWords.has(t) || compact.includes(t));
+        if (tokens.length >= 2 && hits.length / tokens.length >= 0.6) {
+          score += 45;
+          reasons.push(`Titel passt (${hits.join(', ')})`);
+        } else if (tokens.length === 1 && hits.length === 1 && tokens[0].length >= 6) {
+          score += 35;
+          reasons.push(`Titel „${titleSource}" kommt vor`);
+        }
+      }
+      // gleiche erkannte Angaben (Titel, Datum, Ort)
+      const sameText = (f) => {
+        const a = rec.record.values[f.id];
+        const b = analysis.values[f.id];
+        return typeof a === 'string' && typeof b === 'string' && a && compactFold(a) === compactFold(b);
+      };
+      const titleF = fields.find((f) => f.type === 'text' && f.inTitle);
+      const sameDate = mainId && rec.record.values[mainId] && rec.record.values[mainId] === analysis.values[mainId];
+      if (titleF && sameText(titleF) && compactFold(titleF && analysis.values[titleF.id]).length >= 4) {
+        score += 80;
+        reasons.push('gleicher Titel');
+      }
+      if (sameDate) {
+        const placeF = fields.find((f) => f.type === 'text' && /^(ort|veranstaltungsort|spielort|location)/i.test(f.name));
+        if (placeF && sameText(placeF)) {
+          score += 50;
+          reasons.push('gleiches Datum und gleicher Ort');
+        } else if (score > 0) {
+          score += 15;
+          reasons.push('gleiches Datum');
+        }
+      }
+      if (score > 0) results.push({ record: rec, score, reasons });
+    }
+    results.sort((a, b) => b.score - a.score);
+    return results;
+  }
+
+  const AUTO_MATCH_MIN = 45;
+
+  async function extractDocumentText(file) {
+    let server = { text: '', tools: {} };
+    if (file.size <= 50 * 1024 * 1024) {
+      try {
+        const fd = new FormData();
+        fd.append('file', file, file.name || 'upload');
+        const res = await fetch('/api/extract-text', { method: 'POST', body: fd });
+        if (res.ok) server = await res.json();
+        else server.error = `HTTP ${res.status}`;
+      } catch (err) {
+        server.error = String(err);
+      }
+    } else {
+      server.error = 'zu groß';
+    }
+    let clientDoc = null;
+    if (isPdfFileName(file)) clientDoc = await docFromPdfClient(file);
+    const text = server.text || (clientDoc ? clientDoc.flat : '');
+    return { text, clientDoc, tools: server.tools || {}, error: server.error };
+  }
+
+  function isPdfFileName(file) {
+    return file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+  }
+
+  function isEmptyValue(v) {
+    return v == null || v === '' || v === false;
+  }
+
+  const COLL_REVIEW_KEY = 'krisnote.collReview';
+  function collReviewEnabled() {
+    try {
+      return localStorage.getItem(COLL_REVIEW_KEY) === '1';
+    } catch (e) {
+      return false;
+    }
+  }
+  function setCollReviewEnabled(on) {
+    try {
+      localStorage.setItem(COLL_REVIEW_KEY, on ? '1' : '0');
+    } catch (e) {
+      /* ignorieren */
+    }
+  }
+
+  // Verarbeitet mehrere Dokumente nacheinander. Standard: vollautomatisch (bestehender
+  // Eintrag bei sicherem Treffer, sonst neuer Eintrag) mit Zusammenfassung und
+  // "Rückgängig". Optional: jedes Dokument vor dem Ablegen prüfen.
+  async function handleCollectionFiles(collection, files) {
+    const review = collReviewEnabled();
+    const log = [];
+    for (let i = 0; i < files.length; i += 1) {
+      const file = files[i];
+      showBusyBanner(`Lese „${file.name}" (${i + 1} von ${files.length}) …`);
+      let extracted;
+      try {
+        extracted = await extractDocumentText(file);
+      } finally {
+        hideBusyBanner();
+      }
+      const analysis = analyzeDocument(collection, file.name, extracted.text, extracted.clientDoc);
+      const matches = matchRecords(collection, file.name, `${extracted.text}\n${analysis.flat}`, analysis);
+      let choice;
+      if (review) {
+        choice = await askDocumentPlacement(collection, file, { ...analysis, text: extracted.text, matches, extracted }, i + 1, files.length);
+        if (choice === 'stop') break;
+        if (!choice) continue;
+      } else {
+        const best = matches[0];
+        choice = {
+          targetId: best && best.score >= AUTO_MATCH_MIN ? best.record.id : '__new__',
+          values: { ...analysis.values },
+          fill: true,
+          mode: collection.schema.defaultPdfMode === 'file' ? 'file' : 'pages',
+          reasons: best && best.score >= AUTO_MATCH_MIN ? best.reasons : [],
+        };
+      }
+      showBusyBanner(`Lege „${file.name}" ab (${i + 1} von ${files.length}) …`);
+      try {
+        const res = await placeDocument(collection, file, analysis, choice);
+        if (res) log.push({ fileName: file.name, hasText: !!extracted.text, found: Object.keys(analysis.values).length, reasons: choice.reasons || [], ...res });
+      } catch (err) {
+        console.error('Dokument konnte nicht abgelegt werden:', err);
+        log.push({ fileName: file.name, error: true });
+      } finally {
+        hideBusyBanner();
+      }
+    }
+    if (selectedNoteId === collection.id) renderCollection(collection);
+    renderNoteList();
+    if (!log.length) return;
+    const done = log.filter((l) => !l.error);
+    if (done.length) {
+      const last = done[done.length - 1];
+      collMessage = {
+        collectionId: collection.id,
+        recordId: last.recordId,
+        text: done.length === 1 ? `✓ Abgelegt bei „${last.title}".` : `✓ ${done.length} Dokumente abgelegt.`,
+      };
+      if (selectedNoteId === collection.id) renderCollection(collection);
+    }
+    if (!review || log.length > 1) showPlacementSummary(collection, log);
+  }
+
+  function undoPlacements(collection, log) {
+    for (const l of [...log].reverse()) {
+      if (l.error) continue;
+      const rec = findNote(l.recordId);
+      if (!rec) continue;
+      if (l.created) {
+        state.notes = state.notes.filter((n) => n.id !== rec.id);
+      } else {
+        rec.objects = (rec.objects || []).filter((o) => o.id !== l.objId);
+        for (const [fid, old] of Object.entries(l.prevValues || {})) rec.record.values[fid] = old;
+        applyRecordTitle(rec);
+      }
+    }
+    collMessage = { collectionId: collection.id, recordId: null, text: 'Rückgängig gemacht.' };
+    schedulePersist();
+    renderNoteList();
+    if (selectedNoteId === collection.id) renderCollection(collection);
+    else if (!findNote(selectedNoteId)) selectNote(collection.id);
+  }
+
+  function showPlacementSummary(collection, log) {
+    openModal({
+      title: 'Dokumente abgelegt',
+      wide: true,
+      build: ({ body, close }) => {
+        const list = document.createElement('div');
+        list.className = 'summary-list';
+        for (const l of log) {
+          const row = document.createElement('div');
+          row.className = `summary-row${l.error ? ' summary-error' : ''}`;
+          const text = document.createElement('div');
+          text.className = 'summary-text';
+          if (l.error) {
+            text.textContent = `✗ „${l.fileName}" konnte nicht abgelegt werden.`;
+          } else {
+            const head = document.createElement('strong');
+            head.textContent = `${l.created ? 'Neuer Eintrag' : 'Zu bestehendem Eintrag'}: ${l.title}`;
+            const sub = document.createElement('span');
+            const bits = [`📄 ${l.fileName}`];
+            if (l.created) bits.push(l.found ? `${l.found} Angaben erkannt` : 'keine Angaben erkannt – bitte ergänzen');
+            else if (l.reasons && l.reasons.length) bits.push(l.reasons.join('; '));
+            if (!l.hasText) bits.push('kein Text lesbar');
+            sub.textContent = bits.join(' · ');
+            text.append(head, sub);
+          }
+          row.appendChild(text);
+          if (!l.error) {
+            const open = document.createElement('button');
+            open.type = 'button';
+            open.className = 'popover-btn popover-btn-secondary';
+            open.textContent = 'Öffnen';
+            open.addEventListener('click', () => {
+              close();
+              selectNote(l.recordId);
+            });
+            row.appendChild(open);
+          }
+          list.appendChild(row);
+        }
+        body.appendChild(list);
+      },
+      buttons: [
+        { label: 'Alles rückgängig', onClick: () => { undoPlacements(collection, log); return true; } },
+        { label: 'Fertig', kind: 'primary', onClick: () => true },
+      ],
+    });
+  }
+
+  async function placeDocument(collection, file, analysis, choice) {
+    let rec;
+    let created = false;
+    const prevValues = {};
+    if (choice.targetId === '__new__') {
+      const values = {};
+      for (const [k, v] of Object.entries(choice.values)) if (!isEmptyValue(v)) values[k] = v;
+      rec = createRecord(collection, values);
+      created = true;
+    } else {
+      rec = findNote(choice.targetId);
+      if (!rec) return null;
+      if (choice.fill) {
+        for (const f of collectionFields(collection)) {
+          const cur = rec.record.values[f.id];
+          const nv = analysis.values[f.id];
+          if (isEmptyValue(cur) && !isEmptyValue(nv)) {
+            prevValues[f.id] = cur === undefined ? '' : cur;
+            rec.record.values[f.id] = nv;
+          }
+        }
+        applyRecordTitle(rec);
+      }
+    }
+    const objId = await addAttachmentToNote(rec, file, choice.mode);
+    rec.updatedAt = Date.now();
+    schedulePersist();
+    return { recordId: rec.id, title: rec.title, created, objId, prevValues };
+  }
+
+  // Legt eine Datei auf einer (nicht geöffneten) Seite ab - wie das Hineinziehen auf
+  // die Fläche, aber ohne Rückfragen. Mehrere Dateien werden untereinander gesetzt.
+  // Liefert die id des neuen Objekts.
+  async function addAttachmentToNote(note, file, mode) {
+    const bottom = (note.objects || [])
+      .filter((o) => !o.inline && typeof o.y === 'number')
+      .reduce((m, o) => Math.max(m, o.y + (o.h || 0)), 0);
+    const place = (w, h) => ({
+      x: 30,
+      y: clamp(bottom ? bottom + 24 : 30, 0, Math.max(0, SURFACE_H - h)),
+    });
+    const push = (obj) => {
+      bringToFront(note, obj);
+      note.objects.push(obj);
+      return obj.id;
+    };
+    if (isPdfFileName(file)) {
+      const pdfjsLib = await loadPdfJs();
+      const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+      const fileData = await uploadFile(file);
+      let src = null;
+      let w = 240;
+      let h = 60;
+      const variant = mode === 'file' ? 'file' : 'pages';
+      if (variant === 'pages') {
+        const rendered = await renderPdfAllPages(pdf);
+        const scale = Math.min(1, 360 / rendered.width);
+        w = Math.round(rendered.width * scale) || 200;
+        h = Math.round(rendered.height * scale) || 260;
+        src = await uploadFile(await canvasToJpegBlob(rendered.canvas, 0.82), `${file.name}.jpg`);
+      }
+      const { x, y } = place(w, h);
+      return push({ id: uid(), type: 'pdf', x, y, w, h, z: 0, src, pageCount: pdf.numPages, fileName: file.name, variant, fileData });
+    }
+    if (file.type.startsWith('image/')) {
+      const localUrl = URL.createObjectURL(file);
+      const size = await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+        img.onerror = reject;
+        img.src = localUrl;
+      });
+      URL.revokeObjectURL(localUrl);
+      const src = await uploadFile(file);
+      const scale = Math.min(1, 360 / size.w);
+      const w = Math.round(size.w * scale) || 200;
+      const h = Math.round(size.h * scale) || 150;
+      const { x, y } = place(w, h);
+      return push({ id: uid(), type: 'image', x, y, w, h, z: 0, src });
+    }
+    const fileData = await uploadFile(file);
+    const { x, y } = place(240, 60);
+    return push({ id: uid(), type: 'file', x, y, w: 240, h: 60, z: 0, fileName: file.name, fileData });
+  }
+
+
   function fieldKeywords(field) {
     return foldText(field.name)
       .split(/[^a-z0-9]+/)
       .filter((w) => w.length >= 4);
-  }
-
-  function contextBefore(text, index, len) {
-    return foldText(text.slice(Math.max(0, index - len), index));
   }
 
   const GENERIC_TOTAL_WORDS = ['gesamt', 'summe', 'total', 'brutto', 'zu zahlen', 'zahlbetrag', 'preis', 'betrag', 'beitrag', 'pramie', 'premie'];
@@ -10302,290 +11083,6 @@
       }
     }
     return '';
-  }
-
-  const TITLE_NOISE_RE = /\b(ticket|tickets|e-?ticket|rechnung|polizze|polizzen|beleg|best(?:ä|ae)tigung|buchung|scan|kopie|copy|dokument)\b/gi;
-
-  function guessTitleFromDoc(fileName, text) {
-    let t = String(fileName || '').replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ');
-    t = t.replace(/\b\d{1,2}[.\-]\d{1,2}[.\-](?:\d{4}|\d{2})\b/g, '').replace(/\b\d{4}-\d{2}-\d{2}\b/g, '');
-    t = t.replace(TITLE_NOISE_RE, '').replace(/\s+/g, ' ').replace(/^[\s\-–,.]+|[\s\-–,.]+$/g, '').trim();
-    if (t.length >= 3 && /[A-Za-zÄÖÜäöüß]{3}/.test(t)) return t.slice(0, 80);
-    const lines = String(text || '').split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length >= 4 && /[A-Za-zÄÖÜäöüß]{3}/.test(l));
-    return lines.length ? lines[0].slice(0, 80) : '';
-  }
-
-  // Liest aus Dateiname und Text eines Dokuments Werte für die Felder der Sammlung.
-  function analyzeDocument(collection, fileName, text) {
-    const fields = collectionFields(collection);
-    const values = {};
-    const dates = findDatesInText(text);
-    const amounts = findAmountsInText(text);
-    const today = isoToday();
-    const mainId = collection.schema.mainDateId;
-
-    // Datumsfelder: erst über Stichwort im Feldnamen, sonst (nur Haupt-Datum) das nächste kommende Datum.
-    for (const f of fields.filter((x) => x.type === 'date')) {
-      const words = fieldKeywords(f);
-      let pick = null;
-      for (const d of dates) {
-        const ctx = contextBefore(text, d.index, 45);
-        if (words.some((w) => ctx.includes(w))) {
-          pick = d;
-          break;
-        }
-      }
-      if (!pick && f.id === mainId && dates.length) {
-        pick = dates.find((d) => d.iso >= today) || dates[0];
-      }
-      if (pick) values[f.id] = pick.iso;
-    }
-
-    // Beträge: Stichwort aus dem Feldnamen, bei dem ersten Betragsfeld auch allgemeine Summen-Wörter.
-    const moneyFields = fields.filter((x) => x.type === 'money');
-    moneyFields.forEach((f, i) => {
-      const words = fieldKeywords(f);
-      let best = null;
-      let bestScore = 0;
-      for (const a of amounts) {
-        const ctx = contextBefore(text, a.index, 40);
-        let score = 0;
-        if (words.some((w) => ctx.includes(w))) score += 3;
-        if (i === 0 && GENERIC_TOTAL_WORDS.some((w) => ctx.includes(w))) score += 2;
-        if (score > bestScore || (score === bestScore && score > 0 && best && a.value > best.value)) {
-          best = a;
-          bestScore = score;
-        }
-      }
-      if (!best && i === 0 && amounts.length === 1) best = amounts[0];
-      if (best) values[f.id] = best.value;
-    });
-
-    // Kennungen (Polizzennummer, Buchungsnummer ...)
-    for (const f of fields.filter((x) => x.type === 'text' && x.identifier)) {
-      const v = findIdentifierValue(f, text);
-      if (v) values[f.id] = v;
-    }
-
-    // Titel: aus dem Dateinamen (sonst erste Textzeile).
-    const titleField = fields.find((x) => x.type === 'text' && x.inTitle) || fields.find((x) => x.type === 'text');
-    if (titleField && !values[titleField.id]) {
-      const guess = guessTitleFromDoc(fileName, text);
-      if (guess) values[titleField.id] = guess;
-    }
-
-    // Auswahlfelder: eine Möglichkeit, die im Text vorkommt.
-    const hay = foldText(`${fileName} ${text}`);
-    for (const f of fields.filter((x) => x.type === 'choice')) {
-      const opt = (f.options || []).find((o) => o && new RegExp(`(^|[^a-z0-9])${foldText(o).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`).test(hay));
-      if (opt) values[f.id] = opt;
-    }
-    return { values, dates };
-  }
-
-  const TITLE_STOP_WORDS = new Set(['ticket', 'tickets', 'karte', 'karten', 'rechnung', 'polizze', 'beleg', 'dokument', 'wien', 'oesterreich', 'austria', 'mit', 'und']);
-
-  function titleTokens(str) {
-    return foldText(str)
-      .split(/[^a-z0-9]+/)
-      .filter((w) => w.length >= 4 && !TITLE_STOP_WORDS.has(w) && !/^\d+$/.test(w));
-  }
-
-  // Sucht den Eintrag, zu dem ein Dokument gehört. Liefert alle Einträge mit Treffer, beste zuerst.
-  function matchRecords(collection, fileName, text, dates) {
-    const fields = collectionFields(collection);
-    const hay = foldText(`${fileName} ${text}`);
-    const compact = hay.replace(/[^a-z0-9]/g, '');
-    const hayWords = new Set(hay.split(/[^a-z0-9]+/).filter(Boolean));
-    const results = [];
-    for (const rec of collectionRecords(collection)) {
-      let score = 0;
-      const reasons = [];
-      for (const f of fields) {
-        const v = rec.record.values[f.id];
-        if (typeof v !== 'string' || !v) continue;
-        if (f.identifier && f.type === 'text') {
-          const c = foldText(v).replace(/[^a-z0-9]/g, '');
-          if (c.length >= 5 && /\d/.test(c) && compact.includes(c)) {
-            score += 100;
-            reasons.push(`${f.name} „${v}" steht im Dokument`);
-          }
-        }
-      }
-      const titleSource = fields
-        .filter((f) => f.type === 'text' && (f.inTitle || f.identifier))
-        .map((f) => rec.record.values[f.id])
-        .filter((v) => typeof v === 'string' && v)
-        .join(' ');
-      const tokens = [...new Set(titleTokens(titleSource || rec.title || ''))];
-      if (tokens.length) {
-        const hits = tokens.filter((t) => hayWords.has(t) || compact.includes(t));
-        const fullTitle = foldText(titleSource).replace(/[^a-z0-9]/g, '');
-        if (fullTitle.length >= 5 && compact.includes(fullTitle)) {
-          score += 70;
-          reasons.push(`Titel „${titleSource}" kommt vor`);
-        } else if (tokens.length >= 2 && hits.length / tokens.length >= 0.6) {
-          score += 45;
-          reasons.push(`Titel passt (${hits.join(', ')})`);
-        } else if (tokens.length === 1 && hits.length === 1 && tokens[0].length >= 6) {
-          score += 35;
-          reasons.push(`Titel „${titleSource}" kommt vor`);
-        }
-      }
-      if (score > 0) {
-        const md = mainDateOf(collection, rec);
-        if (md && dates.some((d) => d.iso === md)) {
-          score += 15;
-          reasons.push('gleiches Datum');
-        }
-      }
-      if (score > 0) results.push({ record: rec, score, reasons });
-    }
-    results.sort((a, b) => b.score - a.score);
-    return results;
-  }
-
-  async function extractDocumentText(file) {
-    if (file.size > 50 * 1024 * 1024) return { text: '', tools: {}, error: 'zu groß' };
-    try {
-      const fd = new FormData();
-      fd.append('file', file, file.name || 'upload');
-      const res = await fetch('/api/extract-text', { method: 'POST', body: fd });
-      if (!res.ok) return { text: '', tools: {}, error: `HTTP ${res.status}` };
-      return await res.json();
-    } catch (err) {
-      return { text: '', tools: {}, error: String(err) };
-    }
-  }
-
-  function isPdfFileName(file) {
-    return file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
-  }
-
-  async function handleCollectionFiles(collection, files) {
-    let done = 0;
-    let last = null;
-    for (let i = 0; i < files.length; i += 1) {
-      const file = files[i];
-      showBusyBanner(`Lese „${file.name}" (${i + 1} von ${files.length}) …`);
-      let extracted;
-      try {
-        extracted = await extractDocumentText(file);
-      } finally {
-        hideBusyBanner();
-      }
-      const text = extracted.text || '';
-      const analysis = analyzeDocument(collection, file.name, text);
-      const matches = matchRecords(collection, file.name, text, analysis.dates);
-      const choice = await askDocumentPlacement(collection, file, { ...analysis, text, matches, extracted }, i + 1, files.length);
-      if (choice === 'stop') break;
-      if (!choice) continue;
-      showBusyBanner(`Lege „${file.name}" ab …`);
-      try {
-        const rec = await placeDocument(collection, file, analysis, choice);
-        if (rec) {
-          done += 1;
-          last = rec;
-        }
-      } catch (err) {
-        console.error('Dokument konnte nicht abgelegt werden:', err);
-        alert(`„${file.name}" konnte nicht abgelegt werden.`);
-      } finally {
-        hideBusyBanner();
-      }
-    }
-    if (done) {
-      collMessage = {
-        collectionId: collection.id,
-        recordId: last ? last.id : null,
-        text: done === 1 && last ? `✓ Abgelegt bei „${last.title}".` : `✓ ${done} Dokumente abgelegt.`,
-      };
-    }
-    if (selectedNoteId === collection.id) renderCollection(collection);
-    renderNoteList();
-  }
-
-  function isEmptyValue(v) {
-    return v == null || v === '' || v === false;
-  }
-
-  async function placeDocument(collection, file, analysis, choice) {
-    let rec;
-    if (choice.targetId === '__new__') {
-      const values = {};
-      for (const [k, v] of Object.entries(choice.values)) if (!isEmptyValue(v)) values[k] = v;
-      rec = createRecord(collection, values);
-    } else {
-      rec = findNote(choice.targetId);
-      if (!rec) return null;
-      if (choice.fill) {
-        for (const f of collectionFields(collection)) {
-          const cur = rec.record.values[f.id];
-          const nv = analysis.values[f.id];
-          if (isEmptyValue(cur) && !isEmptyValue(nv)) rec.record.values[f.id] = nv;
-        }
-        applyRecordTitle(rec);
-      }
-    }
-    await addAttachmentToNote(rec, file, choice.mode);
-    rec.updatedAt = Date.now();
-    schedulePersist();
-    return rec;
-  }
-
-  // Legt eine Datei auf einer (nicht geöffneten) Seite ab - wie das Hineinziehen auf
-  // die Fläche, aber ohne Rückfragen. Mehrere Dateien werden untereinander gesetzt.
-  async function addAttachmentToNote(note, file, mode) {
-    const bottom = (note.objects || [])
-      .filter((o) => !o.inline && typeof o.y === 'number')
-      .reduce((m, o) => Math.max(m, o.y + (o.h || 0)), 0);
-    const place = (w, h) => ({
-      x: 30,
-      y: clamp(bottom ? bottom + 24 : 30, 0, Math.max(0, SURFACE_H - h)),
-    });
-    const push = (obj) => {
-      bringToFront(note, obj);
-      note.objects.push(obj);
-    };
-    if (isPdfFileName(file)) {
-      const pdfjsLib = await loadPdfJs();
-      const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
-      const fileData = await uploadFile(file);
-      let src = null;
-      let w = 240;
-      let h = 60;
-      const variant = mode === 'file' ? 'file' : 'pages';
-      if (variant === 'pages') {
-        const rendered = await renderPdfAllPages(pdf);
-        const scale = Math.min(1, 360 / rendered.width);
-        w = Math.round(rendered.width * scale) || 200;
-        h = Math.round(rendered.height * scale) || 260;
-        src = await uploadFile(await canvasToJpegBlob(rendered.canvas, 0.82), `${file.name}.jpg`);
-      }
-      const { x, y } = place(w, h);
-      push({ id: uid(), type: 'pdf', x, y, w, h, z: 0, src, pageCount: pdf.numPages, fileName: file.name, variant, fileData });
-      return;
-    }
-    if (file.type.startsWith('image/')) {
-      const localUrl = URL.createObjectURL(file);
-      const size = await new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
-        img.onerror = reject;
-        img.src = localUrl;
-      });
-      URL.revokeObjectURL(localUrl);
-      const src = await uploadFile(file);
-      const scale = Math.min(1, 360 / size.w);
-      const w = Math.round(size.w * scale) || 200;
-      const h = Math.round(size.h * scale) || 150;
-      const { x, y } = place(w, h);
-      push({ id: uid(), type: 'image', x, y, w, h, z: 0, src });
-      return;
-    }
-    const fileData = await uploadFile(file);
-    const { x, y } = place(240, 60);
-    push({ id: uid(), type: 'file', x, y, w: 240, h: 60, z: 0, fileName: file.name, fileData });
   }
 
   // Fenster: Wohin gehört das Dokument? Liefert die Auswahl, 'stop' (alles abbrechen) oder null (überspringen).
@@ -10665,7 +11162,7 @@
             hint.className = 'placement-hint';
             const t = doc.extracted && doc.extracted.tools ? doc.extracted.tools : {};
             hint.textContent = isPdfFileName(file) || file.type.startsWith('image/')
-              ? `Aus dem Dokument konnte kein Text gelesen werden${t.ocr === false && file.type.startsWith('image/') ? ' (Texterkennung ist auf dem Server nicht installiert)' : ''} – es wird nur der Dateiname ausgewertet.`
+              ? `Aus dem Dokument konnte kein Text gelesen werden${t.ocr === false ? ' (es sieht nach einem Scan/Bild aus, und die Texterkennung ist auf dem Server nicht installiert)' : ''} – es wird nur der Dateiname ausgewertet.`
               : 'Aus diesem Dateityp wird kein Text gelesen – es wird nur der Dateiname ausgewertet.';
             body.appendChild(hint);
           }
